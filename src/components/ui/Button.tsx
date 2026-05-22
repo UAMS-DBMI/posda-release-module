@@ -1,5 +1,5 @@
-import Link from "next/link";
 import type { ComponentPropsWithoutRef } from "react";
+import { Link } from "react-router-dom";
 import classNames from "@/lib/classNames";
 
 type ButtonVariant = "primary" | "ghost";
@@ -15,7 +15,7 @@ type ButtonBaseProps = {
 type ButtonProps = ButtonBaseProps & ComponentPropsWithoutRef<"button">;
 
 type LinkButtonProps = ButtonBaseProps &
-  Omit<ComponentPropsWithoutRef<typeof Link>, "className"> & {
+  Omit<ComponentPropsWithoutRef<typeof Link>, "className" | "to"> & {
     href: string;
   };
 
@@ -65,11 +65,13 @@ export function LinkButton({
   size = "md",
   wide,
   className,
+  href,
   ...props
 }: LinkButtonProps) {
   return (
     <Link
       {...props}
+      to={href}
       className={buildButtonClassName({ variant, size, wide, className })}
     />
   );

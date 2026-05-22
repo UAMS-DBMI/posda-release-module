@@ -1,5 +1,5 @@
-import Link from "next/link";
 import type { HTMLAttributes, ReactNode } from "react";
+import { Link } from "react-router-dom";
 import classNames from "@/lib/classNames";
 
 type PageShellSize = "3xl" | "5xl" | "6xl";
@@ -98,7 +98,7 @@ export function PageDetailHeader({
         >
           <span className="opacity-40">←</span>
           <Link
-            href={breadcrumb.href}
+            to={breadcrumb.href}
             className="transition-colors hover:text-accent"
           >
             {breadcrumb.label}

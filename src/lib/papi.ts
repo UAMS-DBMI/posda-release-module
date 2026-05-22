@@ -1,97 +1,28 @@
-import type { PapiErrorPayload } from "@/types/papi";
-
-export class PapiHttpError extends Error {
-  status: number;
-  code?: string;
-  details?: unknown;
-
-  constructor(status: number, message: string, code?: string, details?: unknown) {
-    super(message);
-    this.name = "PapiHttpError";
-    this.status = status;
-    this.code = code;
-    this.details = details;
-  }
-}
-
-function getPapiBaseUrl(basePath?: string) {
-  const target = process.env.PAPI_TARGET;
-
-  if (!target) {
-    throw new Error("Missing PAPI_TARGET environment variable");
-  }
-
-  const normalizedTarget = target.endsWith("/") ? target.slice(0, -1) : target;
-  const resolvedBasePath =
-    basePath ?? process.env.PAPI_BASE_PATH ?? "/papi/v1/distribution";
-  const normalizedBasePath = resolvedBasePath.startsWith("/")
-    ? resolvedBasePath
-    : `/${resolvedBasePath}`;
-
-  return `${normalizedTarget}${normalizedBasePath}`;
-}
-
-export type PapiRequestOptions = {
-  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  query?: URLSearchParams;
-  body?: unknown;
-  headers?: HeadersInit;
-  basePath?: string;
+const RESOURCE_ROOTS: Record<string, string> = {
+  lookups: "/papi/v1/distribution",
+  datasets: "/papi/v1/distribution",
+  releases: "/papi/v1/distribution",
+  recordsets: "/papi/v1/distribution",
+  transfers: "/papi/v1/distribution",
+  activities: "/papi/v1",
+  collections: "/papi/v1/manager",
+  "analysis-results": "/papi/v1/manager",
+  downloads: "/papi/v1/manager",
+  "wp-object-map": "/papi/v1/manager",
+  posda: "/papi/v1/manager",
 };
 
-export async function papiRequest<T>(
-  path: string,
-  options: PapiRequestOptions = {},
-): Promise<T> {
-  const baseUrl = getPapiBaseUrl(options.basePath);
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(`${baseUrl}${normalizedPath}`);
-
-  if (options.query) {
-    url.search = options.query.toString();
+export function papiUrl(path: string): string {
+  const cleaned = path.startsWith("/") ? path.slice(1) : path;
+  const [resource] = cleaned.split("/");
+  const base = RESOURCE_ROOTS[resource];
+  if (!base) {
+    throw new Error(`Unknown PAPI resource: ${resource}`);
   }
+  return `${base}/${cleaned}`;
+}
 
-  const headers = new Headers(options.headers);
-  headers.set("accept", "application/json");
-
-  const bearerToken = process.env.PAPI_BEARER_TOKEN;
-  if (bearerToken) {
-    headers.set("authorization", `Bearer ${bearerToken}`);
-  }
-
-  let requestBody: string | undefined;
-  if (options.body !== undefined) {
-    headers.set("content-type", "application/json");
-    requestBody = JSON.stringify(options.body);
-  }
-
-  const response = await fetch(url, {
-    method: options.method ?? "GET",
-    headers,
-    body: requestBody,
-    cache: "no-store",
-  });
-
-  const contentType = response.headers.get("content-type") ?? "";
-  const isJson = contentType.includes("application/json");
-  const payload = isJson
-    ? ((await response.json()) as T | PapiErrorPayload)
-    : undefined;
-
-  if (!response.ok) {
-    const errorPayload = payload as (PapiErrorPayload & { detail?: string }) | undefined;
-    const message =
-      errorPayload?.error?.message ??
-      (typeof errorPayload?.detail === "string" ? errorPayload.detail : undefined) ??
-      `PAPI request failed with status ${response.status}`;
-
-    throw new PapiHttpError(
-      response.status,
-      message,
-      errorPayload?.error?.code,
-      errorPayload?.error?.details,
-    );
-  }
-
-  return payload as T;
+export function papiDownloadUrl(path: string): string {
+  const cleaned = path.startsWith("/") ? path.slice(1) : path;
+  return `/papi/v1/download/${cleaned}`;
 }
