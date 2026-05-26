@@ -52,7 +52,7 @@ export default function DynamicSection({
         </dl>
       )}
 
-      {actions && <div className="mt-4 flex flex-wrap gap-3">{actions}</div>}
+      {!isLoading && actions && <div className="mt-4 flex flex-wrap gap-3">{actions}</div>}
 
       {children}
     </SectionCard>
