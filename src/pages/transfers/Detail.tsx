@@ -254,16 +254,12 @@ export default function TransferDetail() {
       const json = (await res.json()) as {
         data: { file_id: number; downloadable_file_id: number; security_hash: string };
       };
-      setDestSettings((prev) =>
-        prev
-          ? {
-              ...prev,
-              [`${type}_manifest_file_id`]:               json.data.file_id,
-              [`${type}_manifest_downloadable_file_id`]:  json.data.downloadable_file_id,
-              [`${type}_manifest_security_hash`]:         json.data.security_hash,
-            }
-          : prev
-      );
+      setDestSettings((prev) => ({
+        ...(prev ?? { dataset_release_transfer_id: Number(transferId), published: null, public: null }),
+        [`${type}_manifest_file_id`]:               json.data.file_id,
+        [`${type}_manifest_downloadable_file_id`]:  json.data.downloadable_file_id,
+        [`${type}_manifest_security_hash`]:         json.data.security_hash,
+      }));
       toastSuccess(addToast, `${type.charAt(0).toUpperCase() + type.slice(1)} manifest generated.`);
     } catch (e) {
       toastError(addToast, e instanceof Error ? e.message : "Could not generate manifest.");
