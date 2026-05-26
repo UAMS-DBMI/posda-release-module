@@ -6,10 +6,13 @@
             "type": "node-terminal",
             "request": "launch",
             "command": "npm run dev",
+            "sourceMapPathOverrides": {
+                "/@fs/*": "${workspaceFolder}/*"
+            },
             "serverReadyAction": {
                 "action": "debugWithChrome",
                 "killOnServerStop": true,
-                "pattern": "- Local:.+(https?://.+)",
+                "pattern": "Local:\\s+(https?://\\S+)",
                 "uriFormat": "%s",
                 "webRoot": "${workspaceFolder}"
             }
@@ -18,11 +21,14 @@
             "name": "Prod: Debug full stack",
             "type": "node-terminal",
             "request": "launch",
-            "command": "npm run build && npm run start",
+            "command": "npm run build && npm run preview",
+            "sourceMapPathOverrides": {
+                "/@fs/*": "${workspaceFolder}/*"
+            },
             "serverReadyAction": {
                 "action": "debugWithChrome",
                 "killOnServerStop": true,
-                "pattern": "- Local:.+(https?://.+)",
+                "pattern": "Local:\\s+(https?://\\S+)",
                 "uriFormat": "%s",
                 "webRoot": "${workspaceFolder}"
             }
