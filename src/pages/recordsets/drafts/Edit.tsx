@@ -6,7 +6,6 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { papiUrl } from "@/lib/papi";
 
 type Draft = {
   recordset_draft_id: number;
@@ -100,8 +99,8 @@ export default function RecordsetDraftEdit() {
 
       try {
         const [draftResponse, recordsetsResponse] = await Promise.all([
-          fetch(papiUrl(`distribution/recordsets/drafts/${draftId}`), { cache: "no-store" }),
-          fetch(`${papiUrl("distribution/recordsets")}?limit=1000`, { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}`, { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/recordsets?limit=1000`, { cache: "no-store" }),
         ]);
 
         if (!draftResponse.ok) {
@@ -175,7 +174,7 @@ export default function RecordsetDraftEdit() {
       setIsLoadingReleases(true);
       try {
         const response = await fetch(
-          `${papiUrl(`distribution/recordsets/${recordsetId}/releases`)}?limit=1000`,
+          `/papi/v1/distribution/recordsets/${recordsetId}/releases?limit=1000`,
           { cache: "no-store" },
         );
 
@@ -241,7 +240,7 @@ export default function RecordsetDraftEdit() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl(`distribution/recordsets/drafts/${draftId}`), {
+      const response = await fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",

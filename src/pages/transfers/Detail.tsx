@@ -6,7 +6,6 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { papiDownloadUrl, papiUrl } from "@/lib/papi";
 
 type Transfer = {
   dataset_release_transfer_id: number;
@@ -120,8 +119,8 @@ export default function TransferDetail() {
 
       try {
         const [transferRes, recordsetsRes] = await Promise.all([
-          fetch(papiUrl(`distribution/transfers/${transferId}`), { cache: "no-store" }),
-          fetch(papiUrl(`distribution/transfers/${transferId}/recordsets`), { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/transfers/${transferId}`, { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/transfers/${transferId}/recordsets`, { cache: "no-store" }),
         ]);
 
         if (!isMounted) return;
@@ -146,7 +145,7 @@ export default function TransferDetail() {
 
         const settingsPath = SETTINGS_ENDPOINT[loadedTransfer.destination_abbr];
         if (settingsPath) {
-          const settingsRes = await fetch(papiUrl(`distribution/transfers/${transferId}/${settingsPath}`), { cache: "no-store" });
+          const settingsRes = await fetch(`/papi/v1/distribution/transfers/${transferId}/${settingsPath}`, { cache: "no-store" });
           if (!isMounted) return;
           if (settingsRes.ok) {
             const settingsJson = (await settingsRes.json()) as { data: DestSettings | null };
@@ -180,7 +179,7 @@ export default function TransferDetail() {
     setGeneratingManifestId(r.recordset_release_id);
     try {
       const res = await fetch(
-        papiUrl(`distribution/transfers/${transferId}/recordsets/${r.recordset_release_id}/manifest/generate`),
+        `/papi/v1/distribution/transfers/${transferId}/recordsets/${r.recordset_release_id}/manifest/generate`,
         { method: "POST" },
       );
       if (!res.ok) {
@@ -218,7 +217,7 @@ export default function TransferDetail() {
     if (!transferId) return;
     setIsQueuing(true);
     try {
-      const res = await fetch(papiUrl(`distribution/transfers/${transferId}`), {
+      const res = await fetch(`/papi/v1/distribution/transfers/${transferId}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ transfer_status: "queued" }),
@@ -245,7 +244,7 @@ export default function TransferDetail() {
     if (!transferId) return;
     setGeneratingIdcManifest(type);
     try {
-      const res = await fetch(papiUrl(`distribution/transfers/${transferId}/idc/${type}-manifest/generate`), { method: "POST" });
+      const res = await fetch(`/papi/v1/distribution/transfers/${transferId}/idc/${type}-manifest/generate`, { method: "POST" });
       if (!res.ok) {
         const json = (await res.json()) as { error?: { message?: string } | string };
         const msg = typeof json.error === "string" ? json.error : (json.error?.message ?? "Could not generate manifest.");
@@ -311,7 +310,7 @@ export default function TransferDetail() {
     }
 
     try {
-      const res = await fetch(papiUrl(`distribution/transfers/${transferId}/${settingsPath}`), {
+      const res = await fetch(`/papi/v1/distribution/transfers/${transferId}/${settingsPath}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
@@ -435,7 +434,7 @@ export default function TransferDetail() {
                       {hasManifest && r.downloadable_file_id && r.security_hash && (
                         <a
                           className="btn btn-sm btn-ghost"
-                          href={papiDownloadUrl(`file/${r.downloadable_file_id}/${r.security_hash}`)}
+                          href={`/papi/v1/download/file/${r.downloadable_file_id}/${r.security_hash}`}
                           download
                         >
                           Download
@@ -498,7 +497,7 @@ export default function TransferDetail() {
                                 {hasFile && dfId && hash && (
                                   <a
                                     className="btn btn-sm btn-ghost"
-                                    href={papiDownloadUrl(`file/${String(dfId)}/${String(hash)}`)}
+                                    href={`/papi/v1/download/file/${String(dfId)}/${String(hash)}`}
                                     download
                                   >
                                     Download

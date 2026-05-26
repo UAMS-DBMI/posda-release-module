@@ -8,7 +8,6 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastSuccess } from "@/components/toastHelpers";
-import { papiUrl } from "@/lib/papi";
 
 type Draft = {
   recordset_draft_id: number;
@@ -91,8 +90,8 @@ export default function RecordsetDraftDetail() {
 
       try {
         const [draftRes, summaryRes] = await Promise.all([
-          fetch(papiUrl(`distribution/recordsets/drafts/${draftId}`), { cache: "no-store" }),
-          fetch(papiUrl(`distribution/recordsets/drafts/${draftId}/summary`), { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}`, { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}/summary`, { cache: "no-store" }),
         ]);
 
         if (!isMounted) return;
@@ -142,7 +141,7 @@ export default function RecordsetDraftDetail() {
     setPublishError(null);
 
     try {
-      const res = await fetch(papiUrl(`distribution/recordsets/drafts/${draftId}/publish`), {
+      const res = await fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}/publish`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

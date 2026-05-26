@@ -5,7 +5,6 @@ import DynamicTable from "@/components/DynamicTable";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
-import { papiUrl } from "@/lib/papi";
 
 type Dataset = {
   dataset_id: number;
@@ -71,7 +70,7 @@ export default function TransfersList() {
       if (filters.activeOnly) params.set("active_only", "true");
       params.set("page", String(datasetPage));
       params.set("limit", String(datasetPageSize));
-      const res = await fetch(`${papiUrl("distribution/datasets")}?${params.toString()}`, {
+      const res = await fetch(`/papi/v1/distribution/datasets?${params.toString()}`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Request failed");
@@ -93,7 +92,7 @@ export default function TransfersList() {
     setReleaseError(null);
     setReleases([]);
     try {
-      const res = await fetch(papiUrl(`distribution/datasets/${datasetId}/releases`), {
+      const res = await fetch(`/papi/v1/distribution/datasets/${datasetId}/releases`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Request failed");

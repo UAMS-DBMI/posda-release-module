@@ -6,7 +6,6 @@ import DynamicSection, {
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
-import { papiUrl } from "@/lib/papi";
 
 type DatasetRelease = {
   dataset_release_id: number;
@@ -171,7 +170,7 @@ export default function DatasetReleaseDetail() {
 
     try {
       const recordsetsResponse = await fetch(
-        `${papiUrl("distribution/recordsets")}?dataset_id=${datasetId}&limit=1000`,
+        `/papi/v1/distribution/recordsets?dataset_id=${datasetId}&limit=1000`,
         { cache: "no-store" },
       );
 
@@ -191,7 +190,7 @@ export default function DatasetReleaseDetail() {
         recordsets.map(async (recordset) => {
           try {
             const releasesResponse = await fetch(
-              `${papiUrl(`distribution/recordsets/${recordset.recordset_id}/releases`)}?limit=1000`,
+              `/papi/v1/distribution/recordsets/${recordset.recordset_id}/releases?limit=1000`,
               { cache: "no-store" },
             );
 
@@ -244,7 +243,7 @@ export default function DatasetReleaseDetail() {
       setAvailableError(null);
 
       try {
-        const response = await fetch(papiUrl(`distribution/datasets/releases/${releaseId}`), {
+        const response = await fetch(`/papi/v1/distribution/datasets/releases/${releaseId}`, {
           cache: "no-store",
         });
 
@@ -268,7 +267,7 @@ export default function DatasetReleaseDetail() {
 
         try {
           const recordsetsResponse = await fetch(
-            papiUrl(`distribution/datasets/releases/${releaseId}/recordsets`),
+            `/papi/v1/distribution/datasets/releases/${releaseId}/recordsets`,
             { cache: "no-store" },
           );
 
@@ -403,7 +402,7 @@ export default function DatasetReleaseDetail() {
 
     try {
       const recordsetsResponse = await fetch(
-        papiUrl(`distribution/datasets/releases/${releaseId}/recordsets`),
+        `/papi/v1/distribution/datasets/releases/${releaseId}/recordsets`,
         { cache: "no-store" },
       );
 
@@ -449,7 +448,7 @@ export default function DatasetReleaseDetail() {
 
     try {
       const response = await fetch(
-        papiUrl(`distribution/datasets/releases/${releaseId}/recordsets/add`),
+        `/papi/v1/distribution/datasets/releases/${releaseId}/recordsets/add`,
         {
           method: "POST",
           headers: {
@@ -492,7 +491,7 @@ export default function DatasetReleaseDetail() {
 
     try {
       const response = await fetch(
-        papiUrl(`distribution/datasets/releases/${releaseId}/recordsets/remove`),
+        `/papi/v1/distribution/datasets/releases/${releaseId}/recordsets/remove`,
         {
           method: "POST",
           headers: {

@@ -6,7 +6,6 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { papiUrl } from "@/lib/papi";
 
 type Dataset = {
   dataset_id: number;
@@ -76,7 +75,7 @@ export default function DatasetEdit() {
   useEffect(() => {
     async function loadDatasetTypes() {
       try {
-        const response = await fetch(papiUrl("distribution/lookups/dataset-types"), {
+        const response = await fetch("/papi/v1/distribution/lookups/dataset-types", {
           cache: "no-store",
         });
 
@@ -111,7 +110,7 @@ export default function DatasetEdit() {
       setError(null);
 
       try {
-        const response = await fetch(papiUrl(`distribution/datasets/${datasetId}`), {
+        const response = await fetch(`/papi/v1/distribution/datasets/${datasetId}`, {
           cache: "no-store",
         });
 
@@ -205,7 +204,7 @@ export default function DatasetEdit() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl(`distribution/datasets/${datasetId}`), {
+      const response = await fetch(`/papi/v1/distribution/datasets/${datasetId}`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",

@@ -6,7 +6,6 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { papiUrl } from "@/lib/papi";
 
 type CreateDraftResponse = {
   recordset_draft_id?: number;
@@ -82,7 +81,7 @@ export default function RecordsetDraftCreate() {
     async function loadRecordsets() {
       setIsLoadingOptions(true);
       try {
-        const response = await fetch(`${papiUrl("distribution/recordsets")}?limit=1000`, {
+        const response = await fetch(`/papi/v1/distribution/recordsets?limit=1000`, {
           cache: "no-store",
         });
 
@@ -138,7 +137,7 @@ export default function RecordsetDraftCreate() {
       setIsLoadingReleases(true);
       try {
         const response = await fetch(
-          `${papiUrl(`distribution/recordsets/${recordsetId}/releases`)}?limit=1000`,
+          `/papi/v1/distribution/recordsets/${recordsetId}/releases?limit=1000`,
           { cache: "no-store" },
         );
 
@@ -196,7 +195,7 @@ export default function RecordsetDraftCreate() {
 
     try {
       const response = await fetch(
-        papiUrl(`distribution/recordsets/${formData.recordset_id}/drafts`),
+        `/papi/v1/distribution/recordsets/${formData.recordset_id}/drafts`,
         {
           method: "POST",
           headers: {

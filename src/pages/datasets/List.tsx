@@ -5,7 +5,6 @@ import DynamicTable from "@/components/DynamicTable";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { papiUrl } from "@/lib/papi";
 
 type Dataset = {
   dataset_id: number;
@@ -112,7 +111,7 @@ export default function DatasetsList() {
   useEffect(() => {
     async function loadDatasetTypes() {
       try {
-        const response = await fetch(papiUrl("distribution/lookups/dataset-types"), {
+        const response = await fetch("/papi/v1/distribution/lookups/dataset-types", {
           cache: "no-store",
         });
 
@@ -158,8 +157,8 @@ export default function DatasetsList() {
 
       const query = apiParams.toString();
       const endpoint = query
-        ? `${papiUrl("distribution/datasets")}?${query}`
-        : papiUrl("distribution/datasets");
+        ? `/papi/v1/distribution/datasets?${query}`
+        : "/papi/v1/distribution/datasets";
 
       const response = await fetch(endpoint, { cache: "no-store" });
 

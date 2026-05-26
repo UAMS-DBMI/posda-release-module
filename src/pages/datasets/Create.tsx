@@ -6,7 +6,6 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { papiUrl } from "@/lib/papi";
 
 type CreateDatasetResponse = {
   dataset_id?: number;
@@ -63,7 +62,7 @@ export default function DatasetCreate() {
     async function loadDatasetTypes() {
       setIsLoadingOptions(true);
       try {
-        const response = await fetch(papiUrl("distribution/lookups/dataset-types"), {
+        const response = await fetch("/papi/v1/distribution/lookups/dataset-types", {
           cache: "no-store",
         });
 
@@ -106,7 +105,7 @@ export default function DatasetCreate() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl("distribution/datasets"), {
+      const response = await fetch("/papi/v1/distribution/datasets", {
         method: "POST",
         headers: {
           "content-type": "application/json",

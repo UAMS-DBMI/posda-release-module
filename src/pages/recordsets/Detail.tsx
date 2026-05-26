@@ -9,7 +9,6 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { papiUrl } from "@/lib/papi";
 
 type Recordset = {
   recordset_id: number;
@@ -249,7 +248,7 @@ export default function RecordsetDetail() {
       setDraftsError(null);
 
       try {
-        const response = await fetch(papiUrl(`distribution/recordsets/${recordsetId}`), {
+        const response = await fetch(`/papi/v1/distribution/recordsets/${recordsetId}`, {
           cache: "no-store",
         });
 
@@ -277,7 +276,7 @@ export default function RecordsetDetail() {
           limit: String(releasesItemsPerPage),
         }).toString();
         const releasesResponse = await fetch(
-          `${papiUrl(`distribution/recordsets/${recordsetId}/releases`)}?${releasesQuery}`,
+          `/papi/v1/distribution/recordsets/${recordsetId}/releases?${releasesQuery}`,
           {
             cache: "no-store",
           },
@@ -300,7 +299,7 @@ export default function RecordsetDetail() {
           limit: String(draftsItemsPerPage),
         }).toString();
         const draftsResponse = await fetch(
-          `${papiUrl(`distribution/recordsets/${recordsetId}/drafts`)}?${draftsQuery}`,
+          `/papi/v1/distribution/recordsets/${recordsetId}/drafts?${draftsQuery}`,
           {
             cache: "no-store",
           },
@@ -377,11 +376,11 @@ export default function RecordsetDetail() {
     async function loadDestinationsAndLookups() {
       try {
         const [destRes, allDestRes, modesRes] = await Promise.all([
-          fetch(papiUrl(`distribution/recordsets/${recordsetId}/destinations`), {
+          fetch(`/papi/v1/distribution/recordsets/${recordsetId}/destinations`, {
             cache: "no-store",
           }),
-          fetch(papiUrl("distribution/lookups/destinations"), { cache: "no-store" }),
-          fetch(papiUrl("distribution/lookups/transfer-modes"), { cache: "no-store" }),
+          fetch("/papi/v1/distribution/lookups/destinations", { cache: "no-store" }),
+          fetch("/papi/v1/distribution/lookups/transfer-modes", { cache: "no-store" }),
         ]);
 
         if (!isMounted) return;
@@ -452,7 +451,7 @@ export default function RecordsetDetail() {
 
     try {
       const res = await fetch(
-        papiUrl(`distribution/recordsets/${recordsetId}/destinations/${destModalDestId}`),
+        `/papi/v1/distribution/recordsets/${recordsetId}/destinations/${destModalDestId}`,
         {
           method: "PUT",
           headers: { "content-type": "application/json" },
@@ -475,7 +474,7 @@ export default function RecordsetDetail() {
       closeDestModal();
 
       const destRes = await fetch(
-        papiUrl(`distribution/recordsets/${recordsetId}/destinations`),
+        `/papi/v1/distribution/recordsets/${recordsetId}/destinations`,
         { cache: "no-store" },
       );
       if (destRes.ok) {
@@ -501,7 +500,7 @@ export default function RecordsetDetail() {
     if (!recordsetId) return;
     let isMounted = true;
     setIsLoadingWpMap(true);
-    fetch(papiUrl(`manager/posda/recordset/${recordsetId}/wp-map`), { cache: "no-store" })
+    fetch(`/papi/v1/manager/posda/recordset/${recordsetId}/wp-map`, { cache: "no-store" })
       .then(async (res) => {
         if (!isMounted) return;
         if (res.ok) {
@@ -528,7 +527,7 @@ export default function RecordsetDetail() {
     setWpResults([]);
     try {
       const res = await fetch(
-        `${papiUrl("manager/downloads")}?search=${encodeURIComponent(wpSearchQuery.trim())}`,
+        `/papi/v1/manager/downloads?search=${encodeURIComponent(wpSearchQuery.trim())}`,
       );
       if (res.ok) setWpResults((await res.json()) as WpSearchResult[]);
     } finally {
@@ -548,12 +547,12 @@ export default function RecordsetDetail() {
         wp_view_url: result.view_url,
       };
       const res = wpMap
-        ? await fetch(papiUrl(`manager/wp-object-map/${wpMap.map_id}`), {
+        ? await fetch(`/papi/v1/manager/wp-object-map/${wpMap.map_id}`, {
             method: "PUT",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           })
-        : await fetch(papiUrl("manager/wp-object-map"), {
+        : await fetch("/papi/v1/manager/wp-object-map", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

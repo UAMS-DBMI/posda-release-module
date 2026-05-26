@@ -6,7 +6,6 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { papiUrl } from "@/lib/papi";
 
 type CreateDatasetReleaseResponse = {
   dataset_release_id?: number;
@@ -68,7 +67,7 @@ export default function DatasetReleaseCreate() {
     async function loadDatasets() {
       setIsLoadingOptions(true);
       try {
-        const response = await fetch(`${papiUrl("distribution/datasets")}?limit=1000`, {
+        const response = await fetch(`/papi/v1/distribution/datasets?limit=1000`, {
           cache: "no-store",
         });
 
@@ -135,7 +134,7 @@ export default function DatasetReleaseCreate() {
     async function loadReleaseNumber() {
       try {
         const response = await fetch(
-          `${papiUrl(`distribution/datasets/${datasetId}/releases`)}?limit=1000`,
+          `/papi/v1/distribution/datasets/${datasetId}/releases?limit=1000`,
           { cache: "no-store" },
         );
 
@@ -206,7 +205,7 @@ export default function DatasetReleaseCreate() {
 
     try {
       const response = await fetch(
-        papiUrl(`distribution/datasets/${formData.dataset_id}/releases`),
+        `/papi/v1/distribution/datasets/${formData.dataset_id}/releases`,
         {
           method: "POST",
           headers: {

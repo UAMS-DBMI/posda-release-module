@@ -5,7 +5,6 @@ import DynamicSection, {
 } from "@/components/DynamicSection";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
-import { papiUrl } from "@/lib/papi";
 
 type RecordsetRelease = {
   recordset_release_id: number;
@@ -107,8 +106,8 @@ export default function RecordsetReleaseDetail() {
 
       try {
         const [response, summaryRes] = await Promise.all([
-          fetch(papiUrl(`distribution/recordsets/releases/${releaseId}`), { cache: "no-store" }),
-          fetch(papiUrl(`distribution/recordsets/releases/${releaseId}/summary`), { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/recordsets/releases/${releaseId}`, { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/recordsets/releases/${releaseId}/summary`, { cache: "no-store" }),
         ]);
 
         if (!response.ok) {

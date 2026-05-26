@@ -6,7 +6,6 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { papiUrl } from "@/lib/papi";
 
 type DatasetRelease = {
   dataset_release_id: number;
@@ -90,8 +89,8 @@ export default function DatasetReleaseEdit() {
 
       try {
         const [releaseResponse, datasetsResponse] = await Promise.all([
-          fetch(papiUrl(`distribution/datasets/releases/${releaseId}`), { cache: "no-store" }),
-          fetch(`${papiUrl("distribution/datasets")}?limit=1000`, { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/datasets/releases/${releaseId}`, { cache: "no-store" }),
+          fetch(`/papi/v1/distribution/datasets?limit=1000`, { cache: "no-store" }),
         ]);
 
         if (!releaseResponse.ok) {
@@ -180,7 +179,7 @@ export default function DatasetReleaseEdit() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl(`distribution/datasets/releases/${releaseId}`), {
+      const response = await fetch(`/papi/v1/distribution/datasets/releases/${releaseId}`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",

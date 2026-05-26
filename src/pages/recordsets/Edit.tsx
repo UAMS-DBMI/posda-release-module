@@ -6,7 +6,6 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { papiUrl } from "@/lib/papi";
 
 type Recordset = {
   recordset_id: number;
@@ -119,9 +118,9 @@ export default function RecordsetEdit() {
       try {
         const [datasetsRes, licensesRes, recordsetTypesRes] = await Promise.all(
           [
-            fetch(`${papiUrl("distribution/datasets")}?limit=1000`, { cache: "no-store" }),
-            fetch(papiUrl("distribution/lookups/licenses"), { cache: "no-store" }),
-            fetch(papiUrl("distribution/lookups/recordset-types"), { cache: "no-store" }),
+            fetch(`/papi/v1/distribution/datasets?limit=1000`, { cache: "no-store" }),
+            fetch("/papi/v1/distribution/lookups/licenses", { cache: "no-store" }),
+            fetch("/papi/v1/distribution/lookups/recordset-types", { cache: "no-store" }),
           ],
         );
 
@@ -172,7 +171,7 @@ export default function RecordsetEdit() {
       setError(null);
 
       try {
-        const response = await fetch(papiUrl(`distribution/recordsets/${recordsetId}`), {
+        const response = await fetch(`/papi/v1/distribution/recordsets/${recordsetId}`, {
           cache: "no-store",
         });
 
@@ -266,7 +265,7 @@ export default function RecordsetEdit() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl(`distribution/recordsets/${recordsetId}`), {
+      const response = await fetch(`/papi/v1/distribution/recordsets/${recordsetId}`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",

@@ -9,7 +9,6 @@ import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
-import { papiUrl } from "@/lib/papi";
 
 type Dataset = {
   dataset_id: number;
@@ -222,7 +221,7 @@ export default function DatasetDetail() {
       setRecordsetsError(null);
 
       try {
-        const response = await fetch(papiUrl(`distribution/datasets/${datasetId}`), {
+        const response = await fetch(`/papi/v1/distribution/datasets/${datasetId}`, {
           cache: "no-store",
         });
 
@@ -252,7 +251,7 @@ export default function DatasetDetail() {
             limit: String(recordsetsItemsPerPage),
           }).toString();
           const recordsetsResponse = await fetch(
-            `${papiUrl("distribution/recordsets")}?${recordsetsQuery}`,
+            `/papi/v1/distribution/recordsets?${recordsetsQuery}`,
             {
               cache: "no-store",
             },
@@ -291,7 +290,7 @@ export default function DatasetDetail() {
           limit: String(releasesItemsPerPage),
         }).toString();
         const releasesResponse = await fetch(
-          `${papiUrl(`distribution/datasets/${datasetId}/releases`)}?${releasesQuery}`,
+          `/papi/v1/distribution/datasets/${datasetId}/releases?${releasesQuery}`,
           {
             cache: "no-store",
           },
@@ -362,7 +361,7 @@ export default function DatasetDetail() {
     if (!datasetId) return;
     let isMounted = true;
     setIsLoadingWpMap(true);
-    fetch(papiUrl(`manager/posda/dataset/${datasetId}/wp-map`), { cache: "no-store" })
+    fetch(`/papi/v1/manager/posda/dataset/${datasetId}/wp-map`, { cache: "no-store" })
       .then(async (res) => {
         if (!isMounted) return;
         if (res.ok) {
@@ -391,7 +390,7 @@ export default function DatasetDetail() {
       const resource =
         wpSearchType === "collection" ? "manager/collections" : "manager/analysis-results";
       const res = await fetch(
-        `${papiUrl(resource)}?search=${encodeURIComponent(wpSearchQuery.trim())}`,
+        `/papi/v1/${resource}?search=${encodeURIComponent(wpSearchQuery.trim())}`,
       );
       if (res.ok) setWpResults((await res.json()) as WpSearchResult[]);
     } finally {
@@ -411,12 +410,12 @@ export default function DatasetDetail() {
         wp_view_url: result.view_url,
       };
       const res = wpMap
-        ? await fetch(papiUrl(`manager/wp-object-map/${wpMap.map_id}`), {
+        ? await fetch(`/papi/v1/manager/wp-object-map/${wpMap.map_id}`, {
             method: "PUT",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           })
-        : await fetch(papiUrl("manager/wp-object-map"), {
+        : await fetch("/papi/v1/manager/wp-object-map", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

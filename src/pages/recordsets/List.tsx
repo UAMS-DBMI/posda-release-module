@@ -5,7 +5,6 @@ import DynamicTable from "@/components/DynamicTable";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { papiUrl } from "@/lib/papi";
 
 type Recordset = {
   recordset_id: number;
@@ -152,7 +151,7 @@ export default function RecordsetsList() {
       apiParams.set("page", String(currentPage));
       apiParams.set("limit", String(itemsPerPage));
 
-      const apiUrlStr = `${papiUrl("distribution/recordsets")}?${apiParams.toString()}`;
+      const apiUrlStr = `/papi/v1/distribution/recordsets?${apiParams.toString()}`;
 
       const response = await fetch(apiUrlStr, { cache: "no-store" });
 
@@ -228,7 +227,7 @@ export default function RecordsetsList() {
   useEffect(() => {
     async function loadDatasets() {
       try {
-        const response = await fetch(`${papiUrl("distribution/datasets")}?limit=1000`, {
+        const response = await fetch(`/papi/v1/distribution/datasets?limit=1000`, {
           cache: "no-store",
         });
 
