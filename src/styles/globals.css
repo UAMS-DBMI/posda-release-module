@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #1e293b;
-  --surface: #e8eaee;
-  --surface-alt: #d8dce3;
-  --muted: #64748b;
+  --background: #f6f8fc;
+  --foreground: #1f2937;
+  --surface: #ffffff;
+  --surface-alt: #eef3fb;
+  --muted: #516079;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
-  --border: rgba(0, 0, 0, 0.10);
-  --border-strong: rgba(0, 0, 0, 0.18);
+  --border: rgba(148, 163, 184, 0.18);
+  --border-strong: rgba(100, 116, 139, 0.24);
   --navbar-height: 3.5rem;
   --page-max-width: 72rem;
   --font-geist-sans: "Geist", system-ui, -apple-system, sans-serif;
@@ -77,6 +77,14 @@
     @apply mt-6 rounded-lg p-4;
     background: var(--surface);
     border: 1px solid var(--border-strong);
+  }
+
+  @media (prefers-color-scheme: light) {
+    .section-card,
+    .card,
+    .navbar {
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
   }
 
   .card {
