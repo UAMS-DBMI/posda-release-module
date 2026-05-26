@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicSection, {
   DynamicSectionField,
@@ -222,7 +222,7 @@ export default function DatasetDetail() {
       setRecordsetsError(null);
 
       try {
-        const response = await fetch(papiUrl(`datasets/${datasetId}`), {
+        const response = await fetch(papiUrl(`distribution/datasets/${datasetId}`), {
           cache: "no-store",
         });
 
@@ -252,7 +252,7 @@ export default function DatasetDetail() {
             limit: String(recordsetsItemsPerPage),
           }).toString();
           const recordsetsResponse = await fetch(
-            `${papiUrl("recordsets")}?${recordsetsQuery}`,
+            `${papiUrl("distribution/recordsets")}?${recordsetsQuery}`,
             {
               cache: "no-store",
             },
@@ -291,7 +291,7 @@ export default function DatasetDetail() {
           limit: String(releasesItemsPerPage),
         }).toString();
         const releasesResponse = await fetch(
-          `${papiUrl(`datasets/${datasetId}/releases`)}?${releasesQuery}`,
+          `${papiUrl(`distribution/datasets/${datasetId}/releases`)}?${releasesQuery}`,
           {
             cache: "no-store",
           },
@@ -362,7 +362,7 @@ export default function DatasetDetail() {
     if (!datasetId) return;
     let isMounted = true;
     setIsLoadingWpMap(true);
-    fetch(papiUrl(`posda/dataset/${datasetId}/wp-map`), { cache: "no-store" })
+    fetch(papiUrl(`manager/posda/dataset/${datasetId}/wp-map`), { cache: "no-store" })
       .then(async (res) => {
         if (!isMounted) return;
         if (res.ok) {
@@ -389,7 +389,7 @@ export default function DatasetDetail() {
     setWpResults([]);
     try {
       const resource =
-        wpSearchType === "collection" ? "collections" : "analysis-results";
+        wpSearchType === "collection" ? "manager/collections" : "manager/analysis-results";
       const res = await fetch(
         `${papiUrl(resource)}?search=${encodeURIComponent(wpSearchQuery.trim())}`,
       );
@@ -411,12 +411,12 @@ export default function DatasetDetail() {
         wp_view_url: result.view_url,
       };
       const res = wpMap
-        ? await fetch(papiUrl(`wp-object-map/${wpMap.map_id}`), {
+        ? await fetch(papiUrl(`manager/wp-object-map/${wpMap.map_id}`), {
             method: "PUT",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           })
-        : await fetch(papiUrl("wp-object-map"), {
+        : await fetch(papiUrl("manager/wp-object-map"), {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

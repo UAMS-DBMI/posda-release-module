@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+﻿import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import DynamicTable from "@/components/DynamicTable";
@@ -112,7 +112,7 @@ export default function DatasetsList() {
   useEffect(() => {
     async function loadDatasetTypes() {
       try {
-        const response = await fetch(papiUrl("lookups/dataset-types"), {
+        const response = await fetch(papiUrl("distribution/lookups/dataset-types"), {
           cache: "no-store",
         });
 
@@ -158,8 +158,8 @@ export default function DatasetsList() {
 
       const query = apiParams.toString();
       const endpoint = query
-        ? `${papiUrl("datasets")}?${query}`
-        : papiUrl("datasets");
+        ? `${papiUrl("distribution/datasets")}?${query}`
+        : papiUrl("distribution/datasets");
 
       const response = await fetch(endpoint, { cache: "no-store" });
 

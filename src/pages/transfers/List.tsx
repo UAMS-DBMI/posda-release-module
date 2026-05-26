@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import DynamicTable from "@/components/DynamicTable";
@@ -71,7 +71,7 @@ export default function TransfersList() {
       if (filters.activeOnly) params.set("active_only", "true");
       params.set("page", String(datasetPage));
       params.set("limit", String(datasetPageSize));
-      const res = await fetch(`${papiUrl("datasets")}?${params.toString()}`, {
+      const res = await fetch(`${papiUrl("distribution/datasets")}?${params.toString()}`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Request failed");
@@ -93,7 +93,7 @@ export default function TransfersList() {
     setReleaseError(null);
     setReleases([]);
     try {
-      const res = await fetch(papiUrl(`datasets/${datasetId}/releases`), {
+      const res = await fetch(papiUrl(`distribution/datasets/${datasetId}/releases`), {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Request failed");

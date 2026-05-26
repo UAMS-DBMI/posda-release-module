@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+﻿import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import DynamicTable from "@/components/DynamicTable";
@@ -152,7 +152,7 @@ export default function RecordsetsList() {
       apiParams.set("page", String(currentPage));
       apiParams.set("limit", String(itemsPerPage));
 
-      const apiUrlStr = `${papiUrl("recordsets")}?${apiParams.toString()}`;
+      const apiUrlStr = `${papiUrl("distribution/recordsets")}?${apiParams.toString()}`;
 
       const response = await fetch(apiUrlStr, { cache: "no-store" });
 
@@ -228,7 +228,7 @@ export default function RecordsetsList() {
   useEffect(() => {
     async function loadDatasets() {
       try {
-        const response = await fetch(`${papiUrl("datasets")}?limit=1000`, {
+        const response = await fetch(`${papiUrl("distribution/datasets")}?limit=1000`, {
           cache: "no-store",
         });
 

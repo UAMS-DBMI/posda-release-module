@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import { useToast } from "@/components/Toast";
@@ -76,7 +76,7 @@ export default function DatasetEdit() {
   useEffect(() => {
     async function loadDatasetTypes() {
       try {
-        const response = await fetch(papiUrl("lookups/dataset-types"), {
+        const response = await fetch(papiUrl("distribution/lookups/dataset-types"), {
           cache: "no-store",
         });
 
@@ -111,7 +111,7 @@ export default function DatasetEdit() {
       setError(null);
 
       try {
-        const response = await fetch(papiUrl(`datasets/${datasetId}`), {
+        const response = await fetch(papiUrl(`distribution/datasets/${datasetId}`), {
           cache: "no-store",
         });
 
@@ -205,7 +205,7 @@ export default function DatasetEdit() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl(`datasets/${datasetId}`), {
+      const response = await fetch(papiUrl(`distribution/datasets/${datasetId}`), {
         method: "PUT",
         headers: {
           "content-type": "application/json",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import DynamicSection, {
   DynamicSectionField,
@@ -171,7 +171,7 @@ export default function DatasetReleaseDetail() {
 
     try {
       const recordsetsResponse = await fetch(
-        `${papiUrl("recordsets")}?dataset_id=${datasetId}&limit=1000`,
+        `${papiUrl("distribution/recordsets")}?dataset_id=${datasetId}&limit=1000`,
         { cache: "no-store" },
       );
 
@@ -191,7 +191,7 @@ export default function DatasetReleaseDetail() {
         recordsets.map(async (recordset) => {
           try {
             const releasesResponse = await fetch(
-              `${papiUrl(`recordsets/${recordset.recordset_id}/releases`)}?limit=1000`,
+              `${papiUrl(`distribution/recordsets/${recordset.recordset_id}/releases`)}?limit=1000`,
               { cache: "no-store" },
             );
 
@@ -244,7 +244,7 @@ export default function DatasetReleaseDetail() {
       setAvailableError(null);
 
       try {
-        const response = await fetch(papiUrl(`datasets/releases/${releaseId}`), {
+        const response = await fetch(papiUrl(`distribution/datasets/releases/${releaseId}`), {
           cache: "no-store",
         });
 
@@ -268,7 +268,7 @@ export default function DatasetReleaseDetail() {
 
         try {
           const recordsetsResponse = await fetch(
-            papiUrl(`datasets/releases/${releaseId}/recordsets`),
+            papiUrl(`distribution/datasets/releases/${releaseId}/recordsets`),
             { cache: "no-store" },
           );
 
@@ -403,7 +403,7 @@ export default function DatasetReleaseDetail() {
 
     try {
       const recordsetsResponse = await fetch(
-        papiUrl(`datasets/releases/${releaseId}/recordsets`),
+        papiUrl(`distribution/datasets/releases/${releaseId}/recordsets`),
         { cache: "no-store" },
       );
 
@@ -449,7 +449,7 @@ export default function DatasetReleaseDetail() {
 
     try {
       const response = await fetch(
-        papiUrl(`datasets/releases/${releaseId}/recordsets/add`),
+        papiUrl(`distribution/datasets/releases/${releaseId}/recordsets/add`),
         {
           method: "POST",
           headers: {
@@ -492,7 +492,7 @@ export default function DatasetReleaseDetail() {
 
     try {
       const response = await fetch(
-        papiUrl(`datasets/releases/${releaseId}/recordsets/remove`),
+        papiUrl(`distribution/datasets/releases/${releaseId}/recordsets/remove`),
         {
           method: "POST",
           headers: {

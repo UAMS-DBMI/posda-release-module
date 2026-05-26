@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
@@ -136,7 +136,7 @@ export default function RecordsetDraftFiles() {
 
       try {
         const [draftRes, activitiesRes] = await Promise.all([
-          fetch(papiUrl(`recordsets/drafts/${draftId}`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/recordsets/drafts/${draftId}`), { cache: "no-store" }),
           fetch(papiUrl("activities"), { cache: "no-store" }),
         ]);
 
@@ -181,7 +181,7 @@ export default function RecordsetDraftFiles() {
 
     async function loadSummary() {
       try {
-        const res = await fetch(papiUrl(`recordsets/drafts/${draftId}/summary`), {
+        const res = await fetch(papiUrl(`distribution/recordsets/drafts/${draftId}/summary`), {
           cache: "no-store",
         });
         if (!isMounted) return;
@@ -272,7 +272,7 @@ export default function RecordsetDraftFiles() {
       });
       try {
         const res = await fetch(
-          `${papiUrl(`recordsets/drafts/${draftId}/diff`)}?${query.toString()}`,
+          `${papiUrl(`distribution/recordsets/drafts/${draftId}/diff`)}?${query.toString()}`,
           { cache: "no-store" },
         );
         if (!isMounted) return;
@@ -306,7 +306,7 @@ export default function RecordsetDraftFiles() {
     async function loadReleases() {
       try {
         const res = await fetch(
-          papiUrl(`recordsets/${draft!.recordset_id}/releases`),
+          papiUrl(`distribution/recordsets/${draft!.recordset_id}/releases`),
           { cache: "no-store" },
         );
         if (!isMounted) return;
@@ -345,7 +345,7 @@ export default function RecordsetDraftFiles() {
       const query = new URLSearchParams({ compare_release_id: String(releaseId) });
       try {
         const res = await fetch(
-          `${papiUrl(`recordsets/drafts/${draftId}/diff`)}?${query.toString()}`,
+          `${papiUrl(`distribution/recordsets/drafts/${draftId}/diff`)}?${query.toString()}`,
           { cache: "no-store" },
         );
         if (!isMounted) return;
@@ -372,7 +372,7 @@ export default function RecordsetDraftFiles() {
 
     setIsAdding(true);
     try {
-      const res = await fetch(papiUrl(`recordsets/drafts/${draftId}/files/add`), {
+      const res = await fetch(papiUrl(`distribution/recordsets/drafts/${draftId}/files/add`), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ file_ids: diff.removed_file_ids }),
@@ -401,7 +401,7 @@ export default function RecordsetDraftFiles() {
 
     setIsAddingFromRelease(true);
     try {
-      const res = await fetch(papiUrl(`recordsets/drafts/${draftId}/files/add`), {
+      const res = await fetch(papiUrl(`distribution/recordsets/drafts/${draftId}/files/add`), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ file_ids: releaseDiff.removed_file_ids }),

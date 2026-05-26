@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
@@ -84,8 +84,8 @@ export default function DatasetReleaseTransferCreate() {
 
       try {
         const [releaseRes, destinationsRes] = await Promise.all([
-          fetch(papiUrl(`datasets/releases/${releaseId}`), { cache: "no-store" }),
-          fetch(papiUrl(`datasets/releases/${releaseId}/destinations`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/datasets/releases/${releaseId}`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/datasets/releases/${releaseId}/destinations`), { cache: "no-store" }),
         ]);
 
         if (!isMounted) return;
@@ -98,7 +98,7 @@ export default function DatasetReleaseTransferCreate() {
         }
 
         if (loadedRelease?.dataset_id) {
-          const datasetRes = await fetch(papiUrl(`datasets/${loadedRelease.dataset_id}`), { cache: "no-store" });
+          const datasetRes = await fetch(papiUrl(`distribution/datasets/${loadedRelease.dataset_id}`), { cache: "no-store" });
           if (datasetRes.ok && isMounted) {
             const json = (await datasetRes.json()) as { data?: Dataset };
             setDataset(json.data ?? null);
@@ -137,7 +137,7 @@ export default function DatasetReleaseTransferCreate() {
       setIsLoadingRecordsets(true);
       try {
         const res = await fetch(
-          `${papiUrl(`datasets/releases/${releaseId}/recordsets`)}?destination_id=${selectedDestinationId}`,
+          `${papiUrl(`distribution/datasets/releases/${releaseId}/recordsets`)}?destination_id=${selectedDestinationId}`,
           { cache: "no-store" },
         );
         if (!res.ok) throw new Error();
@@ -181,7 +181,7 @@ export default function DatasetReleaseTransferCreate() {
     setIsSaving(true);
 
     try {
-      const res = await fetch(papiUrl(`datasets/releases/${releaseId}/transfers`), {
+      const res = await fetch(papiUrl(`distribution/datasets/releases/${releaseId}/transfers`), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import { useToast } from "@/components/Toast";
@@ -79,11 +79,11 @@ export default function RecordsetCreate() {
       setIsLoadingOptions(true);
       try {
         const [datasetsRes, licensesRes] = await Promise.all([
-          fetch(`${papiUrl("datasets")}?limit=1000`, { cache: "no-store" }),
-          fetch(papiUrl("lookups/licenses"), { cache: "no-store" }),
+          fetch(`${papiUrl("distribution/datasets")}?limit=1000`, { cache: "no-store" }),
+          fetch(papiUrl("distribution/lookups/licenses"), { cache: "no-store" }),
         ]);
 
-        const recordsetTypesRes = await fetch(papiUrl("lookups/recordset-types"), {
+        const recordsetTypesRes = await fetch(papiUrl("distribution/lookups/recordset-types"), {
           cache: "no-store",
         });
 
@@ -169,7 +169,7 @@ export default function RecordsetCreate() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl("recordsets"), {
+      const response = await fetch(papiUrl("distribution/recordsets"), {
         method: "POST",
         headers: {
           "content-type": "application/json",

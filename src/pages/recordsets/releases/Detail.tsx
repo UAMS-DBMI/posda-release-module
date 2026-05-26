@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import DynamicSection, {
   DynamicSectionField,
@@ -107,8 +107,8 @@ export default function RecordsetReleaseDetail() {
 
       try {
         const [response, summaryRes] = await Promise.all([
-          fetch(papiUrl(`recordsets/releases/${releaseId}`), { cache: "no-store" }),
-          fetch(papiUrl(`recordsets/releases/${releaseId}/summary`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/recordsets/releases/${releaseId}`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/recordsets/releases/${releaseId}/summary`), { cache: "no-store" }),
         ]);
 
         if (!response.ok) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -90,8 +90,8 @@ export default function DatasetReleaseEdit() {
 
       try {
         const [releaseResponse, datasetsResponse] = await Promise.all([
-          fetch(papiUrl(`datasets/releases/${releaseId}`), { cache: "no-store" }),
-          fetch(`${papiUrl("datasets")}?limit=1000`, { cache: "no-store" }),
+          fetch(papiUrl(`distribution/datasets/releases/${releaseId}`), { cache: "no-store" }),
+          fetch(`${papiUrl("distribution/datasets")}?limit=1000`, { cache: "no-store" }),
         ]);
 
         if (!releaseResponse.ok) {
@@ -180,7 +180,7 @@ export default function DatasetReleaseEdit() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl(`datasets/releases/${releaseId}`), {
+      const response = await fetch(papiUrl(`distribution/datasets/releases/${releaseId}`), {
         method: "PUT",
         headers: {
           "content-type": "application/json",

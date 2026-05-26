@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -82,7 +82,7 @@ export default function RecordsetDraftCreate() {
     async function loadRecordsets() {
       setIsLoadingOptions(true);
       try {
-        const response = await fetch(`${papiUrl("recordsets")}?limit=1000`, {
+        const response = await fetch(`${papiUrl("distribution/recordsets")}?limit=1000`, {
           cache: "no-store",
         });
 
@@ -138,7 +138,7 @@ export default function RecordsetDraftCreate() {
       setIsLoadingReleases(true);
       try {
         const response = await fetch(
-          `${papiUrl(`recordsets/${recordsetId}/releases`)}?limit=1000`,
+          `${papiUrl(`distribution/recordsets/${recordsetId}/releases`)}?limit=1000`,
           { cache: "no-store" },
         );
 
@@ -196,7 +196,7 @@ export default function RecordsetDraftCreate() {
 
     try {
       const response = await fetch(
-        papiUrl(`recordsets/${formData.recordset_id}/drafts`),
+        papiUrl(`distribution/recordsets/${formData.recordset_id}/drafts`),
         {
           method: "POST",
           headers: {

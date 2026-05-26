@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicSection, {
   DynamicSectionField,
@@ -249,7 +249,7 @@ export default function RecordsetDetail() {
       setDraftsError(null);
 
       try {
-        const response = await fetch(papiUrl(`recordsets/${recordsetId}`), {
+        const response = await fetch(papiUrl(`distribution/recordsets/${recordsetId}`), {
           cache: "no-store",
         });
 
@@ -277,7 +277,7 @@ export default function RecordsetDetail() {
           limit: String(releasesItemsPerPage),
         }).toString();
         const releasesResponse = await fetch(
-          `${papiUrl(`recordsets/${recordsetId}/releases`)}?${releasesQuery}`,
+          `${papiUrl(`distribution/recordsets/${recordsetId}/releases`)}?${releasesQuery}`,
           {
             cache: "no-store",
           },
@@ -300,7 +300,7 @@ export default function RecordsetDetail() {
           limit: String(draftsItemsPerPage),
         }).toString();
         const draftsResponse = await fetch(
-          `${papiUrl(`recordsets/${recordsetId}/drafts`)}?${draftsQuery}`,
+          `${papiUrl(`distribution/recordsets/${recordsetId}/drafts`)}?${draftsQuery}`,
           {
             cache: "no-store",
           },
@@ -377,11 +377,11 @@ export default function RecordsetDetail() {
     async function loadDestinationsAndLookups() {
       try {
         const [destRes, allDestRes, modesRes] = await Promise.all([
-          fetch(papiUrl(`recordsets/${recordsetId}/destinations`), {
+          fetch(papiUrl(`distribution/recordsets/${recordsetId}/destinations`), {
             cache: "no-store",
           }),
-          fetch(papiUrl("lookups/destinations"), { cache: "no-store" }),
-          fetch(papiUrl("lookups/transfer-modes"), { cache: "no-store" }),
+          fetch(papiUrl("distribution/lookups/destinations"), { cache: "no-store" }),
+          fetch(papiUrl("distribution/lookups/transfer-modes"), { cache: "no-store" }),
         ]);
 
         if (!isMounted) return;
@@ -452,7 +452,7 @@ export default function RecordsetDetail() {
 
     try {
       const res = await fetch(
-        papiUrl(`recordsets/${recordsetId}/destinations/${destModalDestId}`),
+        papiUrl(`distribution/recordsets/${recordsetId}/destinations/${destModalDestId}`),
         {
           method: "PUT",
           headers: { "content-type": "application/json" },
@@ -475,7 +475,7 @@ export default function RecordsetDetail() {
       closeDestModal();
 
       const destRes = await fetch(
-        papiUrl(`recordsets/${recordsetId}/destinations`),
+        papiUrl(`distribution/recordsets/${recordsetId}/destinations`),
         { cache: "no-store" },
       );
       if (destRes.ok) {
@@ -501,7 +501,7 @@ export default function RecordsetDetail() {
     if (!recordsetId) return;
     let isMounted = true;
     setIsLoadingWpMap(true);
-    fetch(papiUrl(`posda/recordset/${recordsetId}/wp-map`), { cache: "no-store" })
+    fetch(papiUrl(`manager/posda/recordset/${recordsetId}/wp-map`), { cache: "no-store" })
       .then(async (res) => {
         if (!isMounted) return;
         if (res.ok) {
@@ -528,7 +528,7 @@ export default function RecordsetDetail() {
     setWpResults([]);
     try {
       const res = await fetch(
-        `${papiUrl("downloads")}?search=${encodeURIComponent(wpSearchQuery.trim())}`,
+        `${papiUrl("manager/downloads")}?search=${encodeURIComponent(wpSearchQuery.trim())}`,
       );
       if (res.ok) setWpResults((await res.json()) as WpSearchResult[]);
     } finally {
@@ -548,12 +548,12 @@ export default function RecordsetDetail() {
         wp_view_url: result.view_url,
       };
       const res = wpMap
-        ? await fetch(papiUrl(`wp-object-map/${wpMap.map_id}`), {
+        ? await fetch(papiUrl(`manager/wp-object-map/${wpMap.map_id}`), {
             method: "PUT",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           })
-        : await fetch(papiUrl("wp-object-map"), {
+        : await fetch(papiUrl("manager/wp-object-map"), {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

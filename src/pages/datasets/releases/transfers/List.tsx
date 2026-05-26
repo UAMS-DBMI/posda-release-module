@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicTable from "@/components/DynamicTable";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -71,7 +71,7 @@ export default function DatasetReleaseTransfersList() {
   const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
 
   async function loadTransfers(id: string) {
-    const res = await fetch(papiUrl(`datasets/releases/${id}/transfers`), { cache: "no-store" });
+    const res = await fetch(papiUrl(`distribution/datasets/releases/${id}/transfers`), { cache: "no-store" });
     if (!res.ok) throw new Error("Could not load transfers.");
     const json = (await res.json()) as unknown;
     return extractArray<Transfer>(json, ["data", "transfers"]);
@@ -87,8 +87,8 @@ export default function DatasetReleaseTransfersList() {
 
       try {
         const [releaseRes, transfersRes] = await Promise.all([
-          fetch(papiUrl(`datasets/releases/${releaseId}`), { cache: "no-store" }),
-          fetch(papiUrl(`datasets/releases/${releaseId}/transfers`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/datasets/releases/${releaseId}`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/datasets/releases/${releaseId}/transfers`), { cache: "no-store" }),
         ]);
 
         if (!isMounted) return;
@@ -101,7 +101,7 @@ export default function DatasetReleaseTransfersList() {
         }
 
         if (loadedRelease?.dataset_id) {
-          const datasetRes = await fetch(papiUrl(`datasets/${loadedRelease.dataset_id}`), { cache: "no-store" });
+          const datasetRes = await fetch(papiUrl(`distribution/datasets/${loadedRelease.dataset_id}`), { cache: "no-store" });
           if (datasetRes.ok && isMounted) {
             const json = (await datasetRes.json()) as { data?: Dataset };
             setDataset(json.data ?? null);
@@ -127,7 +127,7 @@ export default function DatasetReleaseTransfersList() {
     setIsGenerating(true);
 
     try {
-      const destRes = await fetch(papiUrl(`datasets/releases/${releaseId}/destinations`), { cache: "no-store" });
+      const destRes = await fetch(papiUrl(`distribution/datasets/releases/${releaseId}/destinations`), { cache: "no-store" });
       if (!destRes.ok) throw new Error("Could not load destinations.");
       const destinations = extractArray<Destination>(
         (await destRes.json()) as unknown,
@@ -141,7 +141,7 @@ export default function DatasetReleaseTransfersList() {
       const results = await Promise.allSettled(
         destinations.map(async (dest) => {
           const rsRes = await fetch(
-            `${papiUrl(`datasets/releases/${releaseId}/recordsets`)}?destination_id=${dest.destination_id}`,
+            `${papiUrl(`distribution/datasets/releases/${releaseId}/recordsets`)}?destination_id=${dest.destination_id}`,
             { cache: "no-store" },
           );
           const expectedRecordsets = extractArray<{ recordset_release_id: number }>(
@@ -153,7 +153,7 @@ export default function DatasetReleaseTransfersList() {
           const existing = transferByDest.get(dest.destination_id);
 
           if (!existing) {
-            const res = await fetch(papiUrl(`datasets/releases/${releaseId}/transfers`), {
+            const res = await fetch(papiUrl(`distribution/datasets/releases/${releaseId}/transfers`), {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
@@ -175,7 +175,7 @@ export default function DatasetReleaseTransfersList() {
             created++;
           } else {
             const currentRes = await fetch(
-              papiUrl(`transfers/${existing.dataset_release_transfer_id}/recordsets`),
+              papiUrl(`distribution/transfers/${existing.dataset_release_transfer_id}/recordsets`),
               { cache: "no-store" },
             );
             const currentRecordsets = extractArray<{ recordset_release_id: number }>(
@@ -189,14 +189,14 @@ export default function DatasetReleaseTransfersList() {
 
             await Promise.all([
               toAdd.length > 0
-                ? fetch(papiUrl(`transfers/${existing.dataset_release_transfer_id}/recordsets/add`), {
+                ? fetch(papiUrl(`distribution/transfers/${existing.dataset_release_transfer_id}/recordsets/add`), {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ recordset_release_ids: toAdd }),
                   })
                 : Promise.resolve(),
               toRemove.length > 0
-                ? fetch(papiUrl(`transfers/${existing.dataset_release_transfer_id}/recordsets/remove`), {
+                ? fetch(papiUrl(`distribution/transfers/${existing.dataset_release_transfer_id}/recordsets/remove`), {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ recordset_release_ids: toRemove }),
@@ -234,7 +234,7 @@ export default function DatasetReleaseTransfersList() {
   async function deleteTransfer(id: number) {
     setIsDeletingId(id);
     try {
-      const res = await fetch(papiUrl(`transfers/${id}`), { method: "DELETE" });
+      const res = await fetch(papiUrl(`distribution/transfers/${id}`), { method: "DELETE" });
       if (!res.ok) {
         const json = (await res.json()) as { error?: { message?: string } | string };
         const msg =

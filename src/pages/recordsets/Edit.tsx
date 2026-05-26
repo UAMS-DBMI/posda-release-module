@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import { useToast } from "@/components/Toast";
@@ -119,9 +119,9 @@ export default function RecordsetEdit() {
       try {
         const [datasetsRes, licensesRes, recordsetTypesRes] = await Promise.all(
           [
-            fetch(`${papiUrl("datasets")}?limit=1000`, { cache: "no-store" }),
-            fetch(papiUrl("lookups/licenses"), { cache: "no-store" }),
-            fetch(papiUrl("lookups/recordset-types"), { cache: "no-store" }),
+            fetch(`${papiUrl("distribution/datasets")}?limit=1000`, { cache: "no-store" }),
+            fetch(papiUrl("distribution/lookups/licenses"), { cache: "no-store" }),
+            fetch(papiUrl("distribution/lookups/recordset-types"), { cache: "no-store" }),
           ],
         );
 
@@ -172,7 +172,7 @@ export default function RecordsetEdit() {
       setError(null);
 
       try {
-        const response = await fetch(papiUrl(`recordsets/${recordsetId}`), {
+        const response = await fetch(papiUrl(`distribution/recordsets/${recordsetId}`), {
           cache: "no-store",
         });
 
@@ -266,7 +266,7 @@ export default function RecordsetEdit() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl(`recordsets/${recordsetId}`), {
+      const response = await fetch(papiUrl(`distribution/recordsets/${recordsetId}`), {
         method: "PUT",
         headers: {
           "content-type": "application/json",

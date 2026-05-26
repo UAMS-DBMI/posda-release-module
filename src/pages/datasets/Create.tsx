@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import { useToast } from "@/components/Toast";
@@ -63,7 +63,7 @@ export default function DatasetCreate() {
     async function loadDatasetTypes() {
       setIsLoadingOptions(true);
       try {
-        const response = await fetch(papiUrl("lookups/dataset-types"), {
+        const response = await fetch(papiUrl("distribution/lookups/dataset-types"), {
           cache: "no-store",
         });
 
@@ -106,7 +106,7 @@ export default function DatasetCreate() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl("datasets"), {
+      const response = await fetch(papiUrl("distribution/datasets"), {
         method: "POST",
         headers: {
           "content-type": "application/json",

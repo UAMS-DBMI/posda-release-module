@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -68,7 +68,7 @@ export default function DatasetReleaseCreate() {
     async function loadDatasets() {
       setIsLoadingOptions(true);
       try {
-        const response = await fetch(`${papiUrl("datasets")}?limit=1000`, {
+        const response = await fetch(`${papiUrl("distribution/datasets")}?limit=1000`, {
           cache: "no-store",
         });
 
@@ -135,7 +135,7 @@ export default function DatasetReleaseCreate() {
     async function loadReleaseNumber() {
       try {
         const response = await fetch(
-          `${papiUrl(`datasets/${datasetId}/releases`)}?limit=1000`,
+          `${papiUrl(`distribution/datasets/${datasetId}/releases`)}?limit=1000`,
           { cache: "no-store" },
         );
 
@@ -206,7 +206,7 @@ export default function DatasetReleaseCreate() {
 
     try {
       const response = await fetch(
-        papiUrl(`datasets/${formData.dataset_id}/releases`),
+        papiUrl(`distribution/datasets/${formData.dataset_id}/releases`),
         {
           method: "POST",
           headers: {

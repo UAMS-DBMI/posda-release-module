@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import DynamicSection, { DynamicSectionField } from "@/components/DynamicSection";
 import { Button } from "@/components/ui/Button";
@@ -120,8 +120,8 @@ export default function TransferDetail() {
 
       try {
         const [transferRes, recordsetsRes] = await Promise.all([
-          fetch(papiUrl(`transfers/${transferId}`), { cache: "no-store" }),
-          fetch(papiUrl(`transfers/${transferId}/recordsets`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/transfers/${transferId}`), { cache: "no-store" }),
+          fetch(papiUrl(`distribution/transfers/${transferId}/recordsets`), { cache: "no-store" }),
         ]);
 
         if (!isMounted) return;
@@ -146,7 +146,7 @@ export default function TransferDetail() {
 
         const settingsPath = SETTINGS_ENDPOINT[loadedTransfer.destination_abbr];
         if (settingsPath) {
-          const settingsRes = await fetch(papiUrl(`transfers/${transferId}/${settingsPath}`), { cache: "no-store" });
+          const settingsRes = await fetch(papiUrl(`distribution/transfers/${transferId}/${settingsPath}`), { cache: "no-store" });
           if (!isMounted) return;
           if (settingsRes.ok) {
             const settingsJson = (await settingsRes.json()) as { data: DestSettings | null };
@@ -180,7 +180,7 @@ export default function TransferDetail() {
     setGeneratingManifestId(r.recordset_release_id);
     try {
       const res = await fetch(
-        papiUrl(`transfers/${transferId}/recordsets/${r.recordset_release_id}/manifest/generate`),
+        papiUrl(`distribution/transfers/${transferId}/recordsets/${r.recordset_release_id}/manifest/generate`),
         { method: "POST" },
       );
       if (!res.ok) {
@@ -218,7 +218,7 @@ export default function TransferDetail() {
     if (!transferId) return;
     setIsQueuing(true);
     try {
-      const res = await fetch(papiUrl(`transfers/${transferId}`), {
+      const res = await fetch(papiUrl(`distribution/transfers/${transferId}`), {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ transfer_status: "queued" }),
@@ -245,7 +245,7 @@ export default function TransferDetail() {
     if (!transferId) return;
     setGeneratingIdcManifest(type);
     try {
-      const res = await fetch(papiUrl(`transfers/${transferId}/idc/${type}-manifest/generate`), { method: "POST" });
+      const res = await fetch(papiUrl(`distribution/transfers/${transferId}/idc/${type}-manifest/generate`), { method: "POST" });
       if (!res.ok) {
         const json = (await res.json()) as { error?: { message?: string } | string };
         const msg = typeof json.error === "string" ? json.error : (json.error?.message ?? "Could not generate manifest.");
@@ -311,7 +311,7 @@ export default function TransferDetail() {
     }
 
     try {
-      const res = await fetch(papiUrl(`transfers/${transferId}/${settingsPath}`), {
+      const res = await fetch(papiUrl(`distribution/transfers/${transferId}/${settingsPath}`), {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),

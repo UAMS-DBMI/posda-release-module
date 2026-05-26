@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -100,8 +100,8 @@ export default function RecordsetDraftEdit() {
 
       try {
         const [draftResponse, recordsetsResponse] = await Promise.all([
-          fetch(papiUrl(`recordsets/drafts/${draftId}`), { cache: "no-store" }),
-          fetch(`${papiUrl("recordsets")}?limit=1000`, { cache: "no-store" }),
+          fetch(papiUrl(`distribution/recordsets/drafts/${draftId}`), { cache: "no-store" }),
+          fetch(`${papiUrl("distribution/recordsets")}?limit=1000`, { cache: "no-store" }),
         ]);
 
         if (!draftResponse.ok) {
@@ -175,7 +175,7 @@ export default function RecordsetDraftEdit() {
       setIsLoadingReleases(true);
       try {
         const response = await fetch(
-          `${papiUrl(`recordsets/${recordsetId}/releases`)}?limit=1000`,
+          `${papiUrl(`distribution/recordsets/${recordsetId}/releases`)}?limit=1000`,
           { cache: "no-store" },
         );
 
@@ -241,7 +241,7 @@ export default function RecordsetDraftEdit() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(papiUrl(`recordsets/drafts/${draftId}`), {
+      const response = await fetch(papiUrl(`distribution/recordsets/drafts/${draftId}`), {
         method: "PUT",
         headers: {
           "content-type": "application/json",
