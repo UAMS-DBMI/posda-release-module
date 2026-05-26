@@ -49,6 +49,7 @@ export default function DatasetCreate() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [datasetTypes, setDatasetTypes] = useState<DatasetType[]>([]);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
@@ -60,21 +61,20 @@ export default function DatasetCreate() {
 
   useEffect(() => {
     async function loadDatasetTypes() {
+      setIsLoadingOptions(true);
       try {
         const response = await fetch(papiUrl("lookups/dataset-types"), {
           cache: "no-store",
         });
 
-        if (!response.ok) {
-          return;
+        if (response.ok) {
+          const json = (await response.json()) as unknown;
+          setDatasetTypes(extractArray<DatasetType>(json, ["data", "dataset_types"]));
         }
-
-        const json = (await response.json()) as unknown;
-        setDatasetTypes(
-          extractArray<DatasetType>(json, ["data", "dataset_types"]),
-        );
       } catch {
-        setDatasetTypes([]);
+        // leave datasetTypes empty, error shown below
+      } finally {
+        setIsLoadingOptions(false);
       }
     }
 
@@ -197,7 +197,13 @@ export default function DatasetCreate() {
       />
 
       <SectionCard>
-        {datasetTypes.length === 0 && (
+        {isLoadingOptions && (
+          <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">
+            Loading options...
+          </p>
+        )}
+
+        {!isLoadingOptions && datasetTypes.length === 0 && (
           <p className="mb-4 text-sm text-red-600 dark:text-red-400">
             Could not load dataset types from the database.
           </p>
@@ -229,8 +235,8 @@ export default function DatasetCreate() {
               )}
 
               <div className="flex gap-3 pt-2">
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? "Creating..." : "Create Dataset"}
+                <Button type="submit" disabled={isSaving || isLoadingOptions}>
+                  {isLoadingOptions ? "Loading Options..." : isSaving ? "Creating..." : "Create Dataset"}
                 </Button>
 
                 <LinkButton href="/datasets" variant="ghost">
