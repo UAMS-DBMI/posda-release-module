@@ -1,6 +1,19 @@
 export function extractApiError(json: unknown, fallback: string): string {
   if (!json || typeof json !== "object") return fallback;
   const body = json as Record<string, unknown>;
+
+  // FastAPI Pydantic validation error: detail is an array of {loc, msg, type}
+  if (Array.isArray(body.detail)) {
+    const messages = (body.detail as Array<Record<string, unknown>>)
+      .filter((e) => typeof e.msg === "string")
+      .map((e) => {
+        const loc = Array.isArray(e.loc) ? e.loc.at(-1) : null;
+        return typeof loc === "string" ? `${loc}: ${e.msg as string}` : (e.msg as string);
+      });
+    return messages.length > 0 ? messages.join("; ") : fallback;
+  }
+
+  // Custom api_error(): detail is an object with error.message
   const detail = body.detail as Record<string, unknown> | undefined;
   const error = detail?.error as Record<string, unknown> | undefined;
   if (typeof error?.message !== "string") return fallback;
