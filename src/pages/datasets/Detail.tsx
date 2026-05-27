@@ -9,6 +9,7 @@ import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
+import { extractApiError } from "@/lib/apiUtils";
 
 type Dataset = {
   dataset_id: number;
@@ -227,13 +228,8 @@ export default function DatasetDetail() {
 
         if (!response.ok) {
           const fallbackMessage = `Could not load dataset ${datasetId}.`;
-
-          try {
-            const json = (await response.json()) as { error?: string };
-            throw new Error(json.error ?? fallbackMessage);
-          } catch {
-            throw new Error(fallbackMessage);
-          }
+          const json = (await response.json()) as unknown;
+          throw new Error(extractApiError(json, fallbackMessage));
         }
 
         const json = (await response.json()) as DatasetResponse;
@@ -425,14 +421,8 @@ export default function DatasetDetail() {
             }),
           });
       if (!res.ok) {
-        const json = (await res.json()) as {
-          error?: { message?: string } | string;
-        };
-        throw new Error(
-          typeof json.error === "string"
-            ? json.error
-            : (json.error?.message ?? "Could not save link."),
-        );
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not save link."));
       }
       const json = (await res.json()) as { data: WpMap };
       setWpMap(json.data);

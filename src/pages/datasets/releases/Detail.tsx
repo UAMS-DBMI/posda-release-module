@@ -6,7 +6,7 @@ import DynamicSection, {
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
-import { extractArray } from "@/lib/apiUtils";
+import { extractApiError, extractArray } from "@/lib/apiUtils";
 
 type DatasetRelease = {
   dataset_release_id: number;
@@ -91,26 +91,8 @@ async function getApiErrorMessage(
   fallbackMessage: string,
 ): Promise<string> {
   try {
-    const json = (await response.json()) as {
-      error?: string | { message?: string };
-      message?: string;
-    };
-    if (typeof json?.error === "string") {
-      return json.error;
-    }
-    if (json?.error && typeof json.error.message === "string") {
-      return json.error.message;
-    }
-    if (typeof json?.message === "string") {
-      return json.message;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    const text = await response.text();
-    return text || fallbackMessage;
+    const json = (await response.json()) as unknown;
+    return extractApiError(json, fallbackMessage);
   } catch {
     return fallbackMessage;
   }

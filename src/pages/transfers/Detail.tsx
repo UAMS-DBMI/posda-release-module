@@ -6,6 +6,7 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { extractApiError } from "@/lib/apiUtils";
 
 type Transfer = {
   dataset_release_transfer_id: number;
@@ -126,12 +127,8 @@ export default function TransferDetail() {
         if (!isMounted) return;
 
         if (!transferRes.ok) {
-          const json = (await transferRes.json()) as { error?: { message?: string } | string };
-          const msg =
-            typeof json.error === "string"
-              ? json.error
-              : (json.error?.message ?? `Could not load transfer ${transferId}.`);
-          throw new Error(msg);
+          const json = (await transferRes.json()) as unknown;
+          throw new Error(extractApiError(json, `Could not load transfer ${transferId}.`));
         }
 
         const transferJson = (await transferRes.json()) as { data: Transfer };
@@ -183,12 +180,8 @@ export default function TransferDetail() {
         { method: "POST" },
       );
       if (!res.ok) {
-        const json = (await res.json()) as { error?: { message?: string } | string };
-        const msg =
-          typeof json.error === "string"
-            ? json.error
-            : (json.error?.message ?? "Could not generate manifest.");
-        throw new Error(msg);
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not generate manifest."));
       }
       const json = (await res.json()) as {
         data: { downloadable_file_id: number; security_hash: string; file_id: number; series_count: number };
@@ -223,12 +216,8 @@ export default function TransferDetail() {
         body: JSON.stringify({ transfer_status: "queued" }),
       });
       if (!res.ok) {
-        const json = (await res.json()) as { error?: { message?: string } | string };
-        const msg =
-          typeof json.error === "string"
-            ? json.error
-            : (json.error?.message ?? "Could not queue transfer.");
-        throw new Error(msg);
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not queue transfer."));
       }
       const json = (await res.json()) as { data: Transfer };
       setTransfer(json.data);
@@ -246,9 +235,8 @@ export default function TransferDetail() {
     try {
       const res = await fetch(`/papi/v1/distribution/transfers/${transferId}/idc/${type}-manifest/generate`, { method: "POST" });
       if (!res.ok) {
-        const json = (await res.json()) as { error?: { message?: string } | string };
-        const msg = typeof json.error === "string" ? json.error : (json.error?.message ?? "Could not generate manifest.");
-        throw new Error(msg);
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not generate manifest."));
       }
       const json = (await res.json()) as {
         data: { file_id: number; downloadable_file_id: number; security_hash: string };
@@ -316,12 +304,8 @@ export default function TransferDetail() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const json = (await res.json()) as { error?: { message?: string } | string };
-        const msg =
-          typeof json.error === "string"
-            ? json.error
-            : (json.error?.message ?? "Could not save settings.");
-        throw new Error(msg);
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not save settings."));
       }
       const json = (await res.json()) as { data: DestSettings };
       setDestSettings(json.data);

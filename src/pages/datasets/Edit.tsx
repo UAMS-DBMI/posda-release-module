@@ -6,7 +6,7 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { extractArray } from "@/lib/apiUtils";
+import { extractApiError, extractArray } from "@/lib/apiUtils";
 
 type Dataset = {
   dataset_id: number;
@@ -95,13 +95,8 @@ export default function DatasetEdit() {
 
         if (!response.ok) {
           const fallbackMessage = `Could not load dataset ${datasetId}.`;
-
-          try {
-            const json = (await response.json()) as { error?: string };
-            throw new Error(json.error ?? fallbackMessage);
-          } catch {
-            throw new Error(fallbackMessage);
-          }
+          const json = (await response.json()) as unknown;
+          throw new Error(extractApiError(json, fallbackMessage));
         }
 
         const json = (await response.json()) as DatasetResponse;
@@ -197,13 +192,8 @@ export default function DatasetEdit() {
 
       if (!response.ok) {
         const fallbackMessage = `Could not save dataset ${datasetId}.`;
-
-        try {
-          const json = (await response.json()) as { error?: string };
-          throw new Error(json.error ?? fallbackMessage);
-        } catch {
-          throw new Error(fallbackMessage);
-        }
+        const json = (await response.json()) as unknown;
+        throw new Error(extractApiError(json, fallbackMessage));
       }
 
       toastSuccess(addToast, "Dataset saved successfully.");

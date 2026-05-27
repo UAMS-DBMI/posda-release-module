@@ -6,7 +6,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { extractArray } from "@/lib/apiUtils";
+import { extractApiError, extractArray } from "@/lib/apiUtils";
 
 type Draft = {
   recordset_draft_id: number;
@@ -236,13 +236,8 @@ export default function RecordsetDraftEdit() {
 
       if (!response.ok) {
         const fallbackMessage = "Could not update draft.";
-
-        try {
-          const json = (await response.json()) as { error?: string };
-          throw new Error(json.error ?? fallbackMessage);
-        } catch {
-          throw new Error(fallbackMessage);
-        }
+        const json = (await response.json()) as unknown;
+        throw new Error(extractApiError(json, fallbackMessage));
       }
 
       toastSuccess(addToast, "Draft saved successfully.");

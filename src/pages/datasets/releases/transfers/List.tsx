@@ -6,7 +6,7 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { extractArray } from "@/lib/apiUtils";
+import { extractApiError, extractArray } from "@/lib/apiUtils";
 
 type Transfer = {
   dataset_release_transfer_id: number;
@@ -154,12 +154,8 @@ export default function DatasetReleaseTransfersList() {
               }),
             });
             if (!res.ok) {
-              const json = (await res.json()) as { error?: { message?: string } | string };
-              const msg =
-                typeof json.error === "string"
-                  ? json.error
-                  : (json.error?.message ?? `Failed to create transfer for ${dest.destination_name}.`);
-              throw new Error(msg);
+              const json = (await res.json()) as unknown;
+              throw new Error(extractApiError(json, `Failed to create transfer for ${dest.destination_name}.`));
             }
             created++;
           } else {
@@ -225,12 +221,8 @@ export default function DatasetReleaseTransfersList() {
     try {
       const res = await fetch(`/papi/v1/distribution/transfers/${id}`, { method: "DELETE" });
       if (!res.ok) {
-        const json = (await res.json()) as { error?: { message?: string } | string };
-        const msg =
-          typeof json.error === "string"
-            ? json.error
-            : (json.error?.message ?? "Could not delete transfer.");
-        throw new Error(msg);
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not delete transfer."));
       }
       setTransfers((prev) => prev.filter((t) => t.dataset_release_transfer_id !== id));
       setDeleteConfirmId(null);

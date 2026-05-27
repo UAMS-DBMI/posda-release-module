@@ -6,7 +6,7 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { extractArray } from "@/lib/apiUtils";
+import { extractApiError, extractArray } from "@/lib/apiUtils";
 
 type Recordset = {
   recordset_id: number;
@@ -69,25 +69,6 @@ export default function RecordsetEdit() {
     active: false,
   });
 
-  function getErrorMessage(payload: unknown, fallbackMessage: string) {
-    if (!payload || typeof payload !== "object") {
-      return fallbackMessage;
-    }
-
-    const errorPayload = payload as {
-      error?: string | { message?: string; details?: unknown };
-    };
-
-    if (typeof errorPayload.error === "string") {
-      return errorPayload.error;
-    }
-
-    if (errorPayload.error?.message) {
-      return errorPayload.error.message;
-    }
-
-    return fallbackMessage;
-  }
 
   useEffect(() => {
     let isMounted = true;
@@ -158,12 +139,8 @@ export default function RecordsetEdit() {
         if (!response.ok) {
           const fallbackMessage = `Could not load recordset ${recordsetId}.`;
 
-          try {
-            const json = (await response.json()) as { error?: string };
-            throw new Error(json.error ?? fallbackMessage);
-          } catch {
-            throw new Error(fallbackMessage);
-          }
+          const json = (await response.json()) as unknown;
+          throw new Error(extractApiError(json, fallbackMessage));
         }
 
         const json = (await response.json()) as RecordsetResponse;
@@ -265,12 +242,8 @@ export default function RecordsetEdit() {
       if (!response.ok) {
         const fallbackMessage = `Could not save recordset ${recordsetId}.`;
 
-        try {
-          const json = (await response.json()) as unknown;
-          throw new Error(getErrorMessage(json, fallbackMessage));
-        } catch {
-          throw new Error(fallbackMessage);
-        }
+        const json = (await response.json()) as unknown;
+        throw new Error(extractApiError(json, fallbackMessage));
       }
 
       toastSuccess(addToast, "Recordset saved successfully.");

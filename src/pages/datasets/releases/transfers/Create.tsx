@@ -5,7 +5,7 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { extractArray } from "@/lib/apiUtils";
+import { extractApiError, extractArray } from "@/lib/apiUtils";
 
 type Destination = {
   destination_id: number;
@@ -185,12 +185,8 @@ export default function DatasetReleaseTransferCreate() {
       });
 
       if (!res.ok) {
-        const json = (await res.json()) as { error?: { message?: string } | string };
-        const msg =
-          typeof json.error === "string"
-            ? json.error
-            : (json.error?.message ?? "Could not create transfer.");
-        throw new Error(msg);
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not create transfer."));
       }
 
       const json = (await res.json()) as CreateTransferResponse;

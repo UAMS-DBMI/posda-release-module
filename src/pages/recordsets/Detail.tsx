@@ -9,6 +9,7 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { extractApiError } from "@/lib/apiUtils";
 
 type Recordset = {
   recordset_id: number;
@@ -254,13 +255,8 @@ export default function RecordsetDetail() {
 
         if (!response.ok) {
           const fallbackMessage = `Could not load recordset ${recordsetId}.`;
-
-          try {
-            const json = (await response.json()) as { error?: string };
-            throw new Error(json.error ?? fallbackMessage);
-          } catch {
-            throw new Error(fallbackMessage);
-          }
+          const json = (await response.json()) as unknown;
+          throw new Error(extractApiError(json, fallbackMessage));
         }
 
         const json = (await response.json()) as RecordsetResponse;
@@ -463,8 +459,8 @@ export default function RecordsetDetail() {
       );
 
       if (!res.ok) {
-        const json = (await res.json()) as { error?: { message?: string } };
-        throw new Error(json.error?.message ?? "Could not save destination.");
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not save destination."));
       }
 
       toastSuccess(
@@ -562,14 +558,8 @@ export default function RecordsetDetail() {
             }),
           });
       if (!res.ok) {
-        const json = (await res.json()) as {
-          error?: { message?: string } | string;
-        };
-        throw new Error(
-          typeof json.error === "string"
-            ? json.error
-            : (json.error?.message ?? "Could not save link."),
-        );
+        const json = (await res.json()) as unknown;
+        throw new Error(extractApiError(json, "Could not save link."));
       }
       const json = (await res.json()) as { data: WpMap };
       setWpMap(json.data);
