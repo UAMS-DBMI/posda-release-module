@@ -5,6 +5,7 @@ import DynamicTable from "@/components/DynamicTable";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
+import { extractArray } from "@/lib/apiUtils";
 
 type Recordset = {
   recordset_id: number;
@@ -41,27 +42,6 @@ type Dataset = {
   dataset_id: number;
   dataset_name: string;
 };
-
-function extractArray<T>(payload: unknown, keys: string[]): T[] {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const source = payload as Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
-  }
-
-  return [];
-}
 
 function normalizeRecordsetsResponse(payload: unknown): RecordsetsResponse {
   const source = payload as

@@ -6,6 +6,7 @@ import DynamicSection, {
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
+import { extractArray } from "@/lib/apiUtils";
 
 type DatasetRelease = {
   dataset_release_id: number;
@@ -70,27 +71,6 @@ function normalizeRecordsetReleasesResponse(payload: unknown): {
         : releases.length;
 
   return { releases, total };
-}
-
-function extractArray<T>(payload: unknown, keys: string[]): T[] {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const source = payload as Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
-  }
-
-  return [];
 }
 
 function formatDate(value?: string) {

@@ -5,6 +5,7 @@ import DynamicTable from "@/components/DynamicTable";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
+import { extractArray } from "@/lib/apiUtils";
 
 type Dataset = {
   dataset_id: number;
@@ -25,17 +26,6 @@ type DatasetFilters = {
   search: string;
   activeOnly: boolean;
 };
-
-function extractArray<T>(payload: unknown, keys: string[]): T[] {
-  if (Array.isArray(payload)) return payload as T[];
-  if (!payload || typeof payload !== "object") return [];
-  const source = payload as Record<string, unknown>;
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) return value as T[];
-  }
-  return [];
-}
 
 export default function TransfersList() {
   const navigate = useNavigate();

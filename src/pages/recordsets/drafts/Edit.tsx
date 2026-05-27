@@ -6,6 +6,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { extractArray } from "@/lib/apiUtils";
 
 type Draft = {
   recordset_draft_id: number;
@@ -37,27 +38,6 @@ type RecordsetRelease = {
   release_date: string;
 };
 
-function extractArray<T>(payload: unknown, keys: string[]): T[] {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const source = payload as Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
-  }
-
-  return [];
-}
-
 function formatReleaseLabel(release: RecordsetRelease) {
   const date = release.release_date
     ? new Date(release.release_date).toLocaleDateString()
@@ -77,7 +57,6 @@ export default function RecordsetDraftEdit() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoadingReleases, setIsLoadingReleases] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -223,7 +202,6 @@ export default function RecordsetDraftEdit() {
 
     setSaveError(null);
     setFieldErrors({});
-    setSaveSuccess(false);
 
     const nextFieldErrors: Record<string, string> = {};
     if (!formData.recordset_id) {
@@ -267,7 +245,6 @@ export default function RecordsetDraftEdit() {
         }
       }
 
-      setSaveSuccess(true);
       toastSuccess(addToast, "Draft saved successfully.");
       navigate(`/recordsets/drafts/${draftId}`);
     } catch (caughtError) {
@@ -385,11 +362,6 @@ export default function RecordsetDraftEdit() {
             </p>
           )}
 
-          {saveSuccess && !saveError && (
-            <p className="mt-4 text-sm text-emerald-600 dark:text-emerald-400">
-              Draft updated successfully.
-            </p>
-          )}
         </SectionCard>
       )}
     </PageShell>

@@ -6,6 +6,7 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
+import { extractArray } from "@/lib/apiUtils";
 
 type CreateDatasetResponse = {
   dataset_id?: number;
@@ -20,33 +21,11 @@ type DatasetType = {
   dataset_type_name: string;
 };
 
-function extractArray<T>(payload: unknown, keys: string[]): T[] {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const source = payload as Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
-  }
-
-  return [];
-}
-
 export default function DatasetCreate() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [datasetTypes, setDatasetTypes] = useState<DatasetType[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -83,7 +62,6 @@ export default function DatasetCreate() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaveError(null);
-    setSaveSuccess(false);
     setFieldErrors({});
 
     const nextFieldErrors: Record<string, string> = {};
@@ -136,7 +114,6 @@ export default function DatasetCreate() {
         throw new Error("No dataset ID returned from create.");
       }
 
-      setSaveSuccess(true);
       toastSuccess(addToast, "Dataset saved successfully.");
       navigate(`/datasets/${newDatasetId}`);
     } catch (caughtError) {
@@ -224,12 +201,6 @@ export default function DatasetCreate() {
               {saveError && (
                 <p className="rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
                   {saveError}
-                </p>
-              )}
-
-              {saveSuccess && (
-                <p className="rounded-md bg-green-100 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                  Dataset created successfully!
                 </p>
               )}
 

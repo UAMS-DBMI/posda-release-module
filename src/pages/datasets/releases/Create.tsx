@@ -6,6 +6,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { extractArray } from "@/lib/apiUtils";
 
 type CreateDatasetReleaseResponse = {
   dataset_release_id?: number;
@@ -24,34 +25,12 @@ type DatasetRelease = {
   release_number?: number;
 };
 
-function extractArray<T>(payload: unknown, keys: string[]): T[] {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const source = payload as Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
-  }
-
-  return [];
-}
-
 export default function DatasetReleaseCreate() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { addToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -191,7 +170,6 @@ export default function DatasetReleaseCreate() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaveError(null);
-    setSaveSuccess(false);
     setFieldErrors({});
     setIsSaving(true);
 
@@ -238,7 +216,6 @@ export default function DatasetReleaseCreate() {
         throw new Error("No dataset release ID returned from create.");
       }
 
-      setSaveSuccess(true);
       toastSuccess(addToast, "Dataset release saved successfully.");
       navigate(`/datasets/releases/${newReleaseId}`);
     } catch (caughtError) {
@@ -342,11 +319,6 @@ export default function DatasetReleaseCreate() {
           </p>
         )}
 
-        {saveSuccess && !saveError && (
-          <p className="mt-4 text-sm text-emerald-600 dark:text-emerald-400">
-            Dataset release created successfully.
-          </p>
-        )}
       </SectionCard>
     </PageShell>
   );

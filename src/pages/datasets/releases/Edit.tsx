@@ -6,6 +6,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { extractArray } from "@/lib/apiUtils";
 
 type DatasetRelease = {
   dataset_release_id: number;
@@ -31,27 +32,6 @@ type Dataset = {
   dataset_name: string;
 };
 
-function extractArray<T>(payload: unknown, keys: string[]): T[] {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const source = payload as Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
-  }
-
-  return [];
-}
-
 function toDateInput(value?: string) {
   if (!value) {
     return "";
@@ -69,7 +49,6 @@ export default function DatasetReleaseEdit() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
@@ -162,7 +141,6 @@ export default function DatasetReleaseEdit() {
 
     setSaveError(null);
     setFieldErrors({});
-    setSaveSuccess(false);
 
     const nextFieldErrors: Record<string, string> = {};
     if (!formData.dataset_id) {
@@ -203,7 +181,6 @@ export default function DatasetReleaseEdit() {
         }
       }
 
-      setSaveSuccess(true);
       toastSuccess(addToast, "Dataset release saved successfully.");
       navigate(`/datasets/releases/${releaseId}`);
     } catch (caughtError) {
@@ -308,11 +285,6 @@ export default function DatasetReleaseEdit() {
             </p>
           )}
 
-          {saveSuccess && !saveError && (
-            <p className="mt-4 text-sm text-emerald-600 dark:text-emerald-400">
-              Dataset release updated successfully.
-            </p>
-          )}
         </SectionCard>
       )}
     </PageShell>

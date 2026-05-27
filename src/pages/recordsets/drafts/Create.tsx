@@ -6,6 +6,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { extractArray } from "@/lib/apiUtils";
 
 type CreateDraftResponse = {
   recordset_draft_id?: number;
@@ -26,27 +27,6 @@ type RecordsetRelease = {
   release_date: string;
 };
 
-function extractArray<T>(payload: unknown, keys: string[]): T[] {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const source = payload as Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) {
-      return value as T[];
-    }
-  }
-
-  return [];
-}
-
 function formatReleaseLabel(release: RecordsetRelease) {
   const date = release.release_date
     ? new Date(release.release_date).toLocaleDateString()
@@ -60,7 +40,6 @@ export default function RecordsetDraftCreate() {
   const { addToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [recordsets, setRecordsets] = useState<Recordset[]>([]);
   const [recordsetReleases, setRecordsetReleases] = useState<
     RecordsetRelease[]
@@ -181,7 +160,6 @@ export default function RecordsetDraftCreate() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaveError(null);
-    setSaveSuccess(false);
     setFieldErrors({});
     setIsSaving(true);
 
@@ -232,7 +210,6 @@ export default function RecordsetDraftCreate() {
         throw new Error("No draft ID returned from create.");
       }
 
-      setSaveSuccess(true);
       toastSuccess(addToast, "Draft saved successfully.");
       navigate(`/recordsets/drafts/${newDraftId}`);
     } catch (caughtError) {
@@ -349,11 +326,6 @@ export default function RecordsetDraftCreate() {
           </p>
         )}
 
-        {saveSuccess && !saveError && (
-          <p className="mt-4 text-sm text-emerald-600 dark:text-emerald-400">
-            Draft created successfully.
-          </p>
-        )}
       </SectionCard>
     </PageShell>
   );

@@ -53,7 +53,7 @@ export const ToastProvider: React.FC<{
         return currentToast;
       }
 
-      return currentToast;
+      return null;
     });
     setIsDismissing(true);
   }, []);
