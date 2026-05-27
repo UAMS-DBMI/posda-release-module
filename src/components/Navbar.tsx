@@ -11,7 +11,7 @@ export default function Navbar() {
     <header className="navbar fixed inset-x-0 top-0 z-50">
       <nav className="content-width flex h-14 items-center justify-between px-4 sm:px-6">
         <Link to="/" className="text-sm font-bold tracking-wide text-accent">
-          POSDA
+          Release Module
         </Link>
         <ul className="flex items-center gap-5 text-sm font-medium">
           {navLinks.map((link) => (

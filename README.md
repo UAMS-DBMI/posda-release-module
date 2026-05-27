@@ -1,4 +1,4 @@
-# POSDA Distribution UI
+# POSDA Release and Distribution UI
 
 A React + Vite web application for managing biomedical datasets, recordsets, releases, and data transfers within the POSDA (POSDA Object Storage and Distribution Architecture) ecosystem.
 
