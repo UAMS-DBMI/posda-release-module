@@ -7,6 +7,7 @@ export type DynamicTableColumn<T extends RowLike> = {
   key: keyof T & string;
   label?: string;
   render?: (value: unknown, row: T) => ReactNode;
+  sortable?: boolean;
 };
 
 export type DynamicTablePagination = {
@@ -60,6 +61,16 @@ function defaultFormat(value: unknown): ReactNode {
   }
 
   return String(value);
+}
+
+function compareValues(a: unknown, b: unknown): number {
+  if (a === null || a === undefined) return 1;
+  if (b === null || b === undefined) return -1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
 }
 
 export default function DynamicTable<T extends RowLike>({
@@ -120,10 +131,20 @@ export default function DynamicTable<T extends RowLike>({
     safeDefaultItemsPerPage,
   );
   const [internalCurrentPage, setInternalCurrentPage] = useState<number>(1);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return rows;
+    return [...rows].sort((a, b) => {
+      const cmp = compareValues(a[sortKey], b[sortKey]);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [rows, sortKey, sortDir]);
 
   const resolvedItemsPerPage = pagination?.pageSize ?? internalItemsPerPage;
   const resolvedCurrentPage = pagination?.page ?? internalCurrentPage;
-  const resolvedTotalItems = pagination?.totalItems ?? rows.length;
+  const resolvedTotalItems = pagination?.totalItems ?? sortedRows.length;
   const totalPages = paginationEnabled
     ? Math.max(1, Math.ceil(resolvedTotalItems / resolvedItemsPerPage))
     : 1;
@@ -135,16 +156,16 @@ export default function DynamicTable<T extends RowLike>({
     : 0;
   const endIndex = paginationEnabled
     ? startIndex + resolvedItemsPerPage
-    : rows.length;
+    : sortedRows.length;
   const isServerPaged =
     paginationEnabled &&
     typeof pagination?.totalItems === "number" &&
-    pagination.totalItems > rows.length;
+    pagination.totalItems > sortedRows.length;
   const visibleRows = paginationEnabled
     ? isServerPaged
-      ? rows
-      : rows.slice(startIndex, endIndex)
-    : rows;
+      ? sortedRows
+      : sortedRows.slice(startIndex, endIndex)
+    : sortedRows;
 
   const showingStart =
     visibleRows.length > 0 ? (paginationEnabled ? startIndex + 1 : 1) : 0;
@@ -176,6 +197,56 @@ export default function DynamicTable<T extends RowLike>({
     setInternalCurrentPage(1);
     pagination?.onPageSizeChange?.(nextItemsPerPage);
     pagination?.onPageChange?.(1);
+  }
+
+  function handleSortClick(key: string) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+    setInternalCurrentPage(1);
+    pagination?.onPageChange?.(1);
+  }
+
+  function SortIndicator({ colKey }: { colKey: string }) {
+    if (sortKey !== colKey) {
+      return <span className="ml-1 opacity-30">↕</span>;
+    }
+    return (
+      <span className="ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>
+    );
+  }
+
+  function renderHeader(column: DynamicTableColumn<T>) {
+    const isSortable = column.sortable !== false;
+    const label = column.label ?? toLabel(column.key);
+    if (!isSortable) {
+      return (
+        <th
+          key={column.key}
+          className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-white"
+        >
+          {label}
+        </th>
+      );
+    }
+    return (
+      <th
+        key={column.key}
+        className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-white"
+      >
+        <button
+          type="button"
+          onClick={() => handleSortClick(column.key)}
+          className="inline-flex cursor-pointer items-center hover:opacity-80"
+        >
+          {label}
+          <SortIndicator colKey={column.key} />
+        </button>
+      </th>
+    );
   }
 
   return (
@@ -215,14 +286,7 @@ export default function DynamicTable<T extends RowLike>({
           <table className="min-w-full border-collapse text-left text-sm">
             <thead className="sticky top-0">
               <tr className="bg-accent">
-                {resolvedColumns.map((column) => (
-                  <th
-                    key={column.key}
-                    className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-white"
-                  >
-                    {column.label ?? toLabel(column.key)}
-                  </th>
-                ))}
+                {resolvedColumns.map((column) => renderHeader(column))}
               </tr>
             </thead>
             <tbody>
@@ -263,14 +327,7 @@ export default function DynamicTable<T extends RowLike>({
           <table className="min-w-full border-collapse text-left text-sm">
             <thead>
               <tr className="bg-accent">
-                {resolvedColumns.map((column) => (
-                  <th
-                    key={column.key}
-                    className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-white"
-                  >
-                    {column.label ?? toLabel(column.key)}
-                  </th>
-                ))}
+                {resolvedColumns.map((column) => renderHeader(column))}
               </tr>
             </thead>
             <tbody>
