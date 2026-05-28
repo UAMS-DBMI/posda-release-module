@@ -119,11 +119,12 @@ function normalizeRecordsetReleasesResponse(
       }
     | undefined;
 
-  const releases = Array.isArray(source?.releases)
+  const releases = (Array.isArray(source?.releases)
     ? source.releases
     : Array.isArray(source?.data)
       ? source.data
-      : [];
+      : []
+  ).slice().sort((a, b) => b.release_number - a.release_number);
 
   return {
     releases,
@@ -153,11 +154,12 @@ function normalizeRecordsetDraftsResponse(
       }
     | undefined;
 
-  const drafts = Array.isArray(source?.drafts)
+  const drafts = (Array.isArray(source?.drafts)
     ? source.drafts
     : Array.isArray(source?.data)
       ? source.data
-      : [];
+      : []
+  ).slice().sort((a, b) => b.recordset_draft_id - a.recordset_draft_id);
 
   return {
     drafts,
