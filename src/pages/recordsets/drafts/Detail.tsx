@@ -282,9 +282,9 @@ export default function RecordsetDraftDetail() {
         error={error}
         fields={draftFields}
         actions={
-          <div className="space-y-1 rounded-md px-3 py-2 text-xs" style={{ background: "var(--surface-alt)", border: "1px solid var(--border-strong)", color: "var(--muted)" }}>
-            <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Created:</span>{" "}{draft?.when_created ? new Date(draft.when_created).toLocaleString() : "—"} by {draft?.who_created ?? "—"}</p>
-            <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Updated:</span>{" "}{draft?.when_updated ? new Date(draft.when_updated).toLocaleString() : "—"} by {draft?.who_updated ?? "—"}</p>
+          <div className="metadata-panel">
+            <p><strong>Created:</strong>{" "}{draft?.when_created ? new Date(draft.when_created).toLocaleString() : "—"} by {draft?.who_created ?? "—"}</p>
+            <p><strong>Updated:</strong>{" "}{draft?.when_updated ? new Date(draft.when_updated).toLocaleString() : "—"} by {draft?.who_updated ?? "—"}</p>
           </div>
         }
       />

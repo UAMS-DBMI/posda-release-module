@@ -369,9 +369,9 @@ export default function RecordsetEdit() {
               className="space-y-3"
               actions={
                 <>
-                  <div className="space-y-1 rounded-md px-3 py-2 text-xs" style={{ background: "var(--surface-alt)", border: "1px solid var(--border-strong)", color: "var(--muted)" }}>
-                    <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Created:</span>{" "}{new Date(recordset.when_created).toLocaleString()} by {recordset.who_created}</p>
-                    <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Updated:</span>{" "}{new Date(recordset.when_updated).toLocaleString()} by {recordset.who_updated}</p>
+                  <div className="metadata-panel">
+                    <p><strong>Created:</strong>{" "}{new Date(recordset.when_created).toLocaleString()} by {recordset.who_created}</p>
+                    <p><strong>Updated:</strong>{" "}{new Date(recordset.when_updated).toLocaleString()} by {recordset.who_updated}</p>
                   </div>
 
                   {saveError && (

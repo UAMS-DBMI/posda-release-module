@@ -478,31 +478,14 @@ export default function DatasetDetail() {
         error={error}
         fields={datasetFields}
         actions={
-          <div
-            className="space-y-1 rounded-md px-3 py-2 text-xs"
-            style={{
-              background: "var(--surface-alt)",
-              border: "1px solid var(--border-strong)",
-              color: "var(--muted)",
-            }}
-          >
+          <div className="metadata-panel">
             <p>
-              <span
-                className="font-semibold"
-                style={{ color: "var(--foreground)" }}
-              >
-                Created:
-              </span>{" "}
+              <strong>Created:</strong>{" "}
               {dataset ? new Date(dataset.when_created).toLocaleString() : "—"}{" "}
               by {dataset?.who_created}
             </p>
             <p>
-              <span
-                className="font-semibold"
-                style={{ color: "var(--foreground)" }}
-              >
-                Updated:
-              </span>{" "}
+              <strong>Updated:</strong>{" "}
               {dataset ? new Date(dataset.when_updated).toLocaleString() : "—"}{" "}
               by {dataset?.who_updated}
             </p>

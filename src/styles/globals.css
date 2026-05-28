@@ -106,6 +106,17 @@
     color: var(--foreground);
   }
 
+  .metadata-panel {
+    @apply space-y-1 rounded-md px-3 py-2 text-xs;
+    background: var(--background);
+    border: 1px solid var(--border-strong);
+    color: var(--muted);
+  }
+
+  .metadata-panel strong {
+    color: var(--foreground);
+  }
+
   .navbar {
     background: var(--surface);
     border-bottom: 1px solid var(--border-strong);

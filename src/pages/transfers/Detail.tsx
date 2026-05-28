@@ -375,9 +375,9 @@ export default function TransferDetail() {
         error={error}
         fields={transferFields}
         actions={
-          <div className="space-y-1 rounded-md px-3 py-2 text-xs" style={{ background: "var(--surface-alt)", border: "1px solid var(--border-strong)", color: "var(--muted)" }}>
-            <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Created:</span>{" "}{transfer ? new Date(transfer.when_created).toLocaleString() : "—"}</p>
-            <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Updated:</span>{" "}{transfer ? new Date(transfer.when_updated).toLocaleString() : "—"}</p>
+          <div className="metadata-panel">
+            <p><strong>Created:</strong>{" "}{transfer ? new Date(transfer.when_created).toLocaleString() : "—"}</p>
+            <p><strong>Updated:</strong>{" "}{transfer ? new Date(transfer.when_updated).toLocaleString() : "—"}</p>
           </div>
         }
       />

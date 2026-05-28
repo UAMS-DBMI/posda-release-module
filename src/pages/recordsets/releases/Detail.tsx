@@ -173,9 +173,9 @@ export default function RecordsetReleaseDetail() {
         error={error}
         fields={releaseFields}
         actions={
-          <div className="space-y-1 rounded-md px-3 py-2 text-xs" style={{ background: "var(--surface-alt)", border: "1px solid var(--border-strong)", color: "var(--muted)" }}>
-            <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Created:</span>{" "}{release?.when_created ? new Date(release.when_created).toLocaleString() : "—"} by {release?.who_created ?? "—"}</p>
-            <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Updated:</span>{" "}{release?.when_updated ? new Date(release.when_updated).toLocaleString() : "—"} by {release?.who_updated ?? "—"}</p>
+          <div className="metadata-panel">
+            <p><strong>Created:</strong>{" "}{release?.when_created ? new Date(release.when_created).toLocaleString() : "—"} by {release?.who_created ?? "—"}</p>
+            <p><strong>Updated:</strong>{" "}{release?.when_updated ? new Date(release.when_updated).toLocaleString() : "—"} by {release?.who_updated ?? "—"}</p>
           </div>
         }
       />
