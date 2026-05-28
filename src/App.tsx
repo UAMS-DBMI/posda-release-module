@@ -1,4 +1,5 @@
-import { Outlet, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Outlet, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { ToastProvider } from "@/components/Toast";
 
@@ -32,9 +33,18 @@ import RecordsetDraftFiles from "@/pages/recordsets/drafts/Files";
 import TransfersList from "@/pages/transfers/List";
 import TransferById from "@/pages/transfers/Detail";
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 function RootLayout() {
   return (
     <ToastProvider>
+      <ScrollToTop />
       <Navbar />
       <Outlet />
     </ToastProvider>
