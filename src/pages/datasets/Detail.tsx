@@ -10,6 +10,7 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { extractApiError } from "@/lib/apiUtils";
+import { useUsers } from "@/lib/useUsers";
 
 type Dataset = {
   dataset_id: number;
@@ -20,8 +21,8 @@ type Dataset = {
   active: boolean;
   when_created: string;
   when_updated: string;
-  who_created: string;
-  who_updated: string;
+  who_created: number;
+  who_updated: number;
 };
 
 type DatasetResponse = {
@@ -168,6 +169,7 @@ function formatDateTime(value?: string) {
 
 export default function DatasetDetail() {
   const navigate = useNavigate();
+  const userMap = useUsers();
   const { addToast } = useToast();
   const { dataset_id: datasetId } = useParams<{ dataset_id: string }>();
   const [data, setData] = useState<DatasetResponse | null>(null);
@@ -482,12 +484,12 @@ export default function DatasetDetail() {
             <p>
               <strong>Created:</strong>{" "}
               {dataset ? new Date(dataset.when_created).toLocaleString() : "—"}{" "}
-              by {dataset?.who_created}
+              by {dataset != null ? (userMap.get(dataset.who_created) ?? "—") : "—"}
             </p>
             <p>
               <strong>Updated:</strong>{" "}
               {dataset ? new Date(dataset.when_updated).toLocaleString() : "—"}{" "}
-              by {dataset?.who_updated}
+              by {dataset != null ? (userMap.get(dataset.who_updated) ?? "—") : "—"}
             </p>
           </div>
         }

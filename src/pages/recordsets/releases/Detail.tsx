@@ -6,6 +6,7 @@ import DynamicSection, {
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { extractApiError } from "@/lib/apiUtils";
+import { useUsers } from "@/lib/useUsers";
 
 type RecordsetRelease = {
   recordset_release_id: number;
@@ -14,9 +15,9 @@ type RecordsetRelease = {
   release_date: string;
   release_notes: string;
   when_created: string;
-  who_created: string;
+  who_created: number;
   when_updated?: string;
-  who_updated?: string;
+  who_updated?: number;
 };
 
 type ReleaseResponse = {
@@ -73,6 +74,7 @@ async function getApiErrorMessage(
 
 export default function RecordsetReleaseDetail() {
   const { release_id: releaseId } = useParams<{ release_id: string }>();
+  const userMap = useUsers();
   const [data, setData] = useState<ReleaseResponse | null>(null);
   const [summary, setSummary] = useState<ReleaseSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -174,9 +176,9 @@ export default function RecordsetReleaseDetail() {
         fields={releaseFields}
         actions={
           <div className="metadata-panel">
-            <p><strong>Created:</strong>{" "}{release?.when_created ? new Date(release.when_created).toLocaleString() : "—"} by {release?.who_created ?? "—"}</p>
-            <p><strong>Updated:</strong>{" "}{release?.when_updated ? new Date(release.when_updated).toLocaleString() : "—"} by {release?.who_updated ?? "—"}</p>
-          </div>
+            <p><strong>Created:</strong>{" "}{release?.when_created ? new Date(release.when_created).toLocaleString() : "—"} by {release?.who_created != null ? (userMap.get(release.who_created) ?? "—") : "—"}</p>
+            <p><strong>Updated:</strong>{" "}{release?.when_updated ? new Date(release.when_updated).toLocaleString() : "—"} by {release?.who_updated != null ? (userMap.get(release.who_updated) ?? "—") : "—"}</p>
+          </div>          
         }
       />
 

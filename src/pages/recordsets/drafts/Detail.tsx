@@ -9,6 +9,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
+import { useUsers } from "@/lib/useUsers";
 
 type Draft = {
   recordset_draft_id: number;
@@ -18,9 +19,9 @@ type Draft = {
   draft_status: string;
   draft_notes: string;
   when_created?: string;
-  who_created?: string;
+  who_created?: number;
   when_updated?: string;
-  who_updated?: string;
+  who_updated?: number;
 };
 
 type DraftResponse = {
@@ -64,6 +65,7 @@ function formatBytes(bytes: number): string {
 
 export default function RecordsetDraftDetail() {
   const navigate = useNavigate();
+  const userMap = useUsers();
   const { addToast } = useToast();
   const { draft_id: draftId } = useParams<{ draft_id: string }>();
 
@@ -283,9 +285,9 @@ export default function RecordsetDraftDetail() {
         fields={draftFields}
         actions={
           <div className="metadata-panel">
-            <p><strong>Created:</strong>{" "}{draft?.when_created ? new Date(draft.when_created).toLocaleString() : "—"} by {draft?.who_created ?? "—"}</p>
-            <p><strong>Updated:</strong>{" "}{draft?.when_updated ? new Date(draft.when_updated).toLocaleString() : "—"} by {draft?.who_updated ?? "—"}</p>
-          </div>
+            <p><strong>Created:</strong>{" "}{draft?.when_created ? new Date(draft.when_created).toLocaleString() : "—"} by {draft?.who_created != null ? (userMap.get(draft.who_created) ?? "—") : "—"}</p>
+            <p><strong>Updated:</strong>{" "}{draft?.when_updated ? new Date(draft.when_updated).toLocaleString() : "—"} by {draft?.who_updated != null ? (userMap.get(draft.who_updated) ?? "—") : "—"}</p>
+          </div>          
         }
       />
 

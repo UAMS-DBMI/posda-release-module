@@ -10,6 +10,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
+import { useUsers } from "@/lib/useUsers";
 
 type Recordset = {
   recordset_id: number;
@@ -23,9 +24,9 @@ type Recordset = {
   recordset_name: string;
   active: boolean;
   when_created: string;
-  who_created: string;
+  who_created: number;
   when_updated: string;
-  who_updated: string;
+  who_updated: number;
 };
 
 type RecordsetResponse = {
@@ -178,6 +179,7 @@ function normalizeRecordsetDraftsResponse(
 
 export default function RecordsetDetail() {
   const navigate = useNavigate();
+  const userMap = useUsers();
   const { addToast } = useToast();
   const { recordset_id: recordsetId } = useParams<{ recordset_id: string }>();
   const [data, setData] = useState<RecordsetResponse | null>(null);
@@ -644,7 +646,7 @@ export default function RecordsetDetail() {
               {recordset
                 ? new Date(recordset.when_created).toLocaleString()
                 : "—"}{" "}
-              by {recordset?.who_created}
+              by {recordset != null ? (userMap.get(recordset.who_created) ?? "—") : "—"}
             </p>
             <p>
               <span
@@ -656,7 +658,7 @@ export default function RecordsetDetail() {
               {recordset
                 ? new Date(recordset.when_updated).toLocaleString()
                 : "—"}{" "}
-              by {recordset?.who_updated}
+              by {recordset != null ? (userMap.get(recordset.who_updated) ?? "—") : "—"}
             </p>
           </div>
         }

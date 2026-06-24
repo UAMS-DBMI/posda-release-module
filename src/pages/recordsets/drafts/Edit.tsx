@@ -16,9 +16,9 @@ type Draft = {
   draft_status: string;
   draft_notes: string;
   when_created?: string;
-  who_created?: string;
+  who_created?: number;
   when_updated?: string;
-  who_updated?: string;
+  who_updated?: number;
 };
 
 type DraftResponse = {

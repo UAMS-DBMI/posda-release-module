@@ -7,6 +7,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { extractApiError, extractArray } from "@/lib/apiUtils";
+import { useUsers } from "@/lib/useUsers";
 
 type Dataset = {
   dataset_id: number;
@@ -17,8 +18,8 @@ type Dataset = {
   active: boolean;
   when_created: string;
   when_updated: string;
-  who_created: string;
-  who_updated: string;
+  who_created: number;
+  who_updated: number;
 };
 
 type DatasetResponse = {
@@ -34,6 +35,7 @@ type DatasetType = {
 
 export default function DatasetEdit() {
   const navigate = useNavigate();
+  const userMap = useUsers();
   const { addToast } = useToast();
   const { dataset_id: datasetId } = useParams<{ dataset_id: string }>();
   const [data, setData] = useState<DatasetResponse | null>(null);
@@ -294,8 +296,8 @@ export default function DatasetEdit() {
               actions={
                 <>
                   <div className="space-y-1 rounded-md px-3 py-2 text-xs" style={{ background: "var(--surface-alt)", border: "1px solid var(--border-strong)", color: "var(--muted)" }}>
-                    <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Created:</span>{" "}{new Date(dataset.when_created).toLocaleString()} by {dataset.who_created}</p>
-                    <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Updated:</span>{" "}{new Date(dataset.when_updated).toLocaleString()} by {dataset.who_updated}</p>
+                    <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Created:</span>{" "}{new Date(dataset.when_created).toLocaleString()} by {userMap.get(dataset.who_created) ?? "—"}</p>
+                    <p><span className="font-semibold" style={{ color: "var(--foreground)" }}>Updated:</span>{" "}{new Date(dataset.when_updated).toLocaleString()} by {userMap.get(dataset.who_updated) ?? "—"}</p>
                   </div>
 
                   {saveError && (

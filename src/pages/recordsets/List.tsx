@@ -21,9 +21,9 @@ type Recordset = {
   recordset_name?: string;
   active: boolean;
   when_created?: string;
-  who_created?: string;
+  who_created?: number;
   when_updated?: string;
-  who_updated?: string;
+  who_updated?: number;
 };
 
 type RecordsetsResponse = {

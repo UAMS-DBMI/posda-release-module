@@ -7,6 +7,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { extractApiError, extractArray } from "@/lib/apiUtils";
+import { useUsers } from "@/lib/useUsers";
 
 type DatasetRelease = {
   dataset_release_id: number;
@@ -15,9 +16,9 @@ type DatasetRelease = {
   release_date: string;
   release_notes: string;
   when_created?: string;
-  who_created?: string;
+  who_created?: number;
   when_updated?: string;
-  who_updated?: string;
+  who_updated?: number;
 };
 
 type DatasetReleaseResponse = {
@@ -100,6 +101,7 @@ async function getApiErrorMessage(
 
 export default function DatasetReleaseDetail() {
   const { release_id: releaseId } = useParams<{ release_id: string }>();
+  const userMap = useUsers();
   const [data, setData] = useState<DatasetReleaseResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -509,8 +511,8 @@ export default function DatasetReleaseDetail() {
         fields={releaseFields}
         actions={
           <div className="metadata-panel">
-            <p><strong>Created:</strong>{" "}{release?.when_created ? new Date(release.when_created).toLocaleString() : "—"} by {release?.who_created ?? "—"}</p>
-            <p><strong>Updated:</strong>{" "}{release ? (release.when_updated ? new Date(release.when_updated).toLocaleString() : "—") : "—"} by {release?.who_updated ?? "—"}</p>
+            <p><strong>Created:</strong>{" "}{release?.when_created ? new Date(release.when_created).toLocaleString() : "—"} by {release?.who_created != null ? (userMap.get(release.who_created) ?? "—") : "—"}</p>
+            <p><strong>Updated:</strong>{" "}{release ? (release.when_updated ? new Date(release.when_updated).toLocaleString() : "—") : "—"} by {release?.who_updated != null ? (userMap.get(release.who_updated) ?? "—") : "—"}</p>
           </div>
         }
       />

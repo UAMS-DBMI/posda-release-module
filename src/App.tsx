@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { ToastProvider } from "@/components/Toast";
+import { CurrentUserContext, type CurrentUser } from "@/lib/useCurrentUser";
 
 import Home from "@/pages/Home";
 
@@ -42,12 +43,23 @@ function ScrollToTop() {
 }
 
 function RootLayout() {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+    fetch("/papi/auth/users/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: CurrentUser | null) => { if (json) setCurrentUser(json); })
+      .catch(() => {});
+  }, []);
+
   return (
-    <ToastProvider>
-      <ScrollToTop />
-      <Navbar />
-      <Outlet />
-    </ToastProvider>
+    <CurrentUserContext.Provider value={currentUser}>
+      <ToastProvider>
+        <ScrollToTop />
+        <Navbar />
+        <Outlet />
+      </ToastProvider>
+    </CurrentUserContext.Provider>
   );
 }
 

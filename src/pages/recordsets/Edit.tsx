@@ -7,6 +7,7 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { extractApiError, extractArray } from "@/lib/apiUtils";
+import { useUsers } from "@/lib/useUsers";
 
 type Recordset = {
   recordset_id: number;
@@ -21,8 +22,8 @@ type Recordset = {
   active: boolean;
   when_created: string;
   when_updated: string;
-  who_created: string;
-  who_updated: string;
+  who_created: number;
+  who_updated: number;
 };
 
 type RecordsetResponse = {
@@ -48,6 +49,7 @@ type RecordsetType = {
 
 export default function RecordsetEdit() {
   const navigate = useNavigate();
+  const userMap = useUsers();
   const { addToast } = useToast();
   const { recordset_id: recordsetId } = useParams<{ recordset_id: string }>();
   const [data, setData] = useState<RecordsetResponse | null>(null);
@@ -370,9 +372,9 @@ export default function RecordsetEdit() {
               actions={
                 <>
                   <div className="metadata-panel">
-                    <p><strong>Created:</strong>{" "}{new Date(recordset.when_created).toLocaleString()} by {recordset.who_created}</p>
-                    <p><strong>Updated:</strong>{" "}{new Date(recordset.when_updated).toLocaleString()} by {recordset.who_updated}</p>
-                  </div>
+                    <p><strong>Created:</strong>{" "}{new Date(recordset.when_created).toLocaleString()} by {userMap.get(recordset.who_created) ?? "—"}</p>
+                    <p><strong>Updated:</strong>{" "}{new Date(recordset.when_updated).toLocaleString()} by {userMap.get(recordset.who_updated) ?? "—"}</p>
+                  </div>                  
 
                   {saveError && (
                     <p className="rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">

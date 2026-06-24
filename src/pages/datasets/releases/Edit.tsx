@@ -15,9 +15,9 @@ type DatasetRelease = {
   release_date: string;
   release_notes: string;
   when_created?: string;
-  who_created?: string;
+  who_created?: number;
   when_updated?: string;
-  who_updated?: string;
+  who_updated?: number;
 };
 
 type DatasetReleaseResponse = {
