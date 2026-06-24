@@ -2,10 +2,12 @@
 import { useNavigate } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import DynamicTable from "@/components/DynamicTable";
+import FavoriteStar from "@/components/FavoriteStar";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { extractArray } from "@/lib/apiUtils";
+import { useFavorites } from "@/lib/useFavorites";
 
 type Recordset = {
   recordset_id: number;
@@ -90,6 +92,7 @@ function formatDateTime(value?: string) {
 
 export default function RecordsetsList() {
   const navigate = useNavigate();
+  const { favoriteKeys, toggle } = useFavorites();
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [filtersInput, setFiltersInput] = useState<RecordsetFilters>({
     search: "",
@@ -279,6 +282,24 @@ export default function RecordsetsList() {
                 { key: "recordset_name", label: "Name" },
                 { key: "active", label: "Active" },
                 { key: "when_updated", label: "Updated" },
+                {
+                  key: "recordset_id",
+                  label: "",
+                  sortable: false,
+                  render: (_value, row) => (
+                    <FavoriteStar
+                      size={20}
+                      filled={favoriteKeys.has(`recordset:${row.recordset_id}`)}
+                      onClick={() =>
+                        void toggle(
+                          "recordset",
+                          row.recordset_id,
+                          row.recordset_name,
+                        )
+                      }
+                    />
+                  ),
+                },
               ]}
               excludeKeys={[]}
               pagination={{

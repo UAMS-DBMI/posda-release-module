@@ -250,7 +250,7 @@ export default function DynamicTable<T extends RowLike>({
   }
 
   return (
-    <div className="p-3">
+    <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
         <p>
           Showing {showingStart}-{showingEnd} of {showingTotal}

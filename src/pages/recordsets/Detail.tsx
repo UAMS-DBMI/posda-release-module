@@ -11,6 +11,8 @@ import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
+import { useFavorites } from "@/lib/useFavorites";
+import FavoriteStar from "@/components/FavoriteStar";
 
 type Recordset = {
   recordset_id: number;
@@ -180,6 +182,7 @@ function normalizeRecordsetDraftsResponse(
 export default function RecordsetDetail() {
   const navigate = useNavigate();
   const userMap = useUsers();
+  const { favoriteKeys, toggle: toggleFavorite } = useFavorites();
   const { addToast } = useToast();
   const { recordset_id: recordsetId } = useParams<{ recordset_id: string }>();
   const [data, setData] = useState<RecordsetResponse | null>(null);
@@ -613,13 +616,28 @@ export default function RecordsetDetail() {
             : undefined
         }
         actions={
-          <LinkButton
-            href={
-              recordsetId ? `/recordsets/${recordsetId}/edit` : "/recordsets"
-            }
-          >
-            Edit Recordset
-          </LinkButton>
+          <>
+            <FavoriteStar
+              disabled={!recordset}
+              filled={favoriteKeys.has(`recordset:${recordsetId}`)}
+              onClick={() => {
+                if (recordsetId && recordset) {
+                  void toggleFavorite(
+                    "recordset",
+                    parseInt(recordsetId, 10),
+                    recordset.recordset_name,
+                  );
+                }
+              }}
+            />
+            <LinkButton
+              href={
+                recordsetId ? `/recordsets/${recordsetId}/edit` : "/recordsets"
+              }
+            >
+              Edit Recordset
+            </LinkButton>
+          </>
         }
       />
 

@@ -2,10 +2,12 @@
 import { useNavigate } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import DynamicTable from "@/components/DynamicTable";
+import FavoriteStar from "@/components/FavoriteStar";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { extractArray } from "@/lib/apiUtils";
+import { useFavorites } from "@/lib/useFavorites";
 
 type Dataset = {
   dataset_id: number;
@@ -69,6 +71,7 @@ function normalizeDatasetsResponse(payload: unknown): DatasetsResponse {
 
 export default function DatasetsList() {
   const navigate = useNavigate();
+  const { favoriteKeys, toggle } = useFavorites();
   const [datasetTypes, setDatasetTypes] = useState<DatasetType[]>([]);
   const [filtersInput, setFiltersInput] = useState<DatasetFilters>({
     search: "",
@@ -266,6 +269,20 @@ export default function DatasetsList() {
                 { key: "dataset_type_name", label: "Type" },
                 { key: "active", label: "Active" },
                 { key: "when_updated", label: "Updated" },
+                {
+                  key: "dataset_id",
+                  label: "",
+                  sortable: false,
+                  render: (_value, row) => (
+                    <FavoriteStar
+                      size={20}
+                      filled={favoriteKeys.has(`dataset:${row.dataset_id}`)}
+                      onClick={() =>
+                        void toggle("dataset", row.dataset_id, row.dataset_name)
+                      }
+                    />
+                  ),
+                },
               ]}
               formatters={{
                 when_updated: (value) =>

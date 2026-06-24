@@ -11,6 +11,8 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
+import { useFavorites } from "@/lib/useFavorites";
+import FavoriteStar from "@/components/FavoriteStar";
 
 type Dataset = {
   dataset_id: number;
@@ -170,6 +172,7 @@ function formatDateTime(value?: string) {
 export default function DatasetDetail() {
   const navigate = useNavigate();
   const userMap = useUsers();
+  const { favoriteKeys, toggle: toggleFavorite } = useFavorites();
   const { addToast } = useToast();
   const { dataset_id: datasetId } = useParams<{ dataset_id: string }>();
   const [data, setData] = useState<DatasetResponse | null>(null);
@@ -467,11 +470,26 @@ export default function DatasetDetail() {
             : undefined
         }
         actions={
-          <LinkButton
-            href={datasetId ? `/datasets/${datasetId}/edit` : "/datasets"}
-          >
-            Edit Dataset
-          </LinkButton>
+          <>
+            <FavoriteStar
+              disabled={!dataset}
+              filled={favoriteKeys.has(`dataset:${datasetId}`)}
+              onClick={() => {
+                if (datasetId && dataset) {
+                  void toggleFavorite(
+                    "dataset",
+                    parseInt(datasetId, 10),
+                    dataset.dataset_name,
+                  );
+                }
+              }}
+            />
+            <LinkButton
+              href={datasetId ? `/datasets/${datasetId}/edit` : "/datasets"}
+            >
+              Edit Dataset
+            </LinkButton>
+          </>
         }
       />
 
