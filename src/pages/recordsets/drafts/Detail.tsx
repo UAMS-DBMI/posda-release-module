@@ -10,6 +10,7 @@ import { useToast } from "@/components/Toast";
 import { toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
+import QcReviewsCard from "@/components/QcReviewsCard";
 
 type Draft = {
   recordset_draft_id: number;
@@ -415,6 +416,8 @@ export default function RecordsetDraftDetail() {
           </div>
         )}
       </SectionCard>
+
+      {draft && <QcReviewsCard draftId={draftId} />}
     </PageShell>
   );
 }

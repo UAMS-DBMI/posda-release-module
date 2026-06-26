@@ -49,7 +49,10 @@
   }
 
   .page-shell {
-    @apply mx-auto min-h-screen w-full px-6 py-10;
+    @apply mx-auto w-full px-6 py-10;
+    /* fill below the fixed navbar; body already pads top by --navbar-height,
+       so 100vh here would overflow by the navbar height (perpetual scrollbar) */
+    min-height: calc(100vh - var(--navbar-height));
   }
   .page-shell-3xl,
   .page-shell-5xl,

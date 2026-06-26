@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import DynamicTable from "@/components/DynamicTable";
 import FavoriteStar from "@/components/FavoriteStar";
+import QcWorkItems from "@/components/QcWorkItems";
 import { useFavorites, type Favorite } from "@/lib/useFavorites";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
@@ -32,6 +33,8 @@ export default function Home() {
   return (
     <PageShell>
       <PageDetailHeader title="Dashboard" />
+
+      <QcWorkItems />
 
       <CardHeader className="mt-6 mb-0">
         <CardTitle>Favorite Datasets</CardTitle>
