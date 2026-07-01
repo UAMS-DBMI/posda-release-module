@@ -288,56 +288,56 @@ marked separately is application logic, still to build.
 
 #### A. Partial reviews + review type
 
-- [ ] `qc_review.review_type` (`full` | `partial`), default `full`
-- [ ] `qc_review.sample_percentage numeric` (uniform; NULL when full)
-- [ ] `qc_review.sample_seed integer` — **retained.** Sampling is keyed on
+- [x] `qc_review.review_type` (`full` | `partial`), default `full`
+- [x] `qc_review.sample_percentage numeric` (uniform; NULL when full)
+- [x] `qc_review.sample_seed integer` — **retained.** Sampling is keyed on
       `series_instance_uid` (stable; **not** `file_id`). The persisted `qc_series`
       rows are the source of truth for membership; the seed only reproduces a
       draw or makes a deliberate re-draw / top-up deterministic. A plain clone
       copies the same series, so it never needs the seed.
-- [ ] `qc_series.modality` — denormalized onto the snapshot row (populated at
+- [x] `qc_series.modality` — denormalized onto the snapshot row (populated at
       insert via a `DISTINCT` lookup on `file_series` over `file_series_uid_idx`;
       modality is nullable there). Drives the stratified split + per-modality
       summaries; avoids per-file join+dedup. **Replaces** a `qc_review_modality`
       table. (`file_series` is per-file, so a UID maps to many rows.)
-- [ ] Sampled series remain a subset of `qc_series` rows (no change there)
+- [x] Sampled series remain a subset of `qc_series` rows (no change there)
 
 #### B. Cloning a partial review — "carry-forward + reconcile" (recommended)
 
-- [ ] Default clone mode: copy `review_type` + `sample_percentage`; carry forward
+- [x] Default clone mode: copy `review_type` + `sample_percentage`; carry forward
       sampled series UIDs **and** their `qc_status`; recompute `series_file_hash`
       → mark changed series `stale`/pending (reuses existing stale machinery)
-- [ ] Reconcile to target %: drop series no longer in the draft; if population
+- [x] Reconcile to target %: drop series no longer in the draft; if population
       grew and the sample fell below target %, top up with new `pending` series
-- [ ] Alternative clone mode (explicit flag): fresh **re-sample** (new seed, no
+- [x] Alternative clone mode (explicit flag): fresh **re-sample** (new seed, no
       carried decisions)
-- [ ] Assignments reset on clone: new clone starts with one unclaimed
+- [x] Assignments reset on clone: new clone starts with one unclaimed
       whole-review slice (re-splitting is a separate action)
 
 #### C. Assignment / splitting + "needs QC" pickup
 
-- [ ] `qc_review_assignment (assignment_id, qc_review_id, assigned_to NULL=unclaimed,
+- [x] `qc_review_assignment (assignment_id, qc_review_id, assigned_to NULL=unclaimed,
       assignment_status: needs_qc|in_progress|complete, share_percentage, audit cols)`
-- [ ] `qc_series.assignment_id` FK → `qc_review_assignment` (each series belongs to
+- [x] `qc_series.assignment_id` FK → `qc_review_assignment` (each series belongs to
       exactly one slice; this is how the stratified %-split is recorded)
-- [ ] On review create: auto-insert one assignment (share 100, unclaimed,
+- [x] On review create: auto-insert one assignment (share 100, unclaimed,
       `needs_qc`); point every `qc_series` at it
-- [ ] Split: insert N assignments with shares; redistribute `qc_series.assignment_id`
+- [x] Split: insert N assignments with shares; redistribute `qc_series.assignment_id`
       **evenly per modality** (grouping by `qc_series.modality`) across them, with
       deterministic remainder rounding (round-robin leftovers) in the app layer
-- [ ] Pickup page query = `assigned_to IS NULL AND assignment_status='needs_qc'`
-- [ ] Keep `qc_review.review_status` for lifecycle only (don't overload it with
+- [x] Pickup page query = `assigned_to IS NULL AND assignment_status='needs_qc'`
+- [x] Keep `qc_review.review_status` for lifecycle only (don't overload it with
       assignment state); app validates shares sum to 100%
 
 #### D. `user_flag` — per-user action items (polymorphic)
 
-- [ ] `user_flag (user_flag_id, object_type, object_id, series_instance_uid NULL,
+- [x] `user_flag (user_flag_id, object_type, object_id, series_instance_uid NULL,
       flagged_for, flagged_by, note, flag_status: open|resolved, resolve audit)`
       — `object_type`/`object_id` like `user_favorite`; `series_instance_uid`
       narrows within a `qc_review`. Named per the `user_*` convention; note the
       target is `flagged_for`, not an owner.
-- [ ] Distinct from `qc_status='flagged'` (a review decision, not a targeted task)
-- [ ] Dashboard action items = `flagged_for = :me AND flag_status='open'`
+- [x] Distinct from `qc_status='flagged'` (a review decision, not a targeted task)
+- [x] Dashboard action items = `flagged_for = :me AND flag_status='open'`
 
 ### ⭐ PRIORITY 1 — QC API layer (interface + viz tool)
 
@@ -346,13 +346,12 @@ New endpoints under the `/papi/v1/distribution` router, `qc/` namespace
 `{data: …}` envelope, `api_error`. The viz tool lives in **Mirabelle** (separate
 project) and consumes the viz-tool endpoints below.
 
-**Implemented (first pass):** 21 routes appended to `distribution.py` —
-reviews (create/sampling, list, detail, update, cancel, clone, split),
-assignments (list, queue, detail, update, claim, release), series (list, summary,
-set status, batch status, history), and flags (create, list, update). The draw is
-a shared `QC_DRAW_CTE` (used by sampling + clone + the stale reconcile). Pending:
-manual API testing against a live DB; frontend pages; the pagination retrofit
-(item #10).
+**Implemented:** 22 routes in `distribution.py` — reviews (create/sampling, list,
+detail, update, cancel, clone, split), assignments (list, queue, detail, update,
+claim, release), series (list, summary, set status, batch status, history, files),
+and flags (create, list, update). The draw is a shared `QC_DRAW_CTE` (used by
+sampling + clone + the stale reconcile). Frontend Phases 0–C done; pagination
+retrofitted (item #10).
 
 **Write policy (decided):** series status writes (B/C) are allowed for **any
 authorized user** — no `caller == assigned_to` enforcement; an unclaimed
@@ -382,32 +381,36 @@ Applies to all QC + flag list endpoints.
 
 #### Viz-tool endpoints (Mirabelle consumes)
 
-- [ ] **A. List series in an assignment, filter by status**
+- [x] **A. List series in an assignment, filter by status**
       `GET /distribution/qc/assignments/{assignment_id}/series`
       `?qc_status=pending&modality=CT&page=&limit=` (single-value filters) →
       `qc_series WHERE assignment_id=:id` + filters; returns uid, qc_status,
       modality, series_file_hash, notes
-- [ ] **B. Set one series' status**
+- [x] **A+. Files for a series in an assignment** _(added for Mirabelle)_
+      `GET /distribution/qc/assignments/{assignment_id}/series/{series_uid}/files`
+      → ordered by instance_number; returns file_id, num_of_frames, file_path;
+      404 if series not in assignment
+- [x] **B. Set one series' status**
       `PUT /distribution/qc/assignments/{assignment_id}/series/{series_instance_uid}/status`
       body `{ qc_status, notes? }` → validate series ∈ assignment; update
       `qc_series`; append `qc_series_history`; return updated row
-- [ ] **C. Batch set status** (avoid one-HTTP-per-series)
+- [x] **C. Batch set status** (avoid one-HTTP-per-series)
       `PUT /distribution/qc/assignments/{assignment_id}/series/status`
       body `{ series_instance_uids[], qc_status, notes? }` → one txn, history per series
-- [ ] **D. Supporting reads** — `GET …/qc/assignments/{id}` (assignment + review +
+- [x] **D. Supporting reads** — `GET …/qc/assignments/{id}` (assignment + review +
       draft context); `GET …/qc/assignments/{id}/series/summary` (counts by
       qc_status and modality×status, for filter chips + progress)
 
 #### Interface endpoints (Posda UI)
 
-- [ ] Reviews: `GET/POST /distribution/recordsets/drafts/{draft_id}/qc-reviews`
+- [x] Reviews: `GET/POST /distribution/recordsets/drafts/{draft_id}/qc-reviews`
       (POST samples, inserts `qc_series` w/ modality, auto-creates 1 assignment);
       `GET/PUT /distribution/qc/reviews/{review_id}`; `POST …/clone`
-- [ ] Split/assign/pickup: `GET …/qc/reviews/{id}/assignments`;
+- [x] Split/assign/pickup: `GET …/qc/reviews/{id}/assignments`;
       `POST …/qc/reviews/{id}/split` (even %-per-modality + rounding);
       `POST …/qc/assignments/{id}/claim`; `PUT …/qc/assignments/{id}`;
       `GET …/qc/assignments?status=needs_qc&unassigned=true` (pickup queue)
-- [ ] Flags: `POST /distribution/flags`;
+- [x] Flags: `POST /distribution/flags`;
       `GET /distribution/flags?flagged_for=me&status=open` (dashboard action items);
       `PUT /distribution/flags/{id}` (resolve)
 
@@ -651,10 +654,10 @@ sampling time; when the draft moves, in-flight reviews go out of date.
         `dashboard/Overview.tsx` (an orphaned `/dashboard` page nothing links to).
   - [x] No navbar change; pagination done now (queue server-paged). #10 still owns
         the pre-existing endpoints + `DynamicTable` explicit-mode/server-sort cleanup
-- **Phase D — Flags creation + shared-primitive cleanup**
-  - [ ] `useCreateFlag` + "Flag for…" action (review/series → user + note)
-  - [ ] Extract shared `StatusBadge` (visual #6) + `Modal` (visual #4); refactor the
-        QC create/split/flag modals onto them
+- **Phase D — Flags creation (DEFERRED)**
+  - [x] Extract shared `StatusBadge` (visual #6) + `Modal` (visual #4) — done in
+        Phase 0; QC create/split modals already use them
+  - [ ] `useCreateFlag` + "Flag for…" action (review/series → user + note) — deferred
 
 **Decisions (settled):**
 1. Review detail route = **`/qc/reviews/:id`** — new top-level `/qc` area (matches
@@ -718,8 +721,6 @@ Goal: stop re-implementing fetch + isLoading + error + cleanup on every page.
 - [ ] Migrate **incrementally** — wrap new/refactored pages first (start with the
       worst offenders: `datasets/Detail.tsx`, `recordsets/drafts/Files.tsx`);
       leave untouched pages until they're next edited
-- [ ] Add an `apiFetch()` wrapper centralizing headers, `res.ok`, `.json()`,
-      and `extractApiError`
 - [ ] Switch effects from the `isMounted` discard pattern to `AbortController`
       (actually cancels superseded/in-flight requests)
 - [ ] Split `datasets/Detail.tsx`'s sequential mega-effect into independent
@@ -745,8 +746,8 @@ Goal: no silent failures, no full-app blanking.
 
 Goal: one accessible dialog instead of hand-rolled inline modals.
 
-- [ ] Build `Modal`/`Dialog` in `components/ui/` (Escape-to-close, focus trap,
-      scroll lock) or wrap native `<dialog>`
+- [x] Build `Modal`/`Dialog` in `components/ui/` (Escape-to-close, focus trap,
+      scroll lock) — done in Phase 0 (`components/ui/Modal.tsx`)
 - [ ] Migrate the WP-link modal in `datasets/Detail.tsx` to it
 - [ ] Reuse for future confirm dialogs
 
@@ -792,11 +793,11 @@ theme toggle both build on them.
       `bg-blue-50`, `border-neutral-200`, `text-emerald-600`, inline `#ef4444`)
       onto tokens so status colors follow the dark accent
       (`--accent` is `#2563eb` light / `#4a8fd4` dark — hardcoded blues clash)
-- [ ] **Shared `<StatusBadge status=…>`:** extract from the PageDetailHeader
-      badge; map the model's enum statuses to variants — transfer
-      (`draft/queued/in_progress/success/failed`), draft
-      (`open/ready/invalid/published`), qc (`pending/approved/rejected/flagged`).
-      Replace raw-text status rendering in tables
+- [~] **Shared `<StatusBadge status=…>`:** `components/ui/StatusBadge.tsx` exists
+      (done in Phase 0) with QC/review/assignment/flag variants. Still needed:
+      transfer (`draft/queued/in_progress/success/failed`) and recordset draft
+      (`open/ready/invalid/published`) variants; replace raw-text status rendering
+      in those tables
 - [ ] **Manual theme toggle:** switch to class-based dark mode (`.dark` on
       `<html>`) + a Navbar/Settings toggle persisted to `localStorage`
       (currently `prefers-color-scheme`-only, no user override). Deliberately
