@@ -44,7 +44,7 @@ function normalizeDatasetsResponse(payload: unknown): DatasetsResponse {
         total?: number;
         timestamp?: string;
         data?: Dataset[];
-        meta?: { count?: number };
+        meta?: { count?: number; total?: number };
       }
     | undefined;
 
@@ -57,11 +57,13 @@ function normalizeDatasetsResponse(payload: unknown): DatasetsResponse {
   return {
     datasets,
     total:
-      typeof source?.total === "number"
-        ? source.total
-        : typeof source?.meta?.count === "number"
-          ? source.meta.count
-          : datasets.length,
+      typeof source?.meta?.total === "number"
+        ? source.meta.total
+        : typeof source?.total === "number"
+          ? source.total
+          : typeof source?.meta?.count === "number"
+            ? source.meta.count
+            : datasets.length,
     timestamp:
       typeof source?.timestamp === "string"
         ? source.timestamp

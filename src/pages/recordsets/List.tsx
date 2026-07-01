@@ -52,7 +52,7 @@ function normalizeRecordsetsResponse(payload: unknown): RecordsetsResponse {
         total?: number;
         timestamp?: string;
         data?: Recordset[];
-        meta?: { count?: number };
+        meta?: { count?: number; total?: number };
       }
     | undefined;
 
@@ -65,11 +65,13 @@ function normalizeRecordsetsResponse(payload: unknown): RecordsetsResponse {
   return {
     recordsets,
     total:
-      typeof source?.total === "number"
-        ? source.total
-        : typeof source?.meta?.count === "number"
-          ? source.meta.count
-          : recordsets.length,
+      typeof source?.meta?.total === "number"
+        ? source.meta.total
+        : typeof source?.total === "number"
+          ? source.total
+          : typeof source?.meta?.count === "number"
+            ? source.meta.count
+            : recordsets.length,
     timestamp:
       typeof source?.timestamp === "string"
         ? source.timestamp

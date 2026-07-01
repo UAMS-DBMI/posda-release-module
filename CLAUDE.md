@@ -860,13 +860,26 @@ PRIORITY 1 **List conventions**. Today the existing `/distribution` lists
 paginate client-side. Applies to existing endpoints *and* the new QC/flag ones.
 (See [TECH_DEBT.md](TECH_DEBT.md) #4.)
 
-- [ ] Extend the shared `list_response` helper to accept `total`/`page`/`limit`
-      and emit `meta.total` (+ echoed page/limit)
-- [ ] Retrofit existing `distribution.py` list endpoints to window via
-      `page`+`limit` with a `COUNT(*)` for `total`; **omit ⇒ return all**
-      (preserves current callers)
-- [ ] New QC/flag list endpoints follow the same (already speced)
-- [ ] Add a stable server-side default ordering per endpoint (required once windowed)
-- [ ] Frontend: read `meta.total`; drive `DynamicTable` server mode (ties to
-      item #5) and URL-synced page state (ties to item #7); converge the per-page
-      `normalize*Response` shims (tech-debt #3)
+**Scoping decision (2026-07-01):** Paginate only the four endpoints that can grow
+large. Lookup tables, sub-resource lists, and other bounded lists stay as-is
+(return all rows). Also noted: `GET /recordsets/{id}/destinations/{dest_id}` uses
+`list_response` but is semantically a single item — fix to `item_response` separately.
+
+**Paginated** (use `paged_response` / `page_clause`):
+- `GET /recordsets/drafts/{draft_id}/qc-reviews`
+- `GET /qc/assignments`
+- `GET /qc/assignments/{assignment_id}/series`
+- `GET /distribution/flags`
+- [x] `GET /datasets` — order by `dataset_id desc`
+- [x] `GET /recordsets` — order by `recordset_id desc`
+- [x] `GET /recordsets/drafts/{draft_id}/files` — order by `file_id`
+- [x] `GET /recordsets/releases/{release_id}/files` — order by `file_id`
+
+**Infrastructure:**
+- [x] Unified `paged_response` + `page_clause` helpers (renamed from `qc_*`; all
+      existing QC call sites updated)
+- [x] Frontend `datasets/List.tsx` + `recordsets/List.tsx`: normalize functions
+      updated to prefer `meta.total` over `meta.count` for `totalItems`
+- [ ] Frontend: URL-synced page state (ties to item #7)
+- [ ] Frontend: explicit `DynamicTable` server mode prop (ties to item #5)
+- [ ] Converge per-page `normalize*Response` shims (tech-debt #3)
