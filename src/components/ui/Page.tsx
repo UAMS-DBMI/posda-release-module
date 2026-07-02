@@ -98,7 +98,7 @@ export function PageDetailHeader({
     <div>
       {trail.length > 0 && (
         <nav
-          className="mb-2 flex flex-wrap items-center gap-1.5 text-sm"
+          className="mb-1 flex flex-wrap items-center gap-1.5 text-sm"
           style={{ color: "var(--muted)" }}
         >
           <span className="opacity-40">←</span>

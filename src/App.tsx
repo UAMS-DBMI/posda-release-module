@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Outlet, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
-import SubNav from "@/components/SubNav";
 import { ToastProvider } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
 import { CurrentUserContext, type CurrentUser } from "@/lib/useCurrentUser";
@@ -101,7 +100,6 @@ function RootLayout() {
       <ToastProvider>
         <ScrollToTop />
         <Navbar />
-        <SubNav />
         {authStatus === "unauthed" ? (
           <AuthNotice title="You're not logged into Posda">
             Your session has expired or you haven't signed in. Log into Posda,

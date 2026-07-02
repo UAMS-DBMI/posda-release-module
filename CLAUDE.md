@@ -686,6 +686,9 @@ items are small and independent. Functional (Tier 1–2) work may interleave wit
 QC phases; the visual #8 design pass stays sequenced after QC.
 
 **Tier 1 — stop wasting clicks**
+- [x] Nav rework (user-directed, 2026-07-01): tabs merged into the top navbar
+      (+ Dashboard tab), SubNav bar deleted, top gap tightened — see the
+      updated Navbar bullet under item #8 for details
 - [x] URL-as-state list filters (= item #7): filters + page in `useSearchParams`
       on datasets/recordsets lists → back button restores view; shareable URLs.
       Only non-defaults serialized; filter submits push history, page changes
@@ -697,8 +700,25 @@ QC phases; the visual #8 design pass stays sequenced after QC.
       where the page already has them, else `Entity {id}` — upgrades free when
       pages later fetch names. No new API calls. Also fixed QC Queue breadcrumb
       pointing at orphaned `/dashboard` (→ `/`).
-- [ ] Loading primitives (= item #1): `Spinner`/`LoadingState`, skeleton rows in
-      `DynamicTable`, `loading` prop on `Button`
+- [ ] Loading primitives (= item #1) — **PLANNED, not yet approved to build.**
+      Design agreed (2026-07-01), user paused before implementation:
+      - `components/ui/Spinner.tsx`: spinner (`currentColor`) + `LoadingState`
+        (spinner + label, `role="status"` + `aria-live="polite"`) — replaces the
+        ~23 inline `<p>Loading...</p>` sites
+      - `Button loading` prop: inline spinner *beside* the existing label
+        (no width jump) + auto-`disabled` — replaces the 15
+        `{isSaving ? "Saving..." : …}` text swaps
+      - `DynamicTable loading` prop: header renders; body = N pulsing skeleton
+        bar rows (N = page size, cap ~10) using `--border`/`--muted` tokens —
+        requires restructuring pages from `{isLoading && <p>} {!isLoading &&
+        <DynamicTable>}` to always-rendered `<DynamicTable loading rows={…??[]}>`
+      - `DynamicSection`: swap its internal loading text (line ~30) for
+        `LoadingState` — one line, upgrades ~10 detail pages
+      - **Scope (recommended hybrid):** full sweep for text sites + buttons
+        (mechanical); skeleton-table restructure only on the 4 paginated pages
+        (datasets List, recordsets List, QC Queue, Home) to bound risk
+      - Out of scope: keep-previous-rows-while-refetching = TanStack
+        `keepPreviousData`, belongs to item #2 migration
 - [ ] StatusBadge coverage + semantic tokens (= item #8 subset): transfer +
       draft variants; `--success/--danger/--warning/--info` tokens
 
@@ -849,13 +869,14 @@ theme toggle both build on them.
       localStorage, not DB — avoids flash-of-wrong-theme on load. See item #9.
 - [ ] **Button focus ring:** add a `:focus-visible` ring to `.btn` (inputs have
       a focus outline; buttons have none → invisible keyboard focus)
-- [x] **Navbar / SubNav:** moved section tabs (Datasets / Recordsets / Transfers /
-      QC) into a new fixed `SubNav` bar (`components/SubNav.tsx`) below the top
-      navbar; active section highlighted via prefix match; on sub-pages the left
-      title becomes a `← Section` breadcrumb link back to the section root.
-      Top navbar now shows "Logged in as: [full_name ?? username]" on the right
-      using `useCurrentUser` (shows `username`, not `full_name`). `--subnav-height: 3rem` added to CSS; `body`
-      padding-top and `page-shell` min-height updated accordingly.
+- [x] **Navbar (single-bar, 2026-07-01):** section tabs (Dashboard / Datasets /
+      Recordsets / Transfers / QC) live **in the top navbar** next to the logo;
+      active section via prefix match (Dashboard = exact `/`). The interim
+      `SubNav` bar was removed (component deleted, `--subnav-height` gone,
+      `body` padding-top / `page-shell` min-height back to navbar-only).
+      `page-shell` top padding tightened `py-10` → `pt-4 pb-10`; breadcrumb
+      margin `mb-2` → `mb-1`. "Logged in as: username" hides below `lg` to
+      avoid crowding the tabs.
 - [ ] **PageShell sizes:** `3xl/5xl/6xl` all resolve to one `72rem` max-width —
       give the tiers real widths or remove the dead prop
 - [ ] **Dark-mode surfaces (review):** cards (`--surface #1a2035`) are darker

@@ -1,6 +1,19 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { useTheme } from "@/lib/useTheme";
+
+const sections = [
+  { label: "Dashboard",  home: "/",           prefix: "/" },
+  { label: "Datasets",   home: "/datasets",   prefix: "/datasets" },
+  { label: "Recordsets", home: "/recordsets", prefix: "/recordsets" },
+  { label: "Transfers",  home: "/transfers",  prefix: "/transfers" },
+  { label: "QC",         home: "/qc/queue",   prefix: "/qc" },
+] as const;
+
+function isSectionActive(prefix: string, pathname: string) {
+  if (prefix === "/") return pathname === "/";
+  return pathname.startsWith(prefix);
+}
 
 function SunIcon() {
   return (
@@ -51,16 +64,44 @@ function MoonIcon() {
 export default function Navbar() {
   const currentUser = useCurrentUser();
   const { isDark, toggle } = useTheme();
+  const { pathname } = useLocation();
 
   return (
     <header className="navbar fixed inset-x-0 top-0 z-50">
-      <nav className="content-width flex h-14 items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="text-sm font-bold tracking-wide text-accent">
-          Posda Release Module
-        </Link>
-        <div className="flex items-center gap-3">
+      <nav className="content-width flex h-14 items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="flex h-full min-w-0 items-center gap-6">
+          <Link
+            to="/"
+            className="shrink-0 text-sm font-bold tracking-wide text-accent"
+          >
+            Posda Release Module
+          </Link>
+          <div className="flex h-full items-center">
+            {sections.map((section) => {
+              const isActive = isSectionActive(section.prefix, pathname);
+              return (
+                <Link
+                  key={section.prefix}
+                  to={section.home}
+                  className={`flex h-full items-center border-b-2 px-3 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "border-accent text-accent"
+                      : "border-transparent hover:text-foreground"
+                  }`}
+                  style={isActive ? {} : { color: "var(--muted)" }}
+                >
+                  {section.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
           {currentUser && (
-            <span className="text-sm" style={{ color: "var(--muted)" }}>
+            <span
+              className="hidden text-sm lg:inline"
+              style={{ color: "var(--muted)" }}
+            >
               Logged in as:{" "}
               <span
                 className="font-medium"
