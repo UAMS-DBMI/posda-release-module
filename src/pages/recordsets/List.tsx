@@ -1,5 +1,5 @@
 ﻿import { FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import DynamicTable from "@/components/DynamicTable";
 import FavoriteStar from "@/components/FavoriteStar";
@@ -44,6 +44,30 @@ type Dataset = {
   dataset_id: number;
   dataset_name: string;
 };
+
+const DEFAULT_LIMIT = 10;
+
+function filtersFromParams(params: URLSearchParams): RecordsetFilters {
+  return {
+    search: params.get("search") ?? "",
+    activeOnly: params.get("active") !== "false",
+    datasetId: params.get("dataset") ?? "",
+  };
+}
+
+function toSearchParams(
+  filters: RecordsetFilters,
+  page: number,
+  limit: number,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.search.trim()) params.set("search", filters.search.trim());
+  if (filters.datasetId) params.set("dataset", filters.datasetId);
+  if (!filters.activeOnly) params.set("active", "false");
+  if (page !== 1) params.set("page", String(page));
+  if (limit !== DEFAULT_LIMIT) params.set("limit", String(limit));
+  return params;
+}
 
 function normalizeRecordsetsResponse(payload: unknown): RecordsetsResponse {
   const source = payload as
@@ -96,23 +120,23 @@ export default function RecordsetsList() {
   const navigate = useNavigate();
   const { favoriteKeys, toggle } = useFavorites();
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [filtersInput, setFiltersInput] = useState<RecordsetFilters>({
-    search: "",
-    activeOnly: true,
-    datasetId: "",
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [filters, setFilters] = useState<RecordsetFilters>({
-    search: "",
-    activeOnly: true,
-    datasetId: "",
-  });
+  const filters = filtersFromParams(searchParams);
+  const currentPage = Math.max(1, Number(searchParams.get("page")) || 1);
+  const itemsPerPage = Number(searchParams.get("limit")) || DEFAULT_LIMIT;
+
+  const [filtersInput, setFiltersInput] = useState<RecordsetFilters>(filters);
 
   const [data, setData] = useState<RecordsetsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const filterKey = `${filters.search}|${filters.activeOnly}|${filters.datasetId}`;
+  useEffect(() => {
+    setFiltersInput(filtersFromParams(searchParams));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
 
   async function loadRecordsets() {
     setIsLoading(true);
@@ -157,14 +181,13 @@ export default function RecordsetsList() {
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setCurrentPage(1);
-    setFilters(filtersInput);
+    setSearchParams(toSearchParams(filtersInput, 1, itemsPerPage));
   }
 
   function clearFilters() {
-    setFiltersInput({ search: "", activeOnly: false, datasetId: "" });
-    setCurrentPage(1);
-    setFilters({ search: "", activeOnly: false, datasetId: "" });
+    const cleared = { search: "", activeOnly: false, datasetId: "" };
+    setFiltersInput(cleared);
+    setSearchParams(toSearchParams(cleared, 1, itemsPerPage));
   }
 
   const filterFields: Array<DynamicFormField<RecordsetFilters>> = [
@@ -207,7 +230,7 @@ export default function RecordsetsList() {
   useEffect(() => {
     void loadRecordsets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, currentPage, itemsPerPage]);
+  }, [searchParams]);
 
   useEffect(() => {
     async function loadDatasets() {
@@ -310,10 +333,16 @@ export default function RecordsetsList() {
                 page: currentPage,
                 pageSize: itemsPerPage,
                 pageSizeOptions: [4, 10, 25, 50],
-                onPageChange: setCurrentPage,
+                onPageChange: (nextPage) => {
+                  setSearchParams(
+                    toSearchParams(filters, nextPage, itemsPerPage),
+                    { replace: true },
+                  );
+                },
                 onPageSizeChange: (next) => {
-                  setItemsPerPage(next);
-                  setCurrentPage(1);
+                  setSearchParams(toSearchParams(filters, 1, next), {
+                    replace: true,
+                  });
                 },
               }}
               formatters={{

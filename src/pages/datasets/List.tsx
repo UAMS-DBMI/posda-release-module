@@ -1,5 +1,5 @@
 ﻿import { FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
 import DynamicTable from "@/components/DynamicTable";
 import FavoriteStar from "@/components/FavoriteStar";
@@ -36,6 +36,30 @@ type DatasetFilters = {
   activeOnly: boolean;
   datasetTypeId: string;
 };
+
+const DEFAULT_LIMIT = 10;
+
+function filtersFromParams(params: URLSearchParams): DatasetFilters {
+  return {
+    search: params.get("search") ?? "",
+    activeOnly: params.get("active") !== "false",
+    datasetTypeId: params.get("type") ?? "",
+  };
+}
+
+function toSearchParams(
+  filters: DatasetFilters,
+  page: number,
+  limit: number,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.search.trim()) params.set("search", filters.search.trim());
+  if (filters.datasetTypeId) params.set("type", filters.datasetTypeId);
+  if (!filters.activeOnly) params.set("active", "false");
+  if (page !== 1) params.set("page", String(page));
+  if (limit !== DEFAULT_LIMIT) params.set("limit", String(limit));
+  return params;
+}
 
 function normalizeDatasetsResponse(payload: unknown): DatasetsResponse {
   const source = payload as
@@ -75,23 +99,23 @@ export default function DatasetsList() {
   const navigate = useNavigate();
   const { favoriteKeys, toggle } = useFavorites();
   const [datasetTypes, setDatasetTypes] = useState<DatasetType[]>([]);
-  const [filtersInput, setFiltersInput] = useState<DatasetFilters>({
-    search: "",
-    activeOnly: true,
-    datasetTypeId: "",
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [filters, setFilters] = useState<DatasetFilters>({
-    search: "",
-    activeOnly: true,
-    datasetTypeId: "",
-  });
+  const filters = filtersFromParams(searchParams);
+  const currentPage = Math.max(1, Number(searchParams.get("page")) || 1);
+  const itemsPerPage = Number(searchParams.get("limit")) || DEFAULT_LIMIT;
+
+  const [filtersInput, setFiltersInput] = useState<DatasetFilters>(filters);
 
   const [data, setData] = useState<DatasetsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const filterKey = `${filters.search}|${filters.activeOnly}|${filters.datasetTypeId}`;
+  useEffect(() => {
+    setFiltersInput(filtersFromParams(searchParams));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
 
   useEffect(() => {
     async function loadDatasetTypes() {
@@ -164,14 +188,13 @@ export default function DatasetsList() {
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setCurrentPage(1);
-    setFilters(filtersInput);
+    setSearchParams(toSearchParams(filtersInput, 1, itemsPerPage));
   }
 
   function clearFilters() {
-    setFiltersInput({ search: "", activeOnly: false, datasetTypeId: "" });
-    setCurrentPage(1);
-    setFilters({ search: "", activeOnly: false, datasetTypeId: "" });
+    const cleared = { search: "", activeOnly: false, datasetTypeId: "" };
+    setFiltersInput(cleared);
+    setSearchParams(toSearchParams(cleared, 1, itemsPerPage));
   }
 
   const filterFields: Array<DynamicFormField<DatasetFilters>> = [
@@ -214,7 +237,7 @@ export default function DatasetsList() {
   useEffect(() => {
     void loadDatasets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, currentPage, itemsPerPage]);
+  }, [searchParams]);
 
   return (
     <PageShell size="5xl">
@@ -258,10 +281,16 @@ export default function DatasetsList() {
                 totalItems: data.total,
                 page: currentPage,
                 pageSize: itemsPerPage,
-                onPageChange: setCurrentPage,
+                onPageChange: (nextPage) => {
+                  setSearchParams(
+                    toSearchParams(filters, nextPage, itemsPerPage),
+                    { replace: true },
+                  );
+                },
                 onPageSizeChange: (nextItemsPerPage) => {
-                  setItemsPerPage(nextItemsPerPage);
-                  setCurrentPage(1);
+                  setSearchParams(toSearchParams(filters, 1, nextItemsPerPage), {
+                    replace: true,
+                  });
                 },
               }}
               columns={[

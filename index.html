@@ -11,6 +11,14 @@
       href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        var s = localStorage.getItem("theme");
+        if (s === "dark" || (!s && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -675,6 +675,45 @@ sampling time; when the draft moves, in-flight reviews go out of date.
 6. Design-system pass (visual #8) = **after** the QC feature phases (refactor +
    B–D); built on the existing primitives, then a dedicated standardization block.
 
+### ⭐ PRIORITY 2 — UX efficiency plan (approved 2026-07-01)
+
+Goal: make the app task-shaped, not entity-shaped — answer "what needs my
+attention / where was I / what's the status" without click-diving. Diagnosis:
+(1) navigation amnesia (list filters lost on back-nav), (2) context loss in the
+3–4-level hierarchy (breadcrumb is just "← Section"), (3) status buried in
+detail pages instead of surfaced on lists. Tiers ordered by user payoff; Tier 1
+items are small and independent. Functional (Tier 1–2) work may interleave with
+QC phases; the visual #8 design pass stays sequenced after QC.
+
+**Tier 1 — stop wasting clicks**
+- [x] URL-as-state list filters (= item #7): filters + page in `useSearchParams`
+      on datasets/recordsets lists → back button restores view; shareable URLs.
+      Only non-defaults serialized; filter submits push history, page changes
+      `replace`. Draft/transfer browsers still local-state (item #7 remainder).
+- [ ] Real breadcrumbs: SubNav "← Section" → entity trail with names
+      (`Datasets / Cancer-X / Release 2 / Transfers`); parents already fetched
+- [ ] Loading primitives (= item #1): `Spinner`/`LoadingState`, skeleton rows in
+      `DynamicTable`, `loading` prop on `Button`
+- [ ] StatusBadge coverage + semantic tokens (= item #8 subset): transfer +
+      draft variants; `--success/--danger/--warning/--info` tokens
+
+**Tier 2 — the app comes to the user**
+- [ ] Dashboard 2.0: add Recently Viewed (localStorage ring buffer) and
+      My In-flight Transfers to `Home`; fold/remove orphaned `/dashboard` pages
+- [ ] Global quick-open (Ctrl+K palette): jump to dataset/recordset/draft by
+      name (federate existing list endpoints; dedicated search endpoint later)
+- [ ] Empty states with next-action CTA ("No drafts yet → Create draft")
+- [ ] Row-level quick actions on lists (edit/favorite without detail round-trip)
+
+**Tier 3 — workflow visibility (bigger design)**
+- [ ] Lifecycle stepper on recordset/dataset detail: draft → QC → publish →
+      release → transfer status strip
+- [ ] Live transfer progress: TanStack `refetchInterval` polling on in-flight
+      transfers / manifest generation
+
+Explicitly out of scope: component-library swap, mobile-first redesign,
+replacing DynamicForm/DynamicTable.
+
 ### 1. Loading indicators (consistency)
 
 Goal: replace ad-hoc `<p>Loading…</p>` text with shared, accessible primitives.
@@ -775,11 +814,12 @@ Independent of the item-2 library decision. Today `datasets/List.tsx` (and the
 other list pages) hold search / type / active / pagination in local `useState`,
 so filters are lost on navigate-away-and-back and can't be linked or bookmarked.
 
-- [ ] Move list filter + pagination state into React Router search params
-      (`useSearchParams`) instead of local `useState`
-- [ ] Apply across both List pages (datasets, recordsets) and the draft/transfer
-      browsers where it fits
-- [ ] Ensure deep-linking works: a pasted URL reproduces the filtered view
+- [x] Move list filter + pagination state into React Router search params
+      (`useSearchParams`) instead of local `useState` — done for the two List pages
+- [~] Apply across both List pages (datasets ✓, recordsets ✓); the draft/transfer
+      browsers still TODO
+- [x] Ensure deep-linking works: a pasted URL reproduces the filtered view
+      (non-default params only, so bare URLs stay clean)
 
 ### 8. Visual / design system
 
@@ -804,8 +844,13 @@ theme toggle both build on them.
       localStorage, not DB — avoids flash-of-wrong-theme on load. See item #9.
 - [ ] **Button focus ring:** add a `:focus-visible` ring to `.btn` (inputs have
       a focus outline; buttons have none → invisible keyboard focus)
-- [ ] **Navbar:** `Link` → `NavLink` with active-route highlight; surface the
-      already-fetched `currentUser` (name/avatar/logout) — today it's never shown
+- [x] **Navbar / SubNav:** moved section tabs (Datasets / Recordsets / Transfers /
+      QC) into a new fixed `SubNav` bar (`components/SubNav.tsx`) below the top
+      navbar; active section highlighted via prefix match; on sub-pages the left
+      title becomes a `← Section` breadcrumb link back to the section root.
+      Top navbar now shows "Logged in as: [full_name ?? username]" on the right
+      using `useCurrentUser` (shows `username`, not `full_name`). `--subnav-height: 3rem` added to CSS; `body`
+      padding-top and `page-shell` min-height updated accordingly.
 - [ ] **PageShell sizes:** `3xl/5xl/6xl` all resolve to one `72rem` max-width —
       give the tiers real widths or remove the dead prop
 - [ ] **Dark-mode surfaces (review):** cards (`--surface #1a2035`) are darker
