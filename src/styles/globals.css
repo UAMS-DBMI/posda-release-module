@@ -60,14 +60,14 @@
   }
 
   .page-header {
-    padding-bottom: 1rem;
+    padding-bottom: 0.625rem;
     border-bottom: 2px solid var(--border-strong);
-    border-left: 16px solid var(--accent);
+    border-left: 4px solid var(--accent);
     padding-left: 0.625rem;
   }
 
   .page-title {
-    @apply text-3xl font-semibold tracking-tight;
+    @apply text-2xl font-semibold tracking-tight;
   }
 
   .page-subtitle {

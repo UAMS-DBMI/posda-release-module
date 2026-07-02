@@ -10,6 +10,7 @@ import { useToast } from "@/components/Toast";
 import { toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
+import { useQcReviews } from "@/lib/useQc";
 import QcReviewsCard from "@/components/QcReviewsCard";
 
 type Draft = {
@@ -167,6 +168,22 @@ export default function RecordsetDraftDetail() {
 
   const draft = data?.draft ?? data?.data ?? null;
 
+  // QC gate: publishing requires at least one complete review and none open/stale.
+  const qcReviews = useQcReviews(draftId);
+  const qcBlockingCount = (qcReviews.data ?? []).filter(
+    (r) => r.review_status === "open" || r.review_status === "stale",
+  ).length;
+  const qcCompleteCount = (qcReviews.data ?? []).filter(
+    (r) => r.review_status === "complete",
+  ).length;
+  const canPublish = qcBlockingCount === 0 && qcCompleteCount > 0;
+  const publishBlockedReason =
+    qcBlockingCount > 0
+      ? `QC must be complete before publishing (${qcBlockingCount} review${qcBlockingCount === 1 ? "" : "s"} open or stale)`
+      : qcCompleteCount === 0
+        ? "Publishing requires a completed QC review"
+        : undefined;
+
   const draftFields: DynamicSectionField[] = draft
     ? [
         { label: "Draft ID", value: draft.recordset_draft_id },
@@ -215,7 +232,13 @@ export default function RecordsetDraftDetail() {
         actions={
           <>
             {!!draft && draft.draft_status !== "published" && draft.draft_status !== "deleted" && (
-              <Button onClick={() => setShowPublish(true)}>Publish Draft</Button>
+              <Button
+                onClick={() => setShowPublish(true)}
+                disabled={!canPublish}
+                title={publishBlockedReason}
+              >
+                Publish Draft
+              </Button>
             )}
             <LinkButton href={draftId ? `/recordsets/drafts/${draftId}/edit` : "/recordsets"}>
               Edit Draft

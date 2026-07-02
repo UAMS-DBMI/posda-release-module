@@ -1,9 +1,8 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import DynamicSection, {
-  DynamicSectionField,
-} from "@/components/DynamicSection";
 import DynamicTable from "@/components/DynamicTable";
+import LatestReleaseCard from "@/components/LatestReleaseCard";
+import CollapsibleSection from "@/components/ui/CollapsibleSection";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
@@ -445,22 +444,30 @@ export default function DatasetDetail() {
   }
 
   const dataset = data?.dataset ?? data?.data ?? null;
-  const datasetFields: DynamicSectionField[] = dataset
+
+  const latestRelease =
+    releasesData?.releases.reduce<DatasetRelease | null>(
+      (latest, r) =>
+        latest == null || r.release_number > latest.release_number ? r : latest,
+      null,
+    ) ?? null;
+
+  const metadataStrip = dataset
     ? [
-        { label: "Dataset ID", value: dataset.dataset_id },
-        { label: "Type", value: dataset.dataset_type_name },
-        { label: "Name", value: dataset.dataset_name, fullWidth: true },
-        { label: "DOI", value: dataset.dataset_doi },
-        { label: "Active", value: dataset.active ? "Yes" : "No" },
+        dataset.dataset_doi,
+        dataset.dataset_type_name,
+        `updated ${new Date(dataset.when_updated).toLocaleDateString()}`,
       ]
-    : [];
+        .filter(Boolean)
+        .join(" · ")
+    : undefined;
 
   return (
     <PageShell size="5xl">
       <PageDetailHeader
-        title="Dataset Details"
+        title={dataset?.dataset_name ?? "Dataset Details"}
         breadcrumb={{ label: "Datasets", href: "/datasets" }}
-        subtitle={dataset?.dataset_name}
+        subtitle={metadataStrip}
         badge={
           dataset
             ? {
@@ -493,81 +500,25 @@ export default function DatasetDetail() {
         }
       />
 
-      <DynamicSection
-        isLoading={isLoading}
-        error={error}
-        fields={datasetFields}
-        actions={
-          <div className="metadata-panel">
-            <p>
-              <strong>Created:</strong>{" "}
-              {dataset ? new Date(dataset.when_created).toLocaleString() : "—"}{" "}
-              by {dataset != null ? (userMap.get(dataset.who_created) ?? "—") : "—"}
-            </p>
-            <p>
-              <strong>Updated:</strong>{" "}
-              {dataset ? new Date(dataset.when_updated).toLocaleString() : "—"}{" "}
-              by {dataset != null ? (userMap.get(dataset.who_updated) ?? "—") : "—"}
-            </p>
-          </div>
-        }
-      />
+      {isLoading && (
+        <SectionCard className="mt-4">
+          <p className="text-sm">Loading...</p>
+        </SectionCard>
+      )}
 
-      {!isLoading && dataset && (
+      {!isLoading && error && (
+        <SectionCard className="mt-4">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </SectionCard>
+      )}
+
+      {!isLoading && dataset && datasetId && (
         <>
-          <CardHeader className="mt-6 mb-0">
-            <CardTitle>WordPress Object</CardTitle>
-            <Button size="sm" onClick={() => setShowWpModal(true)}>
-              {wpMap ? "Change Link" : "Link to WordPress"}
-            </Button>
-          </CardHeader>
-          <SectionCard className="mt-1">
-            {isLoadingWpMap && <p className="text-sm">Loading...</p>}
-            {!isLoadingWpMap && wpMap === null && (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                No WordPress object linked.
-              </p>
-            )}
-            {!isLoadingWpMap && wpMap && (
-              <div className="space-y-1 text-sm">
-                <p>
-                  <span className="font-medium capitalize">
-                    {wpMap.wp_object_type.replace("_", " ")}
-                  </span>{" "}
-                  <span style={{ color: "var(--muted)" }}>
-                    ID {wpMap.wp_object_id}
-                  </span>
-                </p>
-                <div className="flex gap-4 text-xs">
-                  {wpMap.wp_view_url && (
-                    <a
-                      href={wpMap.wp_view_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      View on site ↗
-                    </a>
-                  )}
-                  {wpMap.wp_edit_url && (
-                    <a
-                      href={wpMap.wp_edit_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      Edit in WordPress ↗
-                    </a>
-                  )}
-                </div>
-                {wpMap.when_synced && (
-                  <p className="text-xs" style={{ color: "var(--muted)" }}>
-                    Synced: {new Date(wpMap.when_synced).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            )}
-          </SectionCard>
+          <LatestReleaseCard
+            datasetId={datasetId}
+            isLoading={isLoadingReleases}
+            release={latestRelease}
+          />
 
           <CardHeader className="mt-6 mb-0">
             <CardTitle>Recordsets</CardTitle>
@@ -690,6 +641,98 @@ export default function DatasetDetail() {
               />
             )}
           </SectionCard>
+
+          <CollapsibleSection
+            title="WordPress Object"
+            summary={
+              isLoadingWpMap ? undefined : wpMap ? "mapped ✓" : "not linked"
+            }
+            actions={
+              <Button size="sm" onClick={() => setShowWpModal(true)}>
+                {wpMap ? "Change Link" : "Link to WordPress"}
+              </Button>
+            }
+          >
+            {isLoadingWpMap && <p className="text-sm">Loading...</p>}
+            {!isLoadingWpMap && wpMap === null && (
+              <p className="text-sm" style={{ color: "var(--muted)" }}>
+                No WordPress object linked.
+              </p>
+            )}
+            {!isLoadingWpMap && wpMap && (
+              <div className="space-y-1 text-sm">
+                <p>
+                  <span className="font-medium capitalize">
+                    {wpMap.wp_object_type.replace("_", " ")}
+                  </span>{" "}
+                  <span style={{ color: "var(--muted)" }}>
+                    ID {wpMap.wp_object_id}
+                  </span>
+                </p>
+                <div className="flex gap-4 text-xs">
+                  {wpMap.wp_view_url && (
+                    <a
+                      href={wpMap.wp_view_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent)" }}
+                    >
+                      View on site ↗
+                    </a>
+                  )}
+                  {wpMap.wp_edit_url && (
+                    <a
+                      href={wpMap.wp_edit_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent)" }}
+                    >
+                      Edit in WordPress ↗
+                    </a>
+                  )}
+                </div>
+                {wpMap.when_synced && (
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>
+                    Synced: {new Date(wpMap.when_synced).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Record Details">
+            <div className="space-y-1 text-sm" style={{ color: "var(--muted)" }}>
+              <p>
+                <span
+                  className="font-medium"
+                  style={{ color: "var(--foreground)" }}
+                >
+                  Dataset ID:
+                </span>{" "}
+                {dataset.dataset_id}
+              </p>
+              <p>
+                <span
+                  className="font-medium"
+                  style={{ color: "var(--foreground)" }}
+                >
+                  Created:
+                </span>{" "}
+                {new Date(dataset.when_created).toLocaleString()} by{" "}
+                {userMap.get(dataset.who_created) ?? "—"}
+              </p>
+              <p>
+                <span
+                  className="font-medium"
+                  style={{ color: "var(--foreground)" }}
+                >
+                  Updated:
+                </span>{" "}
+                {new Date(dataset.when_updated).toLocaleString()} by{" "}
+                {userMap.get(dataset.who_updated) ?? "—"}
+              </p>
+            </div>
+          </CollapsibleSection>
         </>
       )}
       {showWpModal && (

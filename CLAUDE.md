@@ -730,6 +730,68 @@ QC phases; the visual #8 design pass stays sequenced after QC.
 - [ ] Empty states with next-action CTA ("No drafts yet → Create draft")
 - [ ] Row-level quick actions on lists (edit/favorite without detail round-trip)
 
+**Design center (decided 2026-07-01): the RELEASE CYCLE.** Pages are organized
+around "get version N checked, frozen, and distributed" — not around entity
+metadata. Each page answers: where in the pipeline (assemble → verify → freeze
+→ distribute → publicize), what changed since the last frozen version, what's
+blocking / who has the ball, and what's the next action from here. Static
+metadata (DOI, type, license, audit cols) is demoted to compact headers /
+collapsed sections. Page-level redesign to this framing is in discussion.
+
+**Release-cycle decisions (2026-07-01):**
+- **QC blocks publishing (strict — updated 2026-07-01).** Publishing requires
+  **≥1 complete QC review AND none open/stale** (cancelled reviews don't
+  count either way). A draft with zero reviews is NOT publishable. Implemented
+  in the draft-detail Publish gate + `CurrentCycleCard` Publish stage
+  ("Requires QC" when no reviews). ⚠ Backend does not enforce this yet —
+  server-side guard on the publish endpoint is future backend work (flag:
+  public API behavior change).
+- **One open draft per recordset.** Unlikely to have more than one; can be
+  restricted. UI: hide/disable "New Draft" while a draft is open; Current
+  Cycle panel is a singleton. ⚠ DB/API-level restriction (unique partial
+  index or endpoint guard) is future backend work.
+- **Accent bar slims** 16px → 4px in the compact header (visual identity kept).
+- Dashboard "cycles in flight" scope (mine vs all) — deferred, discuss later.
+
+**Build order (approved):** 1. compact header (global) ✅ → 2. CycleStrip +
+recordset detail restructure ✅ → 3. dataset detail restructure ✅ → 4. dashboard
+cycles-in-flight (needs scope decision + maybe a backend aggregation endpoint)
+→ loading primitives + StatusBadge/tokens slot in where natural.
+
+**Step 2 done (2026-07-01):**
+- `components/CycleStrip.tsx` — generic pipeline strip; stages
+  `{key,label,state:done|active|blocked|pending,detail?,href?}`; accent dots,
+  amber = blocked, hollow = pending. Reused by steps 3–4.
+- `components/ui/CollapsibleSection.tsx` — CardHeader chevron toggle +
+  SectionCard body, `title/summary/actions/defaultOpen`.
+- `components/CurrentCycleCard.tsx` — recordset cycle cockpit: open draft
+  (status ≠ published/deleted; singleton per one-draft policy) + QC aggregate
+  from `useQcReviews` + diff vs latest release (`GET drafts/{id}/diff` bare =
+  vs latest; response is **unenveloped** `DraftDiffResponse` w/ added_count /
+  removed_count). Stale reviews → blocked stage + warning row. Empty state
+  offers New Draft.
+- `pages/recordsets/Detail.tsx` restructured: title = recordset name;
+  subtitle = metadata strip (DOI · dataset · type · license · updated);
+  Overview `DynamicSection` deleted; order = Current Cycle → Releases →
+  collapsed (Draft History / Destinations / WordPress / Record Details w/
+  audit). "New Draft" only shows when no open draft exists.
+- `pages/recordsets/drafts/Detail.tsx`: Publish button disabled while any
+  review is open/stale (`useQcReviews`), tooltip explains. UI-only gate —
+  server-side enforcement still future backend work.
+
+**Step 3 done (2026-07-01):**
+- `components/LatestReleaseCard.tsx` — dataset-level distribute cockpit:
+  latest release (max `release_number`) + per-destination transfer status
+  **chips** (parallel destinations, so chips instead of the linear CycleStrip;
+  colors by `transfer_status`, chip links to transfer detail). Empty states:
+  no releases → New Release CTA; release w/o transfers → note.
+- `pages/datasets/Detail.tsx` restructured same as recordset: title = dataset
+  name, subtitle = DOI · type · updated strip, Overview `DynamicSection`
+  deleted; order = Latest Release → Recordsets → Releases → collapsed
+  (WordPress / Record Details w/ audit).
+- Per-recordset-row draft/QC status chips on the Recordsets table = **deferred**
+  (needs a backend aggregate to avoid N+1; revisit with step 4's endpoint).
+
 **Tier 3 — workflow visibility (bigger design)**
 - [ ] Lifecycle stepper on recordset/dataset detail: draft → QC → publish →
       release → transfer status strip
