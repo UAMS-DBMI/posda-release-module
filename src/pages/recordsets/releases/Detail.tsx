@@ -166,7 +166,17 @@ export default function RecordsetReleaseDetail() {
     <PageShell size="5xl">
       <PageDetailHeader
         title="Release Details"
-        breadcrumb={{ label: "Recordset", href: recordsetId ? `/recordsets/${recordsetId}` : "/recordsets" }}
+        breadcrumbs={
+          recordsetId
+            ? [
+                { label: "Recordsets", href: "/recordsets" },
+                {
+                  label: `Recordset ${recordsetId}`,
+                  href: `/recordsets/${recordsetId}`,
+                },
+              ]
+            : [{ label: "Recordsets", href: "/recordsets" }]
+        }
         subtitle={release ? `Release ${release.release_number}` : undefined}
       />
 

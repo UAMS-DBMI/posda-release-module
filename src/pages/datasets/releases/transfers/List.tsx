@@ -238,11 +238,21 @@ export default function DatasetReleaseTransfersList() {
     <PageShell size="5xl">
       <PageDetailHeader
         title="Transfers"
-        breadcrumb={{
-          label: "Dataset Release",
-          href: releaseId ? `/datasets/releases/${releaseId}` : "/datasets",
-        }}
-        subtitle={release ? `${dataset?.dataset_name ?? `Dataset ${release.dataset_id}`} — v${release.release_number}` : undefined}
+        breadcrumbs={
+          release
+            ? [
+                { label: "Datasets", href: "/datasets" },
+                {
+                  label: dataset?.dataset_name ?? `Dataset ${release.dataset_id}`,
+                  href: `/datasets/${release.dataset_id}`,
+                },
+                {
+                  label: `Release v${release.release_number}`,
+                  href: `/datasets/releases/${release.dataset_release_id}`,
+                },
+              ]
+            : [{ label: "Datasets", href: "/datasets" }]
+        }
       />
 
       <CardHeader className="mt-6 mb-0">

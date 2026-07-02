@@ -491,7 +491,17 @@ export default function DatasetReleaseDetail() {
     <PageShell size="5xl">
       <PageDetailHeader
         title="Dataset Release Details"
-        breadcrumb={{ label: "Dataset", href: release?.dataset_id ? `/datasets/${release.dataset_id}` : "/datasets" }}
+        breadcrumbs={
+          release?.dataset_id
+            ? [
+                { label: "Datasets", href: "/datasets" },
+                {
+                  label: `Dataset ${release.dataset_id}`,
+                  href: `/datasets/${release.dataset_id}`,
+                },
+              ]
+            : [{ label: "Datasets", href: "/datasets" }]
+        }
         subtitle={release ? `Release ${release.release_number}` : undefined}
         actions={
           <>

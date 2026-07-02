@@ -196,7 +196,17 @@ export default function RecordsetDraftDetail() {
     <PageShell size="5xl">
       <PageDetailHeader
         title="Draft Details"
-        breadcrumb={{ label: "Recordset", href: draft?.recordset_id ? `/recordsets/${draft.recordset_id}` : "/recordsets" }}
+        breadcrumbs={
+          draft?.recordset_id
+            ? [
+                { label: "Recordsets", href: "/recordsets" },
+                {
+                  label: `Recordset ${draft.recordset_id}`,
+                  href: `/recordsets/${draft.recordset_id}`,
+                },
+              ]
+            : [{ label: "Recordsets", href: "/recordsets" }]
+        }
         subtitle={draft?.draft_name}
         badge={draft ? {
           label: draft.draft_status === "published" ? "Published" : draft.draft_status === "deleted" ? "Deleted" : "Draft",

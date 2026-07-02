@@ -475,7 +475,26 @@ export default function RecordsetDraftFiles() {
     <PageShell size="5xl">
       <PageDetailHeader
         title="Edit Draft Files"
-        breadcrumb={{ label: "Draft", href: draftId ? `/recordsets/drafts/${draftId}` : "/recordsets" }}
+        breadcrumbs={
+          draft
+            ? [
+                { label: "Recordsets", href: "/recordsets" },
+                {
+                  label: `Recordset ${draft.recordset_id}`,
+                  href: `/recordsets/${draft.recordset_id}`,
+                },
+                {
+                  label: draft.draft_name || `Draft ${draft.recordset_draft_id}`,
+                  href: `/recordsets/drafts/${draft.recordset_draft_id}`,
+                },
+              ]
+            : [
+                {
+                  label: "Draft",
+                  href: draftId ? `/recordsets/drafts/${draftId}` : "/recordsets",
+                },
+              ]
+        }
         subtitle={draft?.draft_name}
       />
 

@@ -241,12 +241,17 @@ export default function QcReviewDetail() {
     <PageShell size="5xl">
       <PageDetailHeader
         title="QC Review"
-        breadcrumb={{
-          label: "Draft",
-          href: review
-            ? `/recordsets/drafts/${review.recordset_draft_id}`
-            : "/recordsets",
-        }}
+        breadcrumbs={
+          review
+            ? [
+                { label: "Recordsets", href: "/recordsets" },
+                {
+                  label: `Draft ${review.recordset_draft_id}`,
+                  href: `/recordsets/drafts/${review.recordset_draft_id}`,
+                },
+              ]
+            : [{ label: "Recordsets", href: "/recordsets" }]
+        }
         subtitle={reviewId ? `Review #${reviewId}` : undefined}
         badge={
           review

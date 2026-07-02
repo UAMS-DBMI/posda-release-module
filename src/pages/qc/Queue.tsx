@@ -37,7 +37,7 @@ export default function QcQueue() {
     <PageShell size="5xl">
       <PageDetailHeader
         title="QC Pickup Queue"
-        breadcrumb={{ label: "Dashboard", href: "/dashboard" }}
+        breadcrumb={{ label: "Dashboard", href: "/" }}
         subtitle="Unclaimed review slices available to pick up"
       />
 

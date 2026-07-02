@@ -207,16 +207,33 @@ export default function DatasetReleaseTransferCreate() {
 
   const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide";
 
+  const breadcrumbTrail = release
+    ? [
+        { label: "Datasets", href: "/datasets" },
+        {
+          label: dataset?.dataset_name ?? `Dataset ${release.dataset_id}`,
+          href: `/datasets/${release.dataset_id}`,
+        },
+        {
+          label: `Release v${release.release_number}`,
+          href: `/datasets/releases/${releaseId}`,
+        },
+        {
+          label: "Transfers",
+          href: `/datasets/releases/${releaseId}/transfers`,
+        },
+      ]
+    : [
+        {
+          label: "Transfers",
+          href: releaseId ? `/datasets/releases/${releaseId}/transfers` : "/transfers",
+        },
+      ];
+
   if (isLoadingInit) {
     return (
       <PageShell size="3xl">
-        <PageDetailHeader
-          title="New Transfer"
-          breadcrumb={{
-            label: "Transfers",
-            href: releaseId ? `/datasets/releases/${releaseId}/transfers` : "/transfers",
-          }}
-        />
+        <PageDetailHeader title="New Transfer" breadcrumbs={breadcrumbTrail} />
         <SectionCard><p className="text-sm">Loading...</p></SectionCard>
       </PageShell>
     );
@@ -225,13 +242,7 @@ export default function DatasetReleaseTransferCreate() {
   if (initError) {
     return (
       <PageShell size="3xl">
-        <PageDetailHeader
-          title="New Transfer"
-          breadcrumb={{
-            label: "Transfers",
-            href: releaseId ? `/datasets/releases/${releaseId}/transfers` : "/transfers",
-          }}
-        />
+        <PageDetailHeader title="New Transfer" breadcrumbs={breadcrumbTrail} />
         <SectionCard>
           <p className="text-sm text-red-600 dark:text-red-400">{initError}</p>
         </SectionCard>
@@ -241,14 +252,7 @@ export default function DatasetReleaseTransferCreate() {
 
   return (
     <PageShell size="3xl">
-      <PageDetailHeader
-        title="New Transfer"
-        breadcrumb={{
-          label: "Transfers",
-          href: releaseId ? `/datasets/releases/${releaseId}/transfers` : "/transfers",
-        }}
-        subtitle={release ? `${dataset?.dataset_name ?? `Dataset ${release.dataset_id}`} — v${release.release_number}` : undefined}
-      />
+      <PageDetailHeader title="New Transfer" breadcrumbs={breadcrumbTrail} />
 
       <form onSubmit={(e) => void handleSubmit(e)}>
         <SectionCard>

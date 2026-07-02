@@ -690,8 +690,13 @@ QC phases; the visual #8 design pass stays sequenced after QC.
       on datasets/recordsets lists → back button restores view; shareable URLs.
       Only non-defaults serialized; filter submits push history, page changes
       `replace`. Draft/transfer browsers still local-state (item #7 remainder).
-- [ ] Real breadcrumbs: SubNav "← Section" → entity trail with names
-      (`Datasets / Cancer-X / Release 2 / Transfers`); parents already fetched
+- [x] Real breadcrumbs: `PageDetailHeader` gained a `breadcrumbs` trail prop
+      (single `breadcrumb` still supported); deep pages (release detail,
+      release transfers list/create, transfer detail, draft detail/files,
+      recordset release, QC review) now show full trails. Labels use real names
+      where the page already has them, else `Entity {id}` — upgrades free when
+      pages later fetch names. No new API calls. Also fixed QC Queue breadcrumb
+      pointing at orphaned `/dashboard` (→ `/`).
 - [ ] Loading primitives (= item #1): `Spinner`/`LoadingState`, skeleton rows in
       `DynamicTable`, `loading` prop on `Button`
 - [ ] StatusBadge coverage + semantic tokens (= item #8 subset): transfer +

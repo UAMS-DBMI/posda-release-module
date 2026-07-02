@@ -346,12 +346,20 @@ export default function TransferDetail() {
     <PageShell size="5xl">
       <PageDetailHeader
         title="Transfer Details"
-        breadcrumb={{
-          label: "Transfers",
-          href: transfer?.dataset_release_id
-            ? `/datasets/releases/${transfer.dataset_release_id}/transfers`
-            : "/transfers",
-        }}
+        breadcrumbs={
+          transfer?.dataset_release_id
+            ? [
+                {
+                  label: "Dataset Release",
+                  href: `/datasets/releases/${transfer.dataset_release_id}`,
+                },
+                {
+                  label: "Transfers",
+                  href: `/datasets/releases/${transfer.dataset_release_id}/transfers`,
+                },
+              ]
+            : [{ label: "Transfers", href: "/transfers" }]
+        }
         subtitle={transfer?.transfer_name}
         badge={
           transfer

@@ -58,9 +58,12 @@ export function PageSubtitle({ className, children }: PageSubtitleProps) {
 
 type BadgeVariant = "success" | "neutral" | "warning" | "danger";
 
+type Breadcrumb = { label: string; href: string };
+
 type PageDetailHeaderProps = {
   title: string;
-  breadcrumb?: { label: string; href: string };
+  breadcrumb?: Breadcrumb;
+  breadcrumbs?: Breadcrumb[];
   subtitle?: ReactNode;
   badge?: { label: string; variant: BadgeVariant };
   actions?: ReactNode;
@@ -85,24 +88,31 @@ const badgeDotClasses: Record<BadgeVariant, string> = {
 export function PageDetailHeader({
   title,
   breadcrumb,
+  breadcrumbs,
   subtitle,
   badge,
   actions,
 }: PageDetailHeaderProps) {
+  const trail = breadcrumbs ?? (breadcrumb ? [breadcrumb] : []);
   return (
     <div>
-      {breadcrumb && (
+      {trail.length > 0 && (
         <nav
-          className="mb-2 flex items-center gap-1.5 text-sm"
+          className="mb-2 flex flex-wrap items-center gap-1.5 text-sm"
           style={{ color: "var(--muted)" }}
         >
           <span className="opacity-40">←</span>
-          <Link
-            to={breadcrumb.href}
-            className="transition-colors hover:text-accent"
-          >
-            {breadcrumb.label}
-          </Link>
+          {trail.map((crumb, index) => (
+            <span key={crumb.href} className="flex items-center gap-1.5">
+              {index > 0 && <span className="opacity-40">/</span>}
+              <Link
+                to={crumb.href}
+                className="transition-colors hover:text-accent"
+              >
+                {crumb.label}
+              </Link>
+            </span>
+          ))}
         </nav>
       )}
       <PageHeader>
