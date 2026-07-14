@@ -2,7 +2,7 @@
 
 Running log of shortcuts taken, deferred cleanup, and known rough edges.
 Each entry: what, why it was deferred, and what "done" looks like.
-See [AGENT.md](AGENT.md) for architecture and active feature checklists.
+See [CLAUDE.md](../CLAUDE.md) for architecture and active feature checklists.
 
 ## Conventions for this file
 
@@ -17,7 +17,7 @@ See [AGENT.md](AGENT.md) for architecture and active feature checklists.
 | 1 | Types | Response/entity types are co-located per page and partly duplicated (e.g. `Dataset` redefined across List/Detail). | Fast iteration. | Shared types live in `src/types/` and pages import them. |
 | 2 | Data fetching | Hand-rolled `fetch` + `useEffect` + manual loading/error state in every page. | No data lib chosen yet. | A shared `useApi`/query hook (or library) standardizes fetch, caching, and error handling. |
 | 3 | API envelopes | Backend list responses have inconsistent shapes, worked around with per-page `normalize*` + `extractArray`. | Backend not yet standardized. | Backend settles on one envelope; normalizers collapse to one helper. |
-| 4 | API pagination | List endpoints ignore the `page`/`limit` the frontend sends and return **all** rows (`list_response` → `{data, meta:{count}}`); tables paginate client-side and big lists load fully. | Server-side pagination not yet built. | All list endpoints window via `page`+`limit` and return `total` per the List conventions (AGENT.md item #10); omit ⇒ return all. |
+| 4 | API pagination | List endpoints ignore the `page`/`limit` the frontend sends and return **all** rows (`list_response` → `{data, meta:{count}}`); tables paginate client-side and big lists load fully. | Server-side pagination not yet built. | All list endpoints window via `page`+`limit` and return `total` per the List conventions (CLAUDE.md item #10); omit ⇒ return all. |
 
 ## Resolved
 
