@@ -41,6 +41,7 @@ export default function QcWorkItems() {
 
   return (
     <>
+      {/* My Action Items (flags) — hidden for now, not in use yet.
       <CardHeader className="mt-6 mb-0">
         <CardTitle>My Action Items</CardTitle>
       </CardHeader>
@@ -98,10 +99,11 @@ export default function QcWorkItems() {
           </ul>
         )}
       </SectionCard>
+      */}
 
       <CardHeader className="mt-6 mb-0">
         <CardTitle>My QC Queue</CardTitle>
-        <LinkButton href="/qc/queue" size="sm" variant="ghost">
+        <LinkButton href="/qc/queue" size="sm">
           Pickup Queue
         </LinkButton>
       </CardHeader>

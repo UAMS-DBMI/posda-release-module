@@ -2,15 +2,15 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #f6f8fc;
-  --foreground: #1f2937;
+  --background: #edeef2;
+  --foreground: #1c2333;
   --surface: #ffffff;
-  --surface-alt: #eef3fb;
-  --muted: #516079;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --border: rgba(148, 163, 184, 0.18);
-  --border-strong: rgba(100, 116, 139, 0.24);
+  --surface-alt: #d5d9e2;
+  --muted: #55606f;
+  --accent: #3a5ba0;
+  --accent-hover: #2f4c86;
+  --border: rgba(74, 86, 107, 0.2);
+  --border-strong: rgba(74, 86, 107, 0.35);
   --navbar-height: 3.5rem;
   --page-max-width: 72rem;
   --font-geist-sans: "Geist", system-ui, -apple-system, sans-serif;
@@ -30,15 +30,15 @@
 }
 
 :root.dark {
-  --background: #243050;
-  --foreground: #d0d8e8;
-  --surface: #1a2035;
-  --surface-alt: #1e2840;
-  --muted: #8899b8;
-  --accent: #4a8fd4;
-  --accent-hover: #5a9fe4;
-  --border: #263352;
-  --border-strong: #2e4270;
+  --background: #303950;
+  --foreground: #dde1e8;
+  --surface: #1a2130;
+  --surface-alt: #1e2636;
+  --muted: #8b95a8;
+  --accent: #7c93c9;
+  --accent-hover: #93a8d6;
+  --border: #222a3c;
+  --border-strong: #4a5680;
 }
 
 @layer components {
@@ -96,15 +96,13 @@
   }
 
   .card-header {
-    @apply flex items-center justify-between pb-3 mb-3;
-    min-height: 2.5rem;
-    border-bottom: 2px solid var(--border-strong);
-    border-left: 8px solid var(--accent);
-    padding-left: 0.625rem;
+    @apply flex items-center justify-between pb-2 mb-3;
+    min-height: 2rem;
+    border-bottom: 2px solid var(--accent);
   }
 
   .card-title {
-    @apply text-sm font-bold uppercase tracking-wider;
+    @apply text-sm font-semibold;
     color: var(--foreground);
   }
 
