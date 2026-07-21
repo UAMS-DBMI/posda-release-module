@@ -8,6 +8,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { extractApiError, extractArray } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Dataset = {
   dataset_id: number;
@@ -264,7 +265,7 @@ export default function DatasetEdit() {
           </p>
         )}
 
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
 
         {!isLoading && error && (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -307,8 +308,8 @@ export default function DatasetEdit() {
                   )}
 
                   <div className="flex gap-3 pt-2">
-                    <Button type="submit" disabled={isSaving}>
-                      {isSaving ? "Saving..." : "Save Changes"}
+                    <Button type="submit" loading={isSaving}>
+                      Save Changes
                     </Button>
 
                     <LinkButton href={`/datasets/${datasetId}`} variant="ghost">

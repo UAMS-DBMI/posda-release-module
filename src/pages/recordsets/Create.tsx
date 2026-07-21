@@ -299,12 +299,8 @@ export default function RecordsetCreate() {
               )}
 
               <div className="flex gap-3 pt-2">
-                <Button type="submit" disabled={isSaving || isLoadingOptions}>
-                  {isLoadingOptions
-                    ? "Loading Options..."
-                    : isSaving
-                      ? "Creating..."
-                      : "Create Recordset"}
+                <Button type="submit" loading={isSaving || isLoadingOptions}>
+                  {isLoadingOptions ? "Loading Options" : "Create Recordset"}
                 </Button>
 
                 <LinkButton href="/recordsets" variant="ghost">

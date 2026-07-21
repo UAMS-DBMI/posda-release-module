@@ -297,8 +297,8 @@ export default function RecordsetDraftCreate() {
           className="space-y-3"
           actions={
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Create Draft"}
+              <Button type="submit" loading={isSaving}>
+                Create Draft
               </Button>
 
               <LinkButton

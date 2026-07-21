@@ -290,8 +290,8 @@ export default function DatasetReleaseCreate() {
           className="space-y-3"
           actions={
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Create Release"}
+              <Button type="submit" loading={isSaving}>
+                Create Release
               </Button>
 
               <LinkButton

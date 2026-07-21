@@ -5,6 +5,7 @@ import QcWorkItems from "@/components/QcWorkItems";
 import { useFavorites, type Favorite } from "@/lib/useFavorites";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
+import { LoadingState } from "@/components/ui/Spinner";
 
 const byUpdatedDesc = (
   a: { when_updated: string | null },
@@ -41,7 +42,7 @@ export default function Home() {
       </CardHeader>
       <SectionCard className="mt-1">
         {isLoading ? (
-          <p className="text-sm">Loading...</p>
+          <LoadingState />
         ) : (
           <DynamicTable<Favorite>
             rows={datasets}
@@ -76,7 +77,7 @@ export default function Home() {
       </CardHeader>
       <SectionCard className="mt-1">
         {isLoading ? (
-          <p className="text-sm">Loading...</p>
+          <LoadingState />
         ) : (
           <DynamicTable<Favorite>
             rows={recordsets}

@@ -12,6 +12,7 @@ import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
 import { useFavorites } from "@/lib/useFavorites";
 import FavoriteStar from "@/components/FavoriteStar";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Recordset = {
   recordset_id: number;
@@ -649,7 +650,7 @@ export default function RecordsetDetail() {
 
       {isLoading && (
         <SectionCard className="mt-4">
-          <p className="text-sm">Loading...</p>
+          <LoadingState />
         </SectionCard>
       )}
 
@@ -826,7 +827,7 @@ export default function RecordsetDetail() {
               </Button>
             }
           >
-            {isLoadingWpMap && <p className="text-sm">Loading...</p>}
+            {isLoadingWpMap && <LoadingState />}
             {!isLoadingWpMap && wpMap === null && (
               <p className="text-sm" style={{ color: "var(--muted)" }}>
                 No WordPress object linked.
@@ -1004,11 +1005,10 @@ export default function RecordsetDetail() {
               </Button>
               <Button
                 onClick={() => void handleSaveDestination()}
-                disabled={
-                  isSavingDest || !destModalDestId || !destModalTransferModeId
-                }
+                loading={isSavingDest}
+                disabled={!destModalDestId || !destModalTransferModeId}
               >
-                {isSavingDest ? "Saving..." : "Save"}
+                Save
               </Button>
             </div>
           </div>

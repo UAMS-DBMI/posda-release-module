@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useFavorites } from "@/lib/useFavorites";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/Page";
+import { LoadingState } from "@/components/ui/Spinner";
 
 export default function DashboardOverview() {
   const { favorites, isLoading } = useFavorites();
@@ -17,7 +18,7 @@ export default function DashboardOverview() {
         <CardTitle>Favorited Datasets</CardTitle>
       </CardHeader>
       <SectionCard className="mt-1">
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
         {!isLoading && datasets.length === 0 && (
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             No favorited datasets.
@@ -44,7 +45,7 @@ export default function DashboardOverview() {
         <CardTitle>Favorited Recordsets</CardTitle>
       </CardHeader>
       <SectionCard className="mt-1">
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
         {!isLoading && recordsets.length === 0 && (
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             No favorited recordsets.

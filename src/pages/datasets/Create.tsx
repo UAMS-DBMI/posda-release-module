@@ -200,8 +200,8 @@ export default function DatasetCreate() {
               )}
 
               <div className="flex gap-3 pt-2">
-                <Button type="submit" disabled={isSaving || isLoadingOptions}>
-                  {isLoadingOptions ? "Loading Options..." : isSaving ? "Creating..." : "Create Dataset"}
+                <Button type="submit" loading={isSaving || isLoadingOptions}>
+                  {isLoadingOptions ? "Loading Options" : "Create Dataset"}
                 </Button>
 
                 <LinkButton href="/datasets" variant="ghost">

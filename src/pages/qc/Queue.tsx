@@ -7,6 +7,7 @@ import { SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { LoadingState } from "@/components/ui/Spinner";
 
 export default function QcQueue() {
   const { addToast } = useToast();
@@ -42,7 +43,7 @@ export default function QcQueue() {
       />
 
       <SectionCard>
-        {queue.isLoading && <p className="text-sm">Loading...</p>}
+        {queue.isLoading && <LoadingState />}
 
         {queue.isError && (
           <p className="text-sm text-red-600 dark:text-red-400">

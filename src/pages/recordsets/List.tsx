@@ -8,6 +8,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
 import { extractArray } from "@/lib/apiUtils";
 import { useFavorites } from "@/lib/useFavorites";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Recordset = {
   recordset_id: number;
@@ -289,7 +290,7 @@ export default function RecordsetsList() {
       </SectionCard>
 
       <SectionCard>
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
 
         {!isLoading && error && (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>

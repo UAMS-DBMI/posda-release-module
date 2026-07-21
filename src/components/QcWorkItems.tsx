@@ -7,6 +7,7 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { LoadingState } from "@/components/ui/Spinner";
 
 const CAP = 8;
 
@@ -46,7 +47,7 @@ export default function QcWorkItems() {
         <CardTitle>My Action Items</CardTitle>
       </CardHeader>
       <SectionCard className="mt-1">
-        {flags.isLoading && <p className="text-sm">Loading...</p>}
+        {flags.isLoading && <LoadingState />}
         {!flags.isLoading && myFlags.length === 0 && (
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             No open action items.
@@ -108,7 +109,7 @@ export default function QcWorkItems() {
         </LinkButton>
       </CardHeader>
       <SectionCard className="mt-1">
-        {myQueue.isLoading && <p className="text-sm">Loading...</p>}
+        {myQueue.isLoading && <LoadingState />}
         {!myQueue.isLoading && myActive.length === 0 && (
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             Nothing assigned to you. Pick up work from the queue.

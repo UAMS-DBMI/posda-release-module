@@ -517,8 +517,8 @@ export default function QcReviewDetail() {
             >
               Cancel
             </Button>
-            <Button onClick={() => void saveNotes()} disabled={update.isPending}>
-              {update.isPending ? "Saving..." : "Save"}
+            <Button onClick={() => void saveNotes()} loading={update.isPending}>
+              Save
             </Button>
           </>
         }
@@ -546,8 +546,8 @@ export default function QcReviewDetail() {
             >
               Cancel
             </Button>
-            <Button onClick={() => void handleClone()} disabled={clone.isPending}>
-              {clone.isPending ? "Cloning..." : "Clone"}
+            <Button onClick={() => void handleClone()} loading={clone.isPending}>
+              Clone
             </Button>
           </>
         }
@@ -598,8 +598,8 @@ export default function QcReviewDetail() {
             >
               Keep
             </Button>
-            <Button onClick={() => void handleCancel()} disabled={cancel.isPending}>
-              {cancel.isPending ? "Cancelling..." : "Cancel Review"}
+            <Button onClick={() => void handleCancel()} loading={cancel.isPending}>
+              Cancel Review
             </Button>
           </>
         }
@@ -625,15 +625,15 @@ export default function QcReviewDetail() {
             </Button>
             <Button
               onClick={() => void handleSplit()}
+              loading={split.isPending}
               disabled={
-                split.isPending ||
                 (splitMode === "users" && splitUsers.size < 1) ||
                 (splitMode === "count" &&
                   (!Number.isFinite(Number(splitCount)) ||
                     Number(splitCount) < 1))
               }
             >
-              {split.isPending ? "Splitting..." : "Split"}
+              Split
             </Button>
           </>
         }
@@ -724,9 +724,10 @@ export default function QcReviewDetail() {
             </Button>
             <Button
               onClick={() => void handleReassign()}
-              disabled={reassign.isPending || !reassignUser}
+              loading={reassign.isPending}
+              disabled={!reassignUser}
             >
-              {reassign.isPending ? "Saving..." : "Reassign"}
+              Reassign
             </Button>
           </>
         }

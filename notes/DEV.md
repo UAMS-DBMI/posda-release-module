@@ -561,6 +561,14 @@ cycles-in-flight (needs scope decision + maybe a backend aggregation endpoint)
       release → transfer status strip
 - [ ] Live transfer progress: TanStack `refetchInterval` polling on in-flight
       transfers / manifest generation
+- [ ] **Per-file transfer progress** on transfer detail — `transfer_file`
+      (one row per file per transfer, `status` pending/completed/failed,
+      `error`, `attempts`, `file_dest_url`) is generic across all destinations
+      now, but **no API and no UI touch it yet**. Needs a backend list endpoint
+      first (paginated + `status` filter, per the List conventions) and a
+      counts/summary aggregate so the transfer page can show progress without
+      pulling every row. Pairs with the polling item above. See
+      [IDC_TRANSFER.md](IDC_TRANSFER.md) DDL section.
 
 Explicitly out of scope: component-library swap, mobile-first redesign,
 replacing DynamicForm/DynamicTable.

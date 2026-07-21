@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import { Link } from "react-router-dom";
 import classNames from "@/lib/classNames";
+import { Spinner } from "@/components/ui/Spinner";
 
 type ButtonVariant = "primary" | "ghost";
 type ButtonSize = "sm" | "md" | "lg";
@@ -12,7 +13,11 @@ type ButtonBaseProps = {
   className?: string;
 };
 
-type ButtonProps = ButtonBaseProps & ComponentPropsWithoutRef<"button">;
+type ButtonProps = ButtonBaseProps &
+  ComponentPropsWithoutRef<"button"> & {
+    /** Shows a spinner beside the label and disables the button. */
+    loading?: boolean;
+  };
 
 type LinkButtonProps = ButtonBaseProps &
   Omit<ComponentPropsWithoutRef<typeof Link>, "className" | "to"> & {
@@ -50,13 +55,26 @@ export function Button({
   size = "md",
   wide,
   className,
+  loading,
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
   return (
     <button
       {...props}
-      className={buildButtonClassName({ variant, size, wide, className })}
-    />
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={buildButtonClassName({
+        variant,
+        size,
+        wide,
+        className: classNames(loading ? "gap-2" : undefined, className),
+      })}
+    >
+      {loading && <Spinner size="sm" />}
+      {children}
+    </button>
   );
 }
 

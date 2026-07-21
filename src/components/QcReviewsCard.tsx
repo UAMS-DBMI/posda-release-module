@@ -12,6 +12,7 @@ import Modal from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { LoadingState } from "@/components/ui/Spinner";
 
 export default function QcReviewsCard({
   draftId,
@@ -70,7 +71,7 @@ export default function QcReviewsCard({
         </Button>
       </CardHeader>
       <SectionCard className="mt-1">
-        {reviews.isLoading && <p className="text-sm">Loading...</p>}
+        {reviews.isLoading && <LoadingState />}
 
         {reviews.isError && (
           <p className="text-sm text-red-600 dark:text-red-400">
@@ -130,9 +131,10 @@ export default function QcReviewsCard({
             </Button>
             <Button
               onClick={() => void handleSubmit()}
-              disabled={create.isPending || !pctValid}
+              disabled={!pctValid}
+              loading={create.isPending}
             >
-              {create.isPending ? "Creating..." : "Create Review"}
+              Create Review
             </Button>
           </>
         }

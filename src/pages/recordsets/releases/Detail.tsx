@@ -7,6 +7,7 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type RecordsetRelease = {
   recordset_release_id: number;
@@ -197,7 +198,7 @@ export default function RecordsetReleaseDetail() {
       </CardHeader>
       <SectionCard className="mt-1">
 
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
 
         {!isLoading && summaryError && (
           <p className="text-sm text-red-600 dark:text-red-300">{summaryError}</p>

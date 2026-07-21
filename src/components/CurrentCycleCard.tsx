@@ -4,6 +4,7 @@ import { LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { apiFetch } from "@/lib/apiFetch";
 import { useQcReviews } from "@/lib/useQc";
+import { LoadingState } from "@/components/ui/Spinner";
 
 export type CycleDraft = {
   recordset_draft_id: number;
@@ -146,7 +147,7 @@ export default function CurrentCycleCard({
         )}
       </CardHeader>
       <SectionCard className="mt-1">
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
 
         {!isLoading && !openDraft && (
           <p className="text-sm" style={{ color: "var(--muted)" }}>

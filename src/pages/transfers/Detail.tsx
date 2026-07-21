@@ -7,6 +7,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Transfer = {
   dataset_release_transfer_id: number;
@@ -394,7 +395,7 @@ export default function TransferDetail() {
         <CardTitle>Recordset Releases</CardTitle>
       </CardHeader>
       <SectionCard className="mt-1">
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
         {!isLoading && recordsets.length === 0 && (
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             No recordset releases linked to this transfer.
@@ -416,13 +417,14 @@ export default function TransferDetail() {
                   {isRadiology && (
                     <span className="flex shrink-0 items-center gap-2">
                       <span className="text-xs" style={{ color: "var(--muted)" }}>Retriever Manifest</span>
-                      <button
-                        className="btn btn-sm btn-ghost"
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => void generateManifest(r)}
-                        disabled={isGenerating}
+                        loading={isGenerating}
                       >
-                        {isGenerating ? "Generating…" : hasManifest ? "Replace" : "Generate"}
-                      </button>
+                        {hasManifest ? "Replace" : "Generate"}
+                      </Button>
                       {hasManifest && r.downloadable_file_id && r.security_hash && (
                         <a
                           className="btn btn-sm btn-ghost"
@@ -478,14 +480,15 @@ export default function TransferDetail() {
                             <li key={type} className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0">
                               <span className="capitalize">{type}</span>
                               <span className="flex shrink-0 items-center gap-2">
-                                <button
+                                <Button
                                   type="button"
-                                  className="btn btn-sm btn-ghost"
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => void generateIdcManifest(type)}
-                                  disabled={isGenerating}
+                                  loading={isGenerating}
                                 >
-                                  {isGenerating ? "Generating…" : hasFile ? "Replace" : "Generate"}
-                                </button>
+                                  {hasFile ? "Replace" : "Generate"}
+                                </Button>
                                 {hasFile && dfId && hash && (
                                   <a
                                     className="btn btn-sm btn-ghost"
@@ -576,8 +579,8 @@ export default function TransferDetail() {
                 )}
 
                 <div>
-                  <Button type="submit" disabled={isSavingSettings}>
-                    {isSavingSettings ? "Saving..." : "Save Settings"}
+                  <Button type="submit" loading={isSavingSettings}>
+                    Save Settings
                   </Button>
                 </div>
               </div>

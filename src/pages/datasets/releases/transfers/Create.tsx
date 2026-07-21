@@ -6,6 +6,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError, extractArray } from "@/lib/apiUtils";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Destination = {
   destination_id: number;
@@ -234,7 +235,7 @@ export default function DatasetReleaseTransferCreate() {
     return (
       <PageShell size="3xl">
         <PageDetailHeader title="New Transfer" breadcrumbs={breadcrumbTrail} />
-        <SectionCard><p className="text-sm">Loading...</p></SectionCard>
+        <SectionCard><LoadingState /></SectionCard>
       </PageShell>
     );
   }
@@ -328,7 +329,7 @@ export default function DatasetReleaseTransferCreate() {
           <CardTitle>Recordset Releases</CardTitle>
         </CardHeader>
         <SectionCard className="mt-1">
-          {isLoadingRecordsets && <p className="text-sm">Loading...</p>}
+          {isLoadingRecordsets && <LoadingState />}
           {!isLoadingRecordsets && !selectedDestinationId && (
             <p className="text-sm" style={{ color: "var(--muted)" }}>
               Select a destination to see its recordset releases.
@@ -369,13 +370,13 @@ export default function DatasetReleaseTransferCreate() {
           <Button
             type="submit"
             disabled={
-              isSaving ||
               !selectedDestinationId ||
               !transferName.trim() ||
               selectedRecordsetIds.size === 0
             }
+            loading={isSaving}
           >
-            {isSaving ? "Creating..." : "Create Transfer"}
+            Create Transfer
           </Button>
           <LinkButton
             href={releaseId ? `/datasets/releases/${releaseId}/transfers` : "/transfers"}

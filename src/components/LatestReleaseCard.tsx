@@ -4,6 +4,7 @@ import { LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { apiFetch } from "@/lib/apiFetch";
 import { extractArray } from "@/lib/apiUtils";
+import { LoadingState } from "@/components/ui/Spinner";
 
 export type LatestRelease = {
   dataset_release_id: number;
@@ -85,7 +86,7 @@ export default function LatestReleaseCard({
         )}
       </CardHeader>
       <SectionCard className="mt-1">
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
 
         {!isLoading && !release && (
           <p className="text-sm" style={{ color: "var(--muted)" }}>

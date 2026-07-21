@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { SectionCard } from "@/components/ui/Card";
+import { LoadingState } from "@/components/ui/Spinner";
 
 export type DynamicSectionField = {
   label: string;
@@ -27,7 +28,7 @@ export default function DynamicSection({
 }: DynamicSectionProps) {
   return (
     <SectionCard className={className}>
-      {isLoading && <p className="text-sm">Loading...</p>}
+      {isLoading && <LoadingState />}
 
       {!isLoading && error && (
         <p className="text-sm text-red-600 dark:text-red-300">{error}</p>

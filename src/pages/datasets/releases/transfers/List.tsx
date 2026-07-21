@@ -7,6 +7,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError, extractArray } from "@/lib/apiUtils";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Transfer = {
   dataset_release_transfer_id: number;
@@ -279,7 +280,7 @@ export default function DatasetReleaseTransfersList() {
         </div>
       </CardHeader>
       <SectionCard className="mt-1">
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
         {!isLoading && error && (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
@@ -318,14 +319,15 @@ export default function DatasetReleaseTransfersList() {
                           >
                             Cancel
                           </button>
-                          <button
-                            className="btn btn-sm btn-ghost"
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             style={{ color: "#dc2626" }}
                             onClick={() => void deleteTransfer(id)}
-                            disabled={isThisDeleting}
+                            loading={isThisDeleting}
                           >
-                            {isThisDeleting ? "Deleting…" : "Confirm"}
-                          </button>
+                            Confirm
+                          </Button>
                         </>
                       ) : (
                         <button

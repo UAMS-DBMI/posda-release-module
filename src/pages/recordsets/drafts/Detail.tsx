@@ -12,6 +12,7 @@ import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
 import { useQcReviews } from "@/lib/useQc";
 import QcReviewsCard from "@/components/QcReviewsCard";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Draft = {
   recordset_draft_id: number;
@@ -304,9 +305,10 @@ export default function RecordsetDraftDetail() {
               </Button>
               <Button
                 onClick={() => void handlePublish()}
-                disabled={isPublishing || !releaseNumber.trim() || !releaseDate}
+                loading={isPublishing}
+                disabled={!releaseNumber.trim() || !releaseDate}
               >
-                {isPublishing ? "Publishing..." : "Publish"}
+                Publish
               </Button>
             </div>
           </div>
@@ -336,7 +338,7 @@ export default function RecordsetDraftDetail() {
       </CardHeader>
       <SectionCard className="mt-1">
 
-        {isLoading && <p className="text-sm">Loading...</p>}
+        {isLoading && <LoadingState />}
 
         {!isLoading && summaryError && (
           <p className="text-sm text-red-600 dark:text-red-300">{summaryError}</p>

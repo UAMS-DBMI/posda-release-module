@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { extractArray } from "@/lib/apiUtils";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Dataset = {
   dataset_id: number;
@@ -170,7 +171,7 @@ export default function TransfersList() {
         <CardTitle>Datasets</CardTitle>
       </CardHeader>
       <SectionCard className="mt-1">
-        {isLoadingDatasets && <p className="text-sm">Loading...</p>}
+        {isLoadingDatasets && <LoadingState />}
         {!isLoadingDatasets && datasetError && (
           <p className="text-sm text-red-600 dark:text-red-400">
             {datasetError}

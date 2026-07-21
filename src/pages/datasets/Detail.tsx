@@ -12,6 +12,7 @@ import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
 import { useFavorites } from "@/lib/useFavorites";
 import FavoriteStar from "@/components/FavoriteStar";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Dataset = {
   dataset_id: number;
@@ -502,7 +503,7 @@ export default function DatasetDetail() {
 
       {isLoading && (
         <SectionCard className="mt-4">
-          <p className="text-sm">Loading...</p>
+          <LoadingState />
         </SectionCard>
       )}
 
@@ -653,7 +654,7 @@ export default function DatasetDetail() {
               </Button>
             }
           >
-            {isLoadingWpMap && <p className="text-sm">Loading...</p>}
+            {isLoadingWpMap && <LoadingState />}
             {!isLoadingWpMap && wpMap === null && (
               <p className="text-sm" style={{ color: "var(--muted)" }}>
                 No WordPress object linked.

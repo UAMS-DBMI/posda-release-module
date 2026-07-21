@@ -6,6 +6,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
+import { LoadingState } from "@/components/ui/Spinner";
 
 type Draft = {
   recordset_draft_id: number;
@@ -508,7 +509,7 @@ export default function RecordsetDraftFiles() {
             <CardTitle>Draft Contents</CardTitle>
           </CardHeader>
 
-          {isLoadingSummary && <p className="mt-3 text-sm">Loading...</p>}
+          {isLoadingSummary && <LoadingState className="mt-3" />}
 
           {!isLoadingSummary && summaryError && (
             <p className="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -802,12 +803,11 @@ export default function RecordsetDraftFiles() {
                       <div className="flex gap-3">
                         <Button
                           onClick={() => void handleAddFromActivity()}
-                          disabled={isAdding || diff.removed_count === 0}
+                          loading={isAdding}
+                          disabled={diff.removed_count === 0}
                           size="sm"
                         >
-                          {isAdding
-                            ? "Adding..."
-                            : `Add ${diff.removed_count.toLocaleString()} Files to Draft`}
+                          {`Add ${diff.removed_count.toLocaleString()} Files to Draft`}
                         </Button>
                       </div>
                     </div>
@@ -937,12 +937,11 @@ export default function RecordsetDraftFiles() {
                       <div className="flex gap-3">
                         <Button
                           onClick={() => void handleAddFromRelease()}
-                          disabled={isAddingFromRelease || releaseDiff.removed_count === 0}
+                          loading={isAddingFromRelease}
+                          disabled={releaseDiff.removed_count === 0}
                           size="sm"
                         >
-                          {isAddingFromRelease
-                            ? "Adding..."
-                            : `Add ${releaseDiff.removed_count.toLocaleString()} Files to Draft`}
+                          {`Add ${releaseDiff.removed_count.toLocaleString()} Files to Draft`}
                         </Button>
                       </div>
                     </div>
