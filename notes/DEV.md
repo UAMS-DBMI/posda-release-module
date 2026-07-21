@@ -464,23 +464,33 @@ QC phases; the visual #8 design pass stays sequenced after QC.
       where the page already has them, else `Entity {id}` — upgrades free when
       pages later fetch names. No new API calls. Also fixed QC Queue breadcrumb
       pointing at orphaned `/dashboard` (→ `/`).
-- [ ] Loading primitives (= item #1) — **PLANNED, not yet approved to build.**
-      Design agreed (2026-07-01), user paused before implementation:
-      - `components/ui/Spinner.tsx`: spinner (`currentColor`) + `LoadingState`
-        (spinner + label, `role="status"` + `aria-live="polite"`) — replaces the
-        ~23 inline `<p>Loading...</p>` sites
-      - `Button loading` prop: inline spinner *beside* the existing label
-        (no width jump) + auto-`disabled` — replaces the 15
-        `{isSaving ? "Saving..." : …}` text swaps
-      - `DynamicTable loading` prop: header renders; body = N pulsing skeleton
-        bar rows (N = page size, cap ~10) using `--border`/`--muted` tokens —
-        requires restructuring pages from `{isLoading && <p>} {!isLoading &&
-        <DynamicTable>}` to always-rendered `<DynamicTable loading rows={…??[]}>`
-      - `DynamicSection`: swap its internal loading text (line ~30) for
-        `LoadingState` — one line, upgrades ~10 detail pages
-      - **Scope (recommended hybrid):** full sweep for text sites + buttons
-        (mechanical); skeleton-table restructure only on the 4 paginated pages
-        (datasets List, recordsets List, QC Queue, Home) to bound risk
+- [x] Loading primitives (= item #1) — **BUILT 2026-07-21**, except skeleton
+      tables which were **tried and rejected** (see below):
+      - [x] `components/ui/Spinner.tsx`: `Spinner` (`currentColor`) +
+        `LoadingState` (spinner + label, `role="status"` +
+        `aria-live="polite"`). Note `LoadingState` renders `text-muted`, so
+        loading text is now gray rather than full-contrast foreground.
+      - [x] Swept **27** inline `<p className="text-sm">Loading...</p>` sites
+        across 21 files (estimate said ~23), incl. `DynamicSection` (one line,
+        upgrades ~10 detail pages)
+      - [x] `Button loading` prop: spinner beside the label + `gap-2` +
+        `aria-busy` + auto-`disabled`; swept **20** text-swap sites (estimate
+        said 15). Where a button had both a pending flag and a validity gate,
+        they were split (`loading={x.isPending}` + `disabled={…}`). Three raw
+        `<button className="btn …">` were converted to `Button` to take the
+        prop, leaving those clusters mixed raw/component.
+      - [x] ~~`DynamicTable loading` prop / skeleton rows~~ — **REJECTED
+        2026-07-21.** Built as designed (header + N pulsing bars, 3 paginated
+        tables restructured to always-rendered), then reverted on sight: the
+        user disliked the skeleton flash and prefers the spinner. **Do not
+        re-propose.** The call sites are back to
+        `{isLoading && <LoadingState />}` / `{!isLoading && data && <DynamicTable>}`.
+      - Kept from that work (independent of skeletons): `DynamicTable`'s
+        empty-rows early return moved **below all hooks** — it previously sat
+        above `useState`/`useMemo`, a conditional-hooks violation that throws
+        "Rendered more hooks than during the previous render" when a mounted
+        table goes 0 → N rows; and `renderBody()` now collapses what were two
+        verbatim copies of the `<tbody>` block.
       - Out of scope: keep-previous-rows-while-refetching = TanStack
         `keepPreviousData`, belongs to item #2 migration
 - [ ] StatusBadge coverage + semantic tokens (= item #8 subset): transfer +
@@ -573,17 +583,19 @@ cycles-in-flight (needs scope decision + maybe a backend aggregation endpoint)
 Explicitly out of scope: component-library swap, mobile-first redesign,
 replacing DynamicForm/DynamicTable.
 
-### 1. Loading indicators (consistency)
+### 1. Loading indicators (consistency) — DONE 2026-07-21
 
 Goal: replace ad-hoc `<p>Loading…</p>` text with shared, accessible primitives.
 
-- [ ] Add `<Spinner>` / `<LoadingState>` primitive in `components/ui/`
+- [x] Add `<Spinner>` / `<LoadingState>` primitive in `components/ui/`
       (consistent copy + `aria-busy`/`aria-live`)
-- [ ] Replace the ~20 inline `Loading…` sites across pages with it
-- [ ] Add a `loading` prop to `Button` (inline spinner + auto-`disabled`);
-      retire the manual `{isSaving ? "Creating…" : …}` text swaps
-- [ ] Add a `loading` prop to `DynamicTable` that renders skeleton rows in place
-      (removes the layout shift from loading text sitting outside the table)
+- [x] Replace the inline `Loading…` sites across pages with it (27 sites)
+- [x] Add a `loading` prop to `Button` (inline spinner + auto-`disabled`);
+      retire the manual `{isSaving ? "Creating…" : …}` text swaps (20 sites)
+- [~] ~~Add a `loading` prop to `DynamicTable` that renders skeleton rows~~ —
+      **REJECTED 2026-07-21.** Built, viewed, reverted: the skeleton flash
+      reads worse than the spinner. Lists keep the spinner-then-table pattern.
+      Don't re-propose. Full rationale under Tier 1 above.
 
 ### 2. Async / data-fetching (highest-leverage)
 
@@ -651,12 +663,26 @@ Goal: one accessible dialog instead of hand-rolled inline modals.
 
 ### 5. DynamicTable improvements
 
-Goal: explicit, predictable paging + in-table loading.
+Goal: explicit, predictable paging.
 
 - [ ] Add explicit `mode: "client" | "server"` prop; drop the
       `totalItems > rows.length` heuristic
 - [ ] Define sort behavior under server paging (disable, or server-side sort)
-- [ ] Wire in the `loading` prop from item 1
+- [~] ~~Wire in the `loading` prop from item 1~~ — **dropped**, skeleton rows
+      rejected (item #1). Loading stays outside the table, as a spinner.
+- [x] **Fixed 2026-07-21:** the empty-rows early return sat *above* every
+      `useState`/`useMemo`, a conditional-hooks violation (React throws when a
+      mounted table goes 0 → N rows). Moved below all hooks; column inference
+      now guards `rows[0]` itself rather than relying on that return.
+- [x] **Restyle 2026-07-21 (user-directed):** `.data-table` in `globals.css`
+      gives cells a real grid — `td` `1px solid var(--border-strong)`, table
+      `2px` (wider border wins under `border-collapse`, so the outer edge reads
+      stronger), `th` translucent white 20% to stay visible on the accent
+      header. Replaced the old near-invisible `border-black/5` row rule. Row
+      height tightened `py-2` → `py-1` on `th`/`td` (~37px → ~29px); the
+      `scroll.maxVisibleRows` row-height constant went `41` → `33` to match.
+      ⚠ Rows containing `.btn-sm` (h-8) keep a 32px floor, so action rows are
+      taller than text rows in the same table.
 
 ### 6. Toast & feedback polish
 

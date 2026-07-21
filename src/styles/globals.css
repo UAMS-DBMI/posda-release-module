@@ -209,6 +209,22 @@ thead th {
   text-align: left;
 }
 
+/* Cell grid for DynamicTable. The 2px table border outranks the 1px cell
+   borders under border-collapse, so the outer edge reads stronger than the
+   interior rules. Header cells use a translucent white so the grid stays
+   visible against the accent-filled header row. */
+.data-table {
+  border: 2px solid var(--border-strong);
+}
+
+.data-table th {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.data-table td {
+  border: 1px solid var(--border-strong);
+}
+
 .table-row {
   background: var(--background);
 }
