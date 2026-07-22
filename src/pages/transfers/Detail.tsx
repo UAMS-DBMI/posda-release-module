@@ -28,13 +28,13 @@ type DestSettings = {
   dataset_release_transfer_id: number;
   published: boolean | null;
   public: boolean | null;
-  gcs_url?: string | null;
+  base_gcs_url?: string | null;
   dataset_manifest_file_id?: number | null;
   dataset_manifest_downloadable_file_id?: number | null;
   dataset_manifest_security_hash?: string | null;
-  recordset_manifest_file_id?: number | null;
-  recordset_manifest_downloadable_file_id?: number | null;
-  recordset_manifest_security_hash?: string | null;
+  file_manifest_file_id?: number | null;
+  file_manifest_downloadable_file_id?: number | null;
+  file_manifest_security_hash?: string | null;
   clinical_manifest_file_id?: number | null;
   clinical_manifest_downloadable_file_id?: number | null;
   clinical_manifest_security_hash?: string | null;
@@ -99,12 +99,12 @@ export default function TransferDetail() {
   const [settingsWpMediaFileId, setSettingsWpMediaFileId] = useState("");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
-  const [generatingIdcManifest, setGeneratingIdcManifest] = useState<"dataset" | "recordset" | "clinical" | null>(null);
+  const [generatingIdcManifest, setGeneratingIdcManifest] = useState<"dataset" | "file" | "clinical" | null>(null);
 
   function populateSettingsFields(data: DestSettings) {
     setSettingsPublished(data.published ?? false);
     setSettingsPublic(data.public ?? false);
-    setSettingsGcsUrl(data.gcs_url ?? "");
+    setSettingsGcsUrl(data.base_gcs_url ?? "");
     setSettingsFaspexUrl(data.faspex_url ?? "");
     setSettingsCollection(data.collection ?? "");
     setSettingsSite(data.site ?? "");
@@ -230,7 +230,7 @@ export default function TransferDetail() {
     }
   }
 
-  async function generateIdcManifest(type: "dataset" | "recordset" | "clinical") {
+  async function generateIdcManifest(type: "dataset" | "file" | "clinical") {
     if (!transferId) return;
     setGeneratingIdcManifest(type);
     try {
@@ -271,7 +271,7 @@ export default function TransferDetail() {
 
     if (abbr === "idc") {
       payload = {
-        gcs_url: settingsGcsUrl.trim() || null,
+        base_gcs_url: settingsGcsUrl.trim() || null,
         published: settingsPublished,
         public: settingsPublic,
       };
@@ -468,7 +468,7 @@ export default function TransferDetail() {
                     <div>
                       <span className={labelClass} style={{ color: "var(--muted)" }}>IDC Manifests</span>
                       <ul className="mt-1 divide-y text-sm" style={{ borderColor: "var(--border-strong)" }}>
-                        {(["dataset", "recordset", "clinical"] as const).map((type) => {
+                        {(["dataset", "file", "clinical"] as const).map((type) => {
                           const fileIdKey  = `${type}_manifest_file_id`                as keyof DestSettings;
                           const dfIdKey    = `${type}_manifest_downloadable_file_id`   as keyof DestSettings;
                           const hashKey    = `${type}_manifest_security_hash`          as keyof DestSettings;
