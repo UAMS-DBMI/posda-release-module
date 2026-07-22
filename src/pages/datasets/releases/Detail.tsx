@@ -6,6 +6,7 @@ import DynamicSection, {
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { extractApiError, extractArray } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
 
@@ -15,6 +16,7 @@ type DatasetRelease = {
   release_number: number;
   release_date: string;
   release_notes: string;
+  release_status: string;
   when_created?: string;
   who_created?: number;
   when_updated?: string;
@@ -309,6 +311,10 @@ export default function DatasetReleaseDetail() {
         { label: "Release ID", value: release.dataset_release_id },
         { label: "Dataset ID", value: release.dataset_id },
         { label: "Release Number", value: release.release_number },
+        {
+          label: "Release Status",
+          value: <StatusBadge status={release.release_status} />,
+        },
         { label: "Release Date", value: formatDate(release.release_date) },
         {
           label: "Release Notes",

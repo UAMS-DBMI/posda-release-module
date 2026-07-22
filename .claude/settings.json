@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "d:\\Cloud\\University of Arkansas for Medical Sciences\\Work - General\\Code\\oneposda\\database\\migrations\\posda_files",
+      "d:\\Cloud\\University of Arkansas for Medical Sciences\\Work - General\\Code\\oneposda\\posda\\fastapi\\app\\papi\\routes"
+    ]
+  }
+}

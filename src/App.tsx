@@ -15,6 +15,7 @@ import DatasetsList from "@/pages/datasets/List";
 import DatasetCreate from "@/pages/datasets/Create";
 import DatasetById from "@/pages/datasets/Detail";
 import DatasetEdit from "@/pages/datasets/Edit";
+import DatasetCycle from "@/pages/datasets/Cycle";
 
 import DatasetReleaseCreate from "@/pages/datasets/releases/Create";
 import DatasetReleaseById from "@/pages/datasets/releases/Detail";
@@ -133,6 +134,7 @@ export default function App() {
           <Route path="create" element={<DatasetCreate />} />
           <Route path=":dataset_id" element={<DatasetById />} />
           <Route path=":dataset_id/edit" element={<DatasetEdit />} />
+          <Route path=":dataset_id/cycle" element={<DatasetCycle />} />
           <Route path="releases/create" element={<DatasetReleaseCreate />} />
           <Route path="releases/:release_id" element={<DatasetReleaseById />} />
           <Route path="releases/:release_id/edit" element={<DatasetReleaseEdit />} />

@@ -14,6 +14,7 @@ type DatasetRelease = {
   release_number: number;
   release_date: string;
   release_notes: string;
+  release_status?: string;
   when_created?: string;
   who_created?: number;
   when_updated?: string;
@@ -55,6 +56,7 @@ export default function DatasetReleaseEdit() {
     dataset_id: "",
     release_number: "",
     release_date: "",
+    release_status: "draft",
     release_notes: "",
   });
 
@@ -107,6 +109,7 @@ export default function DatasetReleaseEdit() {
           dataset_id: String(release.dataset_id ?? ""),
           release_number: String(release.release_number ?? ""),
           release_date: toDateInput(release.release_date),
+          release_status: release.release_status ?? "draft",
           release_notes: release.release_notes ?? "",
         });
       } catch (caughtError) {
@@ -166,6 +169,7 @@ export default function DatasetReleaseEdit() {
           dataset_id: Number(formData.dataset_id),
           release_number: Number(formData.release_number),
           release_date: formData.release_date,
+          release_status: formData.release_status,
           release_notes: formData.release_notes,
         }),
       });
@@ -218,6 +222,18 @@ export default function DatasetReleaseEdit() {
       label: "Release Date",
       type: "date",
       controlClassName: "mt-1 input",
+    },
+    {
+      key: "release_status",
+      label: "Release Status",
+      type: "select",
+      options: [
+        { value: "draft", label: "Draft - still being assembled" },
+        { value: "released", label: "Released - final, ready to distribute" },
+        { value: "live", label: "Live - published externally" },
+        { value: "retracted", label: "Retracted - withdrawn" },
+      ],
+      controlClassName: "mt-1 select",
     },
     {
       key: "release_notes",

@@ -8,8 +8,10 @@ import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
+import type { DatasetReleaseStatus } from "@/lib/useCycle";
 import { useFavorites } from "@/lib/useFavorites";
 import FavoriteStar from "@/components/FavoriteStar";
 import { LoadingState } from "@/components/ui/Spinner";
@@ -39,6 +41,7 @@ type DatasetRelease = {
   release_number: number;
   release_date: string;
   release_notes: string;
+  release_status: DatasetReleaseStatus;
 };
 
 type DatasetReleasesResponse = {
@@ -446,12 +449,16 @@ export default function DatasetDetail() {
 
   const dataset = data?.dataset ?? data?.data ?? null;
 
+  // "Latest" = highest release_number that isn't retracted. Must match the
+  // server-side NOT_RETRACTED rule in distribution.py.
   const latestRelease =
-    releasesData?.releases.reduce<DatasetRelease | null>(
-      (latest, r) =>
-        latest == null || r.release_number > latest.release_number ? r : latest,
-      null,
-    ) ?? null;
+    releasesData?.releases
+      .filter((r) => r.release_status !== "retracted")
+      .reduce<DatasetRelease | null>(
+        (latest, r) =>
+          latest == null || r.release_number > latest.release_number ? r : latest,
+        null,
+      ) ?? null;
 
   const metadataStrip = dataset
     ? [
@@ -493,6 +500,12 @@ export default function DatasetDetail() {
               }}
             />
             <LinkButton
+              href={datasetId ? `/datasets/${datasetId}/cycle` : "/datasets"}
+            >
+              Release Cycle
+            </LinkButton>
+            <LinkButton
+              variant="ghost"
               href={datasetId ? `/datasets/${datasetId}/edit` : "/datasets"}
             >
               Edit Dataset
@@ -628,6 +641,11 @@ export default function DatasetDetail() {
                 columns={[
                   { key: "dataset_release_id", label: "ID" },
                   { key: "release_number", label: "Version" },
+                  {
+                    key: "release_status",
+                    label: "Status",
+                    render: (value) => <StatusBadge status={String(value)} />,
+                  },
                   { key: "release_date", label: "Date" },
                   { key: "release_notes", label: "Notes" },
                 ]}

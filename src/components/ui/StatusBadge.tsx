@@ -43,6 +43,11 @@ const statusVariant: Record<string, BadgeVariant> = {
   flagged: "warning",
   // flags
   resolved: "success",
+  // dataset release lifecycle (draft also covers the transfer vocabulary)
+  draft: "neutral",
+  released: "info",
+  live: "success",
+  retracted: "danger",
 };
 
 type StatusBadgeProps = {
