@@ -5,11 +5,85 @@ This file is a running log for whatever comes up while this is the focus —
 add to it as we go, most relevant/current at the top of each section is fine,
 no need to keep it tidy.
 
+## TCIA → IDC submission — background & architecture
+
+**Acronyms:** TCIA = The Cancer Imaging Archive · IDC = Imaging Data Commons ·
+CM = (TCIA) Collection Manager · BQ = Big Query
+
+**Task:** support submissions from TCIA to IDC. This section is the *why* plus
+the current model; manifest specifics are in **Manifest generation** below.
+
+### Why this is changing
+
+IDC has historically retrieved metadata from two sources: the **NBIA API**
+(dataset-related info) and **TCIA Collection Manager (CM)** (collection-related
+metadata, including analysis results).
+
+NBIA is being eliminated as TCIA's final Radiology-DICOM storage/dissemination
+component. **Posda will house the final copy of a dataset submission and all
+related version release information.**
+
+Posda is organized around **activity-based curation**: teams curate data in
+"activities," which give timelines/timepoints for standardization and
+de-identification of imaging. Each batch edit to activity data creates a new
+timepoint (temporal comparison + rollback). **This work doesn't change
+activity-based curation** — only the final collation and submission tooling.
+
+### Current model: datasets, recordsets, releases
+
+⚠ **Terminology note:** what earlier drafts called a *collection* is now a
+**dataset**, and what they called a *dataset* is now a **recordset**.
+"Collection" now refers only to the external TCIA collection, or to the
+`Collection` value of `dataset_type`.
+
+The module is built (see the DDL section below for exact columns):
+
+- **`dataset`** houses both traditional collections and analysis results,
+  distinguished by `dataset_type_id` → `dataset_type`. Datasets relate to other
+  datasets via `dataset_relation` / `dataset_relation_type` (forward/reverse
+  labels). Carries `dataset_doi` (NOT NULL, UNIQUE).
+- **`recordset`** hangs off a dataset (`recordset.dataset_id`), typed by
+  `recordset_type` (e.g. `Radiology Images`) and carrying its own
+  `recordset_doi` and — importantly — its **`license_id`** → `recordset_license`.
+  License lives here, not on the dataset.
+- **Both levels are versioned into releases:** `dataset_release` and
+  `recordset_release`, each with `release_number` (unique per parent),
+  `release_date`, `release_notes`, and its own **`release_doi`**. So datasets
+  *and* recordsets both get per-version DOIs — this is the "subcollection"
+  concept realized.
+- **Recordset releases are built from drafts:** `recordset_draft` (+
+  `recordset_draft_file`) is the mutable working set; publishing snapshots it
+  into `recordset_release` (+ `recordset_release_file`).
+- **`dataset_release_recordset`** links a dataset release to the recordset
+  releases it contains (many-to-many) — this is what a submission actually
+  bundles.
+- **Submission:** `dataset_release_transfer` targets a `transfer_destination`
+  with a `transfer_mode`, and fans out to per-destination **settings** tables —
+  `transfer_idc`, `transfer_gc`, `transfer_nbia`, `transfer_aspera`,
+  `transfer_wp`, `transfer_recordset`. Per-file progress is tracked in the
+  single shared `transfer_file` table, not per destination.
+- **QC** rides on drafts: `qc_review` → `qc_review_assignment` / `qc_series`
+  (+ `qc_series_history`).
+- **`wp_object_map`** links Posda objects (`dataset`, `dataset_release`,
+  `recordset`, `recordset_release`) to WordPress objects (`collection`,
+  `analysis_result`, `download`, `version`, `version_download`).
+
+### Workflow
+
+Curators keep curating in the activity-based way they already do, and use this
+module to build datasets/recordsets and associate activity data with them.
+
+Envisioned as **bidirectional** with TCIA CM — the module can help curators by
+auto-naming/linking names, IDs, and slugs in the WordPress CM from Posda,
+reducing the pressure on curators to get the landing page standardization right
+by hand.
+
 ## What we know so far (from CLAUDE.md / codebase)
 
-- Data model: `dataset_release_transfer` → per-destination table `transfer_idc`
-  (sibling tables: `transfer_nbia`, `transfer_aspera`, `transfer_gc`, `transfer_wp`,
-  `transfer_recordset`). DDL source of truth:
+- Data model: `dataset_release_transfer` → per-destination settings table
+  `transfer_idc` (siblings: `transfer_nbia`, `transfer_aspera`, `transfer_gc`,
+  `transfer_wp`, `transfer_recordset`), plus the shared `transfer_file` for
+  per-file progress. DDL source of truth:
   `../oneposda/database/migrations/posda_files/add_dataset_module_tables.sql`.
 - Backend: `../oneposda/posda/fastapi/app/papi/routes/distribution.py` —
   `transfers/{id}` CRUD + per-destination subresources, including `idc`, plus
@@ -17,9 +91,10 @@ no need to keep it tidy.
 - Frontend touch points so far: `src/pages/transfers/Detail.tsx` (per-transfer
   detail, includes IDC-specific fields) and
   `src/pages/datasets/releases/transfers/Create.tsx` (transfer creation flow).
-- IDC manifest generation is long-running — TECH_DEBT/CLAUDE.md item #2 already
-  flags this as the intended use case for TanStack's `refetchInterval` polling
-  (not yet implemented).
+- IDC manifest generation is long-running — TanStack Query is now adopted
+  (`src/lib/queryClient.ts`, `apiFetch.ts`), and
+  [DEV.md](DEV.md) has "live transfer progress via `refetchInterval` polling"
+  as the intended use case. Still unchecked / not yet implemented.
 
 ### DDL as of 2026-07-21
 
@@ -34,8 +109,10 @@ no need to keep it tidy.
   `base_gcs_url`, `dataset_manifest_file_id`, `file_manifest_file_id`,
   `clinical_manifest_file_id`, `published`, `"public"`. Each manifest FK →
   `file(file_id)`, `ON DELETE RESTRICT`.
-  - `base_gcs_url` = base location of the manifest/package; the anchor that
-    per-file relative URLs resolve against.
+  - `base_gcs_url` = the **absolute** GCS location of the package/manifest,
+    `gs://posda_submit/<dataset>/<version>`. This is the single absolute anchor;
+    everything *inside* the manifests is relative to the manifest, so only this
+    value changes when the package is relocated during ETL.
   - `file_manifest_file_id`'s FK constraint is confusingly named
     `fk_transfer_idc_file_recordset_manifest` — name lag, not a second column.
 - **`file` table** (`all.sql`, base Posda schema): `file_id`, `digest text NOT
@@ -84,13 +161,12 @@ no need to keep it tidy.
   manifest generator creates `transfer_idc` implicitly via upsert). If a
   destination ever needs its own per-file attributes, this becomes nullable
   columns or a `details jsonb`; not built speculatively.
-- Destination settings tables remain per-destination and unchanged:
-  `transfer_idc`, `transfer_gc`, `transfer_aspera`, `transfer_nbia`,
-  `transfer_wp` (plus the `transfer_recordset` junction).
-- Destination parent tables carry their own settings: `transfer_aspera.faspex_url`,
+- **Destination settings tables** remain per-destination and unchanged — each a
+  1:1 extension of `dataset_release_transfer` carrying its own settings:
+  `transfer_idc` (see above), `transfer_aspera.faspex_url`,
   `transfer_nbia.collection`/`.site`, `transfer_wp.wp_media_file_id`,
-  `transfer_recordset.retriever_manifest_file_id`; most also have
-  `published`/`"public"` booleans.
+  `transfer_gc`, plus the `transfer_recordset` junction
+  (`retriever_manifest_file_id`). Most also have `published`/`"public"` booleans.
 - **New trigger: `notify_transfer_queued()`** — fires
   `pg_notify('idc_transfer_channel', dataset_release_transfer_id)` on
   `dataset_release_transfer` INSERT or UPDATE OF `transfer_status`, when the
@@ -177,18 +253,19 @@ layout**).
 | `posda_file_id` | Posda `file_id` of the instance | ✅ |
 
 **`relative_file_url` form:** per-instance paths are **relative to the manifest's
-own location**, dot notation (e.g. `./foo/bar.dcm` for `bar.dcm` in subfolder
-`foo`) — never absolute GCS URLs.
+own location**, dot notation (e.g. `./files/bar.dcm`) — never absolute GCS URLs.
+It is **computed independently** at manifest-generation time, *not* derived from
+`transfer_file.file_dest_url` or `base_gcs_url`.
 
 Why: the package (blobs + manifest) is copied first to a bucket in the
-`idc-submission` project — outside our security boundary — then again into a
-bucket inside our boundary. Absolute URLs change across that ETL move; relative
-ones don't. This implies the manifest and its blobs travel together as one
-relocatable package.
+`idc-submission` project — **outside IDC's security boundary** — and then again
+into a bucket in a project **inside IDC's boundary**. Absolute URLs change across
+that ETL move; relative ones don't. This implies the manifest and its blobs
+travel together as one relocatable package.
 
-**As implemented** — from `generate_idc_recordset_manifest`
+**As implemented** — from `generate_idc_file_manifest`
 (`../oneposda/.../routes/distribution.py`, `POST /transfers/{id}/idc/
-recordset-manifest/generate`):
+file-manifest/generate`):
 
 - **Format:** CSV (via `csv.DictWriter`).
 - **One row per instance**, ordered patient → study → series → SOP. No separate
@@ -209,9 +286,8 @@ Fields still missing from the impl are marked "needs adding" in the spec tables
 above (`dataset_type`, `dataset_name`, `dataset_doi`, `collection_name`,
 `relative_file_url`); `posda_file_id` is emitted in code as `file_id`.
 
-**Open questions specific to this manifest:**
-- Is `relative_file_url` derived from `transfer_file` (`base_gcs_url` +
-  `file_dest_url`) at generation time, or computed independently?
+_(No open questions specific to this manifest — the remaining work is the
+generator fixes and the ❌ fields above.)_
 
 ### Dataset manifest
 
@@ -229,6 +305,20 @@ align with dataset submission to IDC.
   the dataset's recordsets**, with a dataset-level value as the starting point.
   Collapse rule when recordsets disagree is still open (see Open questions).
 
+**Sources.** This manifest draws from **three** places — the implementation
+currently only reads the first:
+1. **WordPress / CM** — most fields, via `wp_object_map` → `wp_get`.
+2. **Posda** — `dataset_version_doi` ← `dataset_release.release_doi`; the
+   `license_*` values (derived from recordsets).
+3. **NBIA API** — `dataset_tooltip`, from
+   `https://nbia.cancerimagingarchive.net/nbia-api/services/v4/getCollectionDescriptions?collectionName=<name>`
+   (per Bill, 2026-07-22).
+
+**Reading these sources live is fine**, because manifests are generated at
+**transfer initialization** — before the Go daemon is ever involved. Posda does
+all the sourcing at generation time and writes a static CSV; the daemon only
+*transports* the finished files and never reads WP/CM, Posda, or NBIA itself.
+
 **Fields:**
 
 | Field | Meaning | In impl? |
@@ -244,13 +334,12 @@ align with dataset submission to IDC.
 | `dataset_version` | Dataset version number | ✅ |
 | `dataset_version_date` | Current dataset version date | ✅ |
 | `dataset_url` | TCIA collection URL | ✅ |
-| `file_manifest_url` | Link to the file manifest for this dataset | ❌ needs adding |
-| `dataset_tooltip` | Tooltip/short description (source TBD — trace down later) | ❌ needs adding |
+| `file_manifest_url` | Path to the file manifest, **relative to this manifest** | ❌ needs adding |
+| `dataset_tooltip` | Tooltip/short description — from the **NBIA API** (see Sources above) | ❌ needs adding |
 | `cancer_type` | Cancer types represented in dataset | ✅ |
 | `supporting_data` | Supporting data found in dataset | ✅ |
 | `species` | Species represented in dataset | ✅ |
 | `location` | Cancer location represented in dataset | ✅ |
-| `tumor_locations` | Tumor locations represented in dataset | ❌ needs adding |
 | `program` | Program (community, etc.) | ✅ |
 | `abstract` | NBIA short description | ✅ |
 | `citation` | TCIA collection version citation (Data Citation only) | ✅ |
@@ -272,16 +361,11 @@ dataset-manifest/generate`):
   `downloadable_file`, and sets `transfer_idc.dataset_manifest_file_id`.
 
 Fields marked ❌ above are not yet emitted: `dataset_version_doi`,
-`file_manifest_url`, `dataset_tooltip`, `tumor_locations`, and the 3 `license_*`.
+`file_manifest_url`, `dataset_tooltip`, and the 3 `license_*`.
 
 **Open questions specific to this manifest:**
-- Add the ❌ fields to the generated manifest.
-- `dataset_tooltip` — trace down the source field in Collection Manager
-  (Michael to trace; **Bill to locate/share the exact field** if Michael can't).
-- `file_manifest_url` — presumably the file manifest's downloadable URL; confirm
-  form (relative vs. absolute, given the relative-package model).
-- Source is **WordPress/CM live** — reconcile with the Go-daemon delivery
-  decision (does the daemon read CM directly, or from Posda?).
+- Add the ❌ fields to the generated manifest — this means extending the
+  generator beyond WordPress to also read Posda and the NBIA API.
 
 ### Clinical manifest
 
@@ -296,24 +380,53 @@ link to them. Populates `transfer_idc.clinical_manifest_file_id`.
   live yet** at generation time — the tabular clinical files it links to might
   not exist/be published when the transfer is initialized. Need a plan for the
   not-yet-live case (defer/regenerate, or block generation until CM is up).
-- **Open:** we need to **define what counts as "clinical data"** — which
-  tabular files on WordPress qualify (scope/criteria not yet decided).
-  **Action item: Bill to provide the list.**
+
+**What counts as "clinical data"** (per Bill, 2026-07-22) — note this stretches
+the usual definition of *clinical*; it is really "tabular supporting data."
+Selection is a two-stage filter over **Collection Manager downloads**:
+
+1. **By `download_type`** — keep downloads whose `download_type` includes any
+   combination of:
+   - `clinical data`
+   - `image annotations`
+   - `other`
+2. **By `file_type`** — a CM download's `file_type` is a **list**; keep those
+   including one or more of **CSV**, **XLS**, or **XLSX**.
+
+Then **a human decides which of the surviving downloads are actually relevant** —
+this is a curator judgement call, not a pure rule. Any implementation needs to
+surface candidates for selection rather than auto-including everything.
+
+Open follow-ups on this:
+- Is the relevance decision recorded anywhere (per transfer? per dataset?), or
+  re-made each time a manifest is generated?
+- `download_type` matching — substring/"includes" or exact set membership, and
+  is it case-sensitive?
 
 ## Bucket layout & versioning
 
 A **single** Google Cloud bucket, keyed by dataset then version:
 
 ```
-<dataset>/
-  <version>/
-    <manifests: file, dataset, clinical>
-    files/          <-- DICOM blobs
+gs://posda_submit/
+  <dataset>/
+    <version>/
+      <manifests: file, dataset, clinical>
+      files/          <-- DICOM blobs
 ```
 
-`relative_file_url`s in the file manifest resolve against the `<version>/`
-folder — the manifest's own location — with blobs in the `files/` subfolder.
-That is what makes the whole `<version>/` folder relocatable in one piece.
+**URL scheme — one absolute anchor, everything else relative:**
+
+| Value | Form | Example |
+|---|---|---|
+| `transfer_idc.base_gcs_url` | **Absolute** GCS URL to the package | `gs://posda_submit/<dataset>/<version>` |
+| `relative_file_url` (file manifest) | Relative to the manifest, `./` notation | `./files/foo.dcm` |
+| `file_manifest_url` (dataset manifest) | Relative to the manifest | `./<file manifest>.csv` |
+
+Because the manifests are relocated as a unit and contain **only** relative
+references, moving the package across buckets/projects during ETL means updating
+`base_gcs_url` alone — no manifest is rewritten. That is the whole point of the
+relative scheme.
 
 **Versioning:**
 - **No sub-versioning within a release cycle.** All changes pushed *before* IDC
@@ -328,78 +441,6 @@ That is what makes the whole `<version>/` folder relocatable in one piece.
 - **Per-collection buckets and a dedicated GCP project** — a single shared
   bucket is sufficient. Whether a dedicated GCP project is needed to allow
   per-collection bucket creation stays open, but isn't needed yet.
-
-## TCIA → IDC submission — background & architecture
-
-**Acronyms:** TCIA = The Cancer Imaging Archive · IDC = Imaging Data Commons ·
-CM = (TCIA) Collection Manager · BQ = Big Query
-
-**Task:** support submissions from TCIA to IDC. Manifest specifics live in
-**Manifest generation** above; this section is the *why* plus the current model.
-
-### Why this is changing
-
-IDC has historically retrieved metadata from two sources: the **NBIA API**
-(dataset-related info) and **TCIA Collection Manager (CM)** (collection-related
-metadata, including analysis results).
-
-NBIA is being eliminated as TCIA's final Radiology-DICOM storage/dissemination
-component. **Posda will house the final copy of a dataset submission and all
-related version release information.**
-
-Posda is organized around **activity-based curation**: teams curate data in
-"activities," which give timelines/timepoints for standardization and
-de-identification of imaging. Each batch edit to activity data creates a new
-timepoint (temporal comparison + rollback). **This work doesn't change
-activity-based curation** — only the final collation and submission tooling.
-
-### Current model: datasets, recordsets, releases
-
-⚠ **Terminology note:** what earlier drafts called a *collection* is now a
-**dataset**, and what they called a *dataset* is now a **recordset**.
-"Collection" now refers only to the external TCIA collection, or to the
-`Collection` value of `dataset_type`.
-
-The module is built (see the DDL section at the top for exact columns):
-
-- **`dataset`** houses both traditional collections and analysis results,
-  distinguished by `dataset_type_id` → `dataset_type`. Datasets relate to other
-  datasets via `dataset_relation` / `dataset_relation_type` (forward/reverse
-  labels). Carries `dataset_doi` (NOT NULL, UNIQUE).
-- **`recordset`** hangs off a dataset (`recordset.dataset_id`), typed by
-  `recordset_type` (e.g. `Radiology Images`) and carrying its own
-  `recordset_doi` and — importantly — its **`license_id`** → `recordset_license`.
-  License lives here, not on the dataset.
-- **Both levels are versioned into releases:** `dataset_release` and
-  `recordset_release`, each with `release_number` (unique per parent),
-  `release_date`, `release_notes`, and its own **`release_doi`**. So datasets
-  *and* recordsets both get per-version DOIs — this is the "subcollection"
-  concept realized.
-- **Recordset releases are built from drafts:** `recordset_draft` (+
-  `recordset_draft_file`) is the mutable working set; publishing snapshots it
-  into `recordset_release` (+ `recordset_release_file`).
-- **`dataset_release_recordset`** links a dataset release to the recordset
-  releases it contains (many-to-many) — this is what a submission actually
-  bundles.
-- **Submission:** `dataset_release_transfer` targets a `transfer_destination`
-  with a `transfer_mode`, and fans out to per-destination tables — `transfer_idc`,
-  `transfer_gc`, `transfer_nbia`, `transfer_aspera`, `transfer_wp`,
-  `transfer_recordset` — each with a per-file child table for granular progress.
-- **QC** rides on drafts: `qc_review` → `qc_review_assignment` / `qc_series`
-  (+ `qc_series_history`).
-- **`wp_object_map`** links Posda objects (`dataset`, `dataset_release`,
-  `recordset`, `recordset_release`) to WordPress objects (`collection`,
-  `analysis_result`, `download`, `version`, `version_download`).
-
-### Workflow
-
-Curators keep curating in the activity-based way they already do, and use this
-module to build datasets/recordsets and associate activity data with them.
-
-Envisioned as **bidirectional** with TCIA CM — the module can help curators by
-auto-naming/linking names, IDs, and slugs in the WordPress CM from Posda,
-reducing the pressure on curators to get the landing page standardization right
-by hand.
 
 ## Open questions / things to figure out
 
@@ -461,20 +502,43 @@ record, not the reference.
   `dataset_release_transfer.destination_id`; destination *settings* tables stay
   as they are. → *DDL section*
 
+**2026-07-22 (from Bill)**
+- `dataset_tooltip` is sourced from the **NBIA API**
+  (`getCollectionDescriptions`), not Collection Manager. → *Dataset manifest →
+  Sources*
+- **"Clinical data" defined:** CM downloads whose `download_type` includes any of
+  `clinical data` / `image annotations` / `other`, **and** whose `file_type` list
+  includes CSV / XLS / XLSX — then a human picks the relevant ones. →
+  *Clinical manifest*
+- **URL scheme:** `base_gcs_url` is the one **absolute** anchor
+  (`gs://posda_submit/<dataset>/<version>`); `relative_file_url` and
+  `file_manifest_url` are **relative to their manifest**. Relocation updates
+  `base_gcs_url` only. → *Bucket layout & versioning*
+- `relative_file_url` is **computed independently** at generation time, not
+  derived from `transfer_file` / `base_gcs_url`. → *File manifest*
+- **Live source reads are fine:** manifests are generated at transfer
+  initialization, before the Go daemon runs. Posda does all sourcing and writes
+  static CSVs; the daemon only transports them. → *Dataset manifest → Sources*
+
 ## Action items (from 2026-07-16 meeting)
 
-- **Michael:** finalize the manifest data model (possibly this afternoon) and
-  share via GitHub.
-- **Michael:** add `file_manifest_url`, `tumor_locations`, and
-  `dataset_version_doi` fields to the dataset manifest.
-- **Michael:** add licensing info to the manifest, pulled from the WordPress DB.
+- ~~**Michael:** finalize the manifest data model and share via GitHub.~~
+  ✅ model finalized 2026-07-21 (release DOIs + `transfer_file` consolidation).
+- **Michael:** add `file_manifest_url` and `dataset_version_doi` fields to the
+  dataset manifest. (`tumor_locations` from the meeting turned out to be a
+  duplicate of the existing `location` field — dropped.)
+- **Michael:** add licensing info to the manifest. ⚠ The meeting said "pulled
+  from the WordPress DB," but we since established license lives on
+  `recordset.license_id` in **Posda** — derive it from the recordsets instead.
 - **Michael:** push the first test case to the Google bucket for end-to-end
   validation.
 - **Michael:** confirm the single-version-per-release-cycle assumption with Kirk
   and the wider curator group.
-- **Bill:** provide IDC's broader clinical-data acceptance criteria.
-- **Bill:** locate and share the tooltip description field from Collection
-  Manager.
+- ~~**Bill:** provide IDC's broader clinical-data acceptance criteria.~~ ✅ done
+  2026-07-22 — see *Clinical manifest*.
+- ~~**Bill:** locate and share the tooltip description field from Collection
+  Manager.~~ ✅ done 2026-07-22 — it's the **NBIA API**, not CM; see
+  *Dataset manifest → Sources*.
 - **Quasar:** continue Go daemon development (queue statuses, push to Google
   bucket).
 
@@ -482,33 +546,44 @@ record, not the reference.
 
 _(running log)_
 
-**2026-07-21 — paused here, detoured to frontend work.**
-
-Done this session:
+**2026-07-21**
 - DDL re-read: release DOIs added; five per-destination file tables collapsed
   into a single `transfer_file` (see DDL section).
 - `release_doi` plumbed through the API for both release resources in
   `distribution.py` — Pydantic models, list/detail SELECTs (incl. `GROUP BY` on
   the recordset-release aggregates), INSERT + `returning`, and the dataset-release
-  PATCH. Frontend deliberately untouched; safe to ignore there.
+  PATCH.
 - Notes overhauled: stale collections/datasets terminology corrected to
-  datasets/recordsets, decisions moved into a dated log with the detail kept
+  datasets/recordsets; decisions moved into a dated log with the detail kept
   inline in the body sections.
-- Verified `distribution.py` references **no** `transfer_*_file` table, so the
-  consolidation needs no API changes. Test-data script also verified clean.
+- Verified `distribution.py` references no per-destination file table, so the
+  `transfer_file` consolidation needs no API changes. Test-data script clean too.
+
+**2026-07-22**
+- Bill's answers folded in: `dataset_tooltip` comes from the **NBIA API**, and
+  the "clinical data" selection criteria (see *Clinical manifest*).
+- URL scheme settled: `base_gcs_url` absolute, everything in-manifest relative.
+- Endpoint renamed `recordset-manifest` → **`file-manifest`**
+  (`generate_idc_file_manifest`).
+- **Frontend fixed** in `src/pages/transfers/Detail.tsx` — it was calling the
+  dead `recordset-manifest` path (URL built by string interpolation, so grep and
+  `tsc` both missed it), reading `recordset_manifest_*` response fields, and
+  using `gcs_url` instead of `base_gcs_url`. All corrected; `tsc --noEmit` clean.
+  ⚠ **Not yet exercised against a live backend** — generation + download still
+  need a click-through to confirm.
 
 Pick back up here (nothing in flight, no half-done edits):
 1. **File manifest generator fixes** — the two silent-data-loss risks in
-   `generate_idc_recordset_manifest`: the hardcoded `'Radiology Images'` filter,
+   `generate_idc_file_manifest`: the hardcoded `'Radiology Images'` filter,
    and the INNER joins on `file_patient`/`file_study`/`file_series`/
    `file_sop_common` that silently drop files. Agreed these come *before*
    adding the missing manifest fields.
 2. **Then** the ❌ fields: file manifest (`dataset_type`, `dataset_name`,
    `dataset_doi`, `collection_name`, `relative_file_url`) and dataset manifest
    (`dataset_version_doi` — now has a source in `dataset_release.release_doi`,
-   `file_manifest_url`, `tumor_locations`, `license_*`).
-   - Two open decisions block the dataset-manifest work: is it OK for that
-     generator to join Posda tables (it's currently WordPress-only), and what's
-     the license collapse rule when recordsets disagree?
+   `file_manifest_url`, `license_*`).
+   - Only one decision still blocks the dataset-manifest work: the **license
+     collapse rule** when recordsets disagree. (Joining Posda tables from that
+     generator is settled — it's fine, see *Dataset manifest → Sources*.)
 3. **Optional test-data gaps** (not blocking): no `release_doi` values seeded,
    and `transfer_file` has no rows to build a per-file progress UI against.
