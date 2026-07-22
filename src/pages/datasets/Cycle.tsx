@@ -1,134 +1,377 @@
-import { Link, useParams } from "react-router-dom";
-import CycleStrip, { type CycleStage } from "@/components/CycleStrip";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import DynamicTable from "@/components/DynamicTable";
 import TransferChip from "@/components/TransferChip";
 import { LinkButton } from "@/components/ui/Button";
-import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
+import { SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/Spinner";
+import Tabs, { tabPanelId, tabId, type TabItem } from "@/components/ui/Tabs";
 import {
+  firstUnfinishedStage,
   isPublishable,
+  qcPercent,
+  STAGE_ORDER,
+  stageSummaries,
   unbundledRecordsets,
   useDatasetCycle,
-  type CycleRecordset,
+  type DatasetCycle,
+  type StageKey,
 } from "@/lib/useCycle";
 
-/** Draft -> QC -> Freeze, for one recordset. Mirrors the gate used on draft
- *  detail: publishing needs >=1 complete review and none open or stale. */
-function recordsetStages(recordset: CycleRecordset): CycleStage[] {
-  const { open_draft: draft, qc, latest_release: release } = recordset;
-  const draftUrl = draft
-    ? `/recordsets/drafts/${draft.recordset_draft_id}`
-    : undefined;
+const STAGE_LABELS: Record<StageKey, string> = {
+  draft: "Draft",
+  qc: "QC",
+  release: "Release",
+  distribute: "Distribute",
+};
 
-  if (!draft) {
-    return [
-      {
-        key: "draft",
-        label: "Draft",
-        state: "pending",
-        detail: "No open draft",
-        href: `/recordsets/${recordset.recordset_id}`,
-      },
-      { key: "qc", label: "QC", state: "pending", detail: "—" },
-      {
-        key: "freeze",
-        label: "Frozen",
-        state: release ? "done" : "pending",
-        detail: release ? `v${release.release_number}` : "Never released",
-        href: release
-          ? `/recordsets/releases/${release.recordset_release_id}`
-          : undefined,
-      },
-    ];
-  }
+const ID_PREFIX = "cycle";
 
-  const reviewed = qc.series_total - qc.series_pending;
-  const percent =
-    qc.series_total > 0 ? Math.round((reviewed / qc.series_total) * 100) : 0;
-
-  const qcStage: CycleStage = (() => {
-    if (qc.reviews_total === 0) {
-      return { key: "qc", label: "QC", state: "pending", detail: "No QC yet", href: draftUrl };
-    }
-    if (qc.stale > 0) {
-      return {
-        key: "qc",
-        label: "QC",
-        state: "blocked",
-        detail: `${percent}% · ${qc.stale} stale`,
-        href: draftUrl,
-      };
-    }
-    if (qc.open > 0) {
-      return { key: "qc", label: "QC", state: "active", detail: `${percent}% reviewed`, href: draftUrl };
-    }
-    return { key: "qc", label: "QC", state: "done", detail: "Complete", href: draftUrl };
-  })();
-
-  const publishable = isPublishable(qc);
-
-  return [
-    {
-      key: "draft",
-      label: "Draft",
-      state: qc.reviews_total > 0 ? "done" : "active",
-      detail: `${draft.file_count} files`,
-      href: draftUrl,
-    },
-    qcStage,
-    {
-      key: "freeze",
-      label: "Freeze",
-      state: publishable ? "active" : "pending",
-      detail: publishable
-        ? "Ready to publish"
-        : qc.reviews_total === 0
-          ? "Requires QC"
-          : "Awaiting QC",
-      href: draftUrl,
-    },
-  ];
+function RecordsetLink({ id, name }: { id: number; name: string }) {
+  return (
+    <Link
+      to={`/recordsets/${id}`}
+      className="hover:text-accent"
+      style={{ color: "var(--accent)" }}
+    >
+      {name}
+    </Link>
+  );
 }
 
-function RecordsetRow({ recordset }: { recordset: CycleRecordset }) {
-  const frozenNotBundled =
-    recordset.latest_release !== null && !recordset.in_latest_dataset_release;
+function DraftPanel({ cycle }: { cycle: DatasetCycle }) {
+  const rows = cycle.recordsets.map((r) => ({
+    recordset_id: r.recordset_id,
+    recordset_name: r.recordset_name,
+    draft_name: r.open_draft?.draft_name ?? null,
+    draft_status: r.open_draft?.draft_status ?? null,
+    file_count: r.open_draft?.file_count ?? null,
+    draft_id: r.open_draft?.recordset_draft_id ?? null,
+    frozen: r.latest_release ? `v${r.latest_release.release_number}` : null,
+  }));
 
   return (
-    <div className="py-3 first:pt-0 last:pb-0">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <Link
-          to={`/recordsets/${recordset.recordset_id}`}
-          className="text-sm font-medium hover:text-accent"
-          style={{ color: "var(--accent)" }}
-        >
-          {recordset.recordset_name}
-        </Link>
-        <span className="text-xs" style={{ color: "var(--muted)" }}>
-          {recordset.recordset_type_name}
-        </span>
-        {frozenNotBundled && (
-          <StatusBadge
-            status="not_bundled"
-            variant="warning"
-            label={`v${recordset.latest_release?.release_number} not in a dataset release`}
-          />
+    <DynamicTable
+      rows={rows}
+      getRowKey={(row) => row.recordset_id}
+      emptyMessage="This dataset has no recordsets yet."
+      columns={[
+        {
+          key: "recordset_name",
+          label: "Recordset",
+          render: (_v, row) => (
+            <RecordsetLink id={row.recordset_id} name={row.recordset_name} />
+          ),
+        },
+        {
+          key: "draft_name",
+          label: "Open Draft",
+          render: (v) => (v ? String(v) : "—"),
+        },
+        {
+          key: "draft_status",
+          label: "Status",
+          render: (v) => (v ? <StatusBadge status={String(v)} /> : "—"),
+        },
+        {
+          key: "file_count",
+          label: "Files",
+          render: (v) => (v == null ? "—" : Number(v).toLocaleString()),
+        },
+        {
+          key: "frozen",
+          label: "Frozen At",
+          render: (v) => (v ? String(v) : "—"),
+        },
+        {
+          key: "draft_id",
+          label: "",
+          sortable: false,
+          render: (_v, row) =>
+            row.draft_id ? (
+              <LinkButton
+                size="sm"
+                variant="ghost"
+                href={`/recordsets/drafts/${row.draft_id}`}
+              >
+                Open Draft
+              </LinkButton>
+            ) : null,
+        },
+      ]}
+    />
+  );
+}
+
+function QcPanel({ cycle }: { cycle: DatasetCycle }) {
+  const rows = cycle.recordsets
+    .filter((r) => r.open_draft !== null)
+    .map((r) => ({
+      recordset_id: r.recordset_id,
+      recordset_name: r.recordset_name,
+      reviews: r.qc.reviews_total,
+      progress:
+        r.qc.series_total === 0
+          ? "—"
+          : `${r.qc.series_approved}/${r.qc.series_total} (${qcPercent(r.qc)}%)`,
+      status:
+        r.qc.stale > 0
+          ? "stale"
+          : r.qc.open > 0
+            ? "open"
+            : r.qc.complete > 0
+              ? "complete"
+              : "pending",
+      publishable: isPublishable(r.qc),
+      draft_id: r.open_draft?.recordset_draft_id ?? null,
+    }));
+
+  return (
+    <DynamicTable
+      rows={rows}
+      getRowKey={(row) => row.recordset_id}
+      emptyMessage="No open drafts, so there is nothing to review."
+      columns={[
+        {
+          key: "recordset_name",
+          label: "Recordset",
+          render: (_v, row) => (
+            <RecordsetLink id={row.recordset_id} name={row.recordset_name} />
+          ),
+        },
+        { key: "reviews", label: "Reviews" },
+        { key: "progress", label: "Approved" },
+        {
+          key: "status",
+          label: "Status",
+          render: (v) => <StatusBadge status={String(v)} />,
+        },
+        {
+          key: "publishable",
+          label: "Publish Gate",
+          render: (v) =>
+            v ? (
+              <span className="text-xs text-green-700 dark:text-green-400">
+                Ready
+              </span>
+            ) : (
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                Blocked
+              </span>
+            ),
+        },
+        {
+          key: "draft_id",
+          label: "",
+          sortable: false,
+          render: (_v, row) =>
+            row.draft_id ? (
+              <LinkButton
+                size="sm"
+                variant="ghost"
+                href={`/recordsets/drafts/${row.draft_id}`}
+              >
+                Reviews
+              </LinkButton>
+            ) : null,
+        },
+      ]}
+    />
+  );
+}
+
+function ReleasePanel({
+  cycle,
+  datasetId,
+}: {
+  cycle: DatasetCycle;
+  datasetId: string | undefined;
+}) {
+  const release = cycle.latest_dataset_release;
+  const unbundled = unbundledRecordsets(cycle);
+
+  const rows = cycle.recordsets
+    .filter((r) => r.latest_release !== null)
+    .map((r) => ({
+      recordset_id: r.recordset_id,
+      recordset_name: r.recordset_name,
+      release: `v${r.latest_release?.release_number}`,
+      release_date: r.latest_release?.release_date ?? "",
+      bundled: r.in_latest_dataset_release,
+      release_id: r.latest_release?.recordset_release_id ?? null,
+    }));
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        {release ? (
+          <>
+            <span className="font-medium">
+              v{release.release_number} ·{" "}
+              {new Date(release.release_date).toLocaleDateString()}
+            </span>
+            <StatusBadge status={release.release_status} />
+            {release.release_doi && (
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                {release.release_doi}
+              </span>
+            )}
+          </>
+        ) : (
+          <span style={{ color: "var(--muted)" }}>
+            No dataset release yet.
+          </span>
         )}
+        <LinkButton
+          size="sm"
+          href={`/datasets/releases/create?dataset_id=${datasetId}`}
+        >
+          New Release
+        </LinkButton>
       </div>
-      <CycleStrip stages={recordsetStages(recordset)} />
+
+      {unbundled.length > 0 && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          ⚠ {unbundled.length} recordset{unbundled.length === 1 ? " is" : "s are"}{" "}
+          frozen but not bundled
+          {release ? ` into v${release.release_number}` : ""} — cut a release to
+          distribute {unbundled.length === 1 ? "it" : "them"}.
+        </p>
+      )}
+
+      <DynamicTable
+        rows={rows}
+        getRowKey={(row) => row.recordset_id}
+        emptyMessage="No recordset has been frozen yet."
+        columns={[
+          {
+            key: "recordset_name",
+            label: "Recordset",
+            render: (_v, row) => (
+              <RecordsetLink id={row.recordset_id} name={row.recordset_name} />
+            ),
+          },
+          { key: "release", label: "Frozen At" },
+          {
+            key: "release_date",
+            label: "Date",
+            render: (v) =>
+              v ? new Date(String(v)).toLocaleDateString() : "—",
+          },
+          {
+            key: "bundled",
+            label: "In Dataset Release",
+            render: (v) =>
+              v ? (
+                <StatusBadge status="bundled" variant="success" label="Yes" />
+              ) : (
+                <StatusBadge status="unbundled" variant="warning" label="No" />
+              ),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+function DistributePanel({ cycle }: { cycle: DatasetCycle }) {
+  const navigate = useNavigate();
+  const release = cycle.latest_dataset_release;
+
+  if (!release) {
+    return (
+      <p className="text-sm" style={{ color: "var(--muted)" }}>
+        Nothing to distribute until a dataset release exists.
+      </p>
+    );
+  }
+
+  // UI-only gate: the API still accepts transfers on a draft release
+  // (see TECH_DEBT #5).
+  if (release.release_status === "draft") {
+    return (
+      <p className="text-sm" style={{ color: "var(--muted)" }}>
+        v{release.release_number} is still a draft. Mark it released to start
+        distributing it.
+      </p>
+    );
+  }
+
+  const rows = release.transfers.map((t) => ({
+    dataset_release_transfer_id: t.dataset_release_transfer_id,
+    destination_name: t.destination_name,
+    destination_abbr: t.destination_abbr,
+    transfer_name: t.transfer_name,
+    transfer_status: t.transfer_status,
+  }));
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {release.transfers.map((t) => (
+          <TransferChip key={t.dataset_release_transfer_id} transfer={t} />
+        ))}
+        <LinkButton
+          size="sm"
+          variant="ghost"
+          href={`/datasets/releases/${release.dataset_release_id}/transfers`}
+        >
+          Manage Transfers
+        </LinkButton>
+      </div>
+
+      <DynamicTable
+        rows={rows}
+        getRowKey={(row) => row.dataset_release_transfer_id}
+        emptyMessage={`No transfers configured for v${release.release_number} yet.`}
+        onRowClick={(row) =>
+          navigate(`/transfers/${row.dataset_release_transfer_id}`)
+        }
+        columns={[
+          { key: "destination_name", label: "Destination" },
+          { key: "transfer_name", label: "Transfer" },
+          {
+            key: "transfer_status",
+            label: "Status",
+            render: (v) => <StatusBadge status={String(v)} />,
+          },
+        ]}
+      />
     </div>
   );
 }
 
 export default function DatasetCycle() {
   const { dataset_id: datasetId } = useParams<{ dataset_id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const cycle = useDatasetCycle(datasetId);
 
   const data = cycle.data;
-  const release = data?.latest_dataset_release ?? null;
-  const unbundled = data ? unbundledRecordsets(data) : [];
-  const isDraftRelease = release?.release_status === "draft";
+  const summaries = data ? stageSummaries(data) : null;
+
+  const requested = searchParams.get("stage") as StageKey | null;
+  const activeStage: StageKey =
+    requested && STAGE_ORDER.includes(requested)
+      ? requested
+      : summaries
+        ? firstUnfinishedStage(summaries)
+        : "draft";
+
+  function selectStage(key: string) {
+    const next = new URLSearchParams(searchParams);
+    next.set("stage", key);
+    setSearchParams(next);
+  }
+
+  const tabs: TabItem[] = summaries
+    ? STAGE_ORDER.map((key) => ({
+        key,
+        label: STAGE_LABELS[key],
+        detail: summaries[key].detail,
+        state: summaries[key].state,
+      }))
+    : [];
 
   return (
     <PageShell size="5xl">
@@ -173,120 +416,29 @@ export default function DatasetCycle() {
         </SectionCard>
       )}
 
-      {data && (
-        <>
-          <CardHeader className="mt-6 mb-0">
-            <CardTitle>Recordsets</CardTitle>
-          </CardHeader>
-          <SectionCard className="mt-1">
-            {data.recordsets.length === 0 ? (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                This dataset has no recordsets yet. Add one to start a cycle.
-              </p>
-            ) : (
-              <div className="divide-y" style={{ borderColor: "var(--border)" }}>
-                {data.recordsets.map((r) => (
-                  <RecordsetRow key={r.recordset_id} recordset={r} />
-                ))}
-              </div>
-            )}
-          </SectionCard>
+      {data && summaries && (
+        <SectionCard className="mt-4">
+          <Tabs
+            tabs={tabs}
+            active={activeStage}
+            onChange={selectStage}
+            idPrefix={ID_PREFIX}
+            className="mb-4"
+          />
 
-          <CardHeader className="mt-6 mb-0">
-            <CardTitle>
-              {release
-                ? `Dataset Release v${release.release_number} (${new Date(release.release_date).toLocaleDateString()})`
-                : "Dataset Release"}
-            </CardTitle>
-            {release && <StatusBadge status={release.release_status} />}
-            <LinkButton
-              size="sm"
-              href={`/datasets/releases/create?dataset_id=${datasetId}`}
-            >
-              New Release
-            </LinkButton>
-          </CardHeader>
-          <SectionCard className="mt-1">
-            {!release && (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                No dataset release yet.{" "}
-                {unbundled.length > 0
-                  ? `${unbundled.length} recordset${unbundled.length === 1 ? " is" : "s are"} frozen and ready to bundle.`
-                  : "Freeze a recordset first."}
-              </p>
+          <div
+            role="tabpanel"
+            id={tabPanelId(ID_PREFIX, activeStage)}
+            aria-labelledby={tabId(ID_PREFIX, activeStage)}
+          >
+            {activeStage === "draft" && <DraftPanel cycle={data} />}
+            {activeStage === "qc" && <QcPanel cycle={data} />}
+            {activeStage === "release" && (
+              <ReleasePanel cycle={data} datasetId={datasetId} />
             )}
-
-            {release && unbundled.length === 0 && (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                Every frozen recordset is bundled into v{release.release_number}.
-              </p>
-            )}
-
-            {release && unbundled.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm text-amber-600 dark:text-amber-400">
-                  ⚠ {unbundled.length} recordset
-                  {unbundled.length === 1 ? " is" : "s are"} frozen but not in v
-                  {release.release_number} — cut a new release to distribute
-                  {unbundled.length === 1 ? " it" : " them"}.
-                </p>
-                <ul className="text-sm" style={{ color: "var(--muted)" }}>
-                  {unbundled.map((r) => (
-                    <li key={r.recordset_id}>
-                      {r.recordset_name} · v{r.latest_release?.release_number}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </SectionCard>
-
-          <CardHeader className="mt-6 mb-0">
-            <CardTitle>Distribution</CardTitle>
-            {release && !isDraftRelease && (
-              <LinkButton
-                size="sm"
-                variant="ghost"
-                href={`/datasets/releases/${release.dataset_release_id}/transfers`}
-              >
-                View Transfers
-              </LinkButton>
-            )}
-          </CardHeader>
-          <SectionCard className="mt-1">
-            {!release && (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                Nothing to distribute until a dataset release exists.
-              </p>
-            )}
-
-            {/* UI-only gate: the API still accepts transfers on a draft
-                release (see TECH_DEBT). */}
-            {isDraftRelease && (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                v{release?.release_number} is still a draft. Mark it released to
-                start distributing it.
-              </p>
-            )}
-
-            {release && !isDraftRelease && release.transfers.length === 0 && (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                No transfers configured for v{release.release_number} yet.
-              </p>
-            )}
-
-            {release && !isDraftRelease && release.transfers.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                {release.transfers.map((t) => (
-                  <TransferChip
-                    key={t.dataset_release_transfer_id}
-                    transfer={t}
-                  />
-                ))}
-              </div>
-            )}
-          </SectionCard>
-        </>
+            {activeStage === "distribute" && <DistributePanel cycle={data} />}
+          </div>
+        </SectionCard>
       )}
     </PageShell>
   );
