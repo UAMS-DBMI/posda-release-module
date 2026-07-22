@@ -1,12 +1,21 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
+import DynamicForm from "@/components/DynamicForm";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { extractApiError, extractArray } from "@/lib/apiUtils";
+import { extractApiError } from "@/lib/apiUtils";
+import {
+  emptyRecordsetForm,
+  recordsetCreatePayload,
+  recordsetFormFields,
+  useDatasetOptions,
+  useRecordsetLookups,
+  validateRecordsetForm,
+  type RecordsetFormValues,
+} from "@/lib/recordsetForm";
 
 type CreateRecordsetResponse = {
   recordset_id?: number;
@@ -16,95 +25,24 @@ type CreateRecordsetResponse = {
   timestamp: string;
 };
 
-type Dataset = {
-  dataset_id: number;
-  dataset_name: string;
-};
-
-type License = {
-  license_id: number;
-  license_label: string;
-};
-
-type RecordsetType = {
-  recordset_type_id: number;
-  recordset_type_name: string;
-};
-
 export default function RecordsetCreate() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { addToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [licenses, setLicenses] = useState<License[]>([]);
-  const [recordsetTypes, setRecordsetTypes] = useState<RecordsetType[]>([]);
-  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const [formData, setFormData] = useState({
-    dataset_id: "",
-    recordset_doi: "",
-    license_id: "",
-    recordset_name: "",
-    recordset_type_id: "",
-    active: true,
-  });
+  const [formData, setFormData] = useState<RecordsetFormValues>(() =>
+    emptyRecordsetForm(),
+  );
 
-  useEffect(() => {
-    async function loadOptions() {
-      setIsLoadingOptions(true);
-      try {
-        const [datasetsRes, licensesRes] = await Promise.all([
-          fetch(`/papi/v1/distribution/datasets?limit=1000`, { cache: "no-store" }),
-          fetch("/papi/v1/distribution/lookups/licenses", { cache: "no-store" }),
-        ]);
+  const { recordsetTypes, licenses, isLoading: isLoadingLookups } =
+    useRecordsetLookups();
+  const { datasets, isLoading: isLoadingDatasets } = useDatasetOptions();
+  const isLoadingOptions = isLoadingLookups || isLoadingDatasets;
 
-        const recordsetTypesRes = await fetch("/papi/v1/distribution/lookups/recordset-types", {
-          cache: "no-store",
-        });
-
-        if (datasetsRes.ok) {
-          const datasetsJson = (await datasetsRes.json()) as unknown;
-          const datasetsArray = extractArray<Dataset>(datasetsJson, [
-            "datasets",
-            "data",
-            "items",
-            "results",
-          ]);
-          setDatasets(datasetsArray);
-        }
-
-        if (licensesRes.ok) {
-          const licensesJson = (await licensesRes.json()) as unknown;
-          const licensesArray = extractArray<License>(licensesJson, [
-            "licenses",
-            "data",
-            "items",
-            "results",
-          ]);
-          setLicenses(licensesArray);
-        }
-
-        if (recordsetTypesRes.ok) {
-          const recordsetTypesJson =
-            (await recordsetTypesRes.json()) as unknown;
-          const recordsetTypesArray = extractArray<RecordsetType>(
-            recordsetTypesJson,
-            ["recordset_types", "data", "items", "results"],
-          );
-          setRecordsetTypes(recordsetTypesArray);
-        }
-      } catch {
-        setLicenses([]);
-      } finally {
-        setIsLoadingOptions(false);
-      }
-    }
-
-    void loadOptions();
-  }, []);
+  const fields = recordsetFormFields({ recordsetTypes, licenses, datasets });
 
   useEffect(() => {
     const datasetIdFromQuery = searchParams.get("dataset_id");
@@ -127,16 +65,7 @@ export default function RecordsetCreate() {
     setSaveError(null);
     setFieldErrors({});
 
-    const nextFieldErrors: Record<string, string> = {};
-    if (!formData.dataset_id) {
-      nextFieldErrors.dataset_id = "Dataset is required.";
-    }
-    if (!formData.recordset_name.trim()) {
-      nextFieldErrors.recordset_name = "Name is required.";
-    }
-    if (!formData.recordset_type_id) {
-      nextFieldErrors.recordset_type_id = "Type is required.";
-    }
+    const nextFieldErrors = validateRecordsetForm(formData);
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
       setSaveError("Please fix the highlighted fields.");
@@ -151,16 +80,7 @@ export default function RecordsetCreate() {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({
-          dataset_id: Number(formData.dataset_id),
-          ...(formData.recordset_doi.trim()
-            ? { recordset_doi: formData.recordset_doi.trim() }
-            : {}),
-          license_id: Number(formData.license_id),
-          recordset_name: formData.recordset_name,
-          recordset_type_id: Number(formData.recordset_type_id),
-          active: formData.active,
-        }),
+        body: JSON.stringify(recordsetCreatePayload(formData)),
       });
 
       if (!response.ok) {
@@ -190,68 +110,6 @@ export default function RecordsetCreate() {
       setIsSaving(false);
     }
   }
-
-  const fields: Array<DynamicFormField<typeof formData>> = [
-    {
-      key: "dataset_id",
-      label: "Dataset",
-      type: "select",
-      required: true,
-      options: [
-        { value: "", label: "--- Select a value ---" },
-        ...datasets.map((d) => ({
-          value: String(d.dataset_id),
-          label: `${d.dataset_id} - ${d.dataset_name}`,
-        })),
-      ],
-      controlClassName: "mt-1 select",
-    },
-    {
-      key: "recordset_doi",
-      label: "DOI",
-      controlClassName: "mt-1 input",
-    },
-    {
-      key: "license_id",
-      label: "License",
-      type: "select",
-      options: [
-        { value: "", label: "--- Select a value ---" },
-        ...licenses.map((l) => ({
-          value: String(l.license_id),
-          label: l.license_label,
-        })),
-      ],
-      controlClassName: "mt-1 select",
-    },
-    {
-      key: "recordset_name",
-      label: "Name",
-      required: true,
-      controlClassName: "mt-1 input",
-    },
-    {
-      key: "recordset_type_id",
-      label: "Type",
-      type: "select",
-      required: true,
-      options: [
-        { value: "", label: "--- Select a value ---" },
-        ...recordsetTypes.map((recordsetType) => ({
-          value: String(recordsetType.recordset_type_id),
-          label: recordsetType.recordset_type_name,
-        })),
-      ],
-      controlClassName: "mt-1 select",
-    },
-    {
-      key: "active",
-      label: "Active",
-      type: "checkbox",
-      className: "flex items-center gap-2",
-      controlClassName: "checkbox",
-    },
-  ];
 
   return (
     <PageShell size="3xl">

@@ -40,6 +40,15 @@ export default function Modal({
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // Callers pass an inline arrow for onClose, so its identity changes on every
+  // render. Holding it in a ref keeps the setup effect keyed on `open` alone --
+  // otherwise every keystroke re-ran setup and yanked focus back to the first
+  // field.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -54,7 +63,7 @@ export default function Modal({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key === "Tab" && panelRef.current) {
@@ -84,7 +93,7 @@ export default function Modal({
       document.body.style.overflow = prevOverflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

@@ -8,6 +8,8 @@ guidelines. Active feature work, decisions, and checklists live in `notes/`:
   checklists, design decisions, and the full workstream history
 - [notes/TECH_DEBT.md](notes/TECH_DEBT.md) — known shortcuts and deferred cleanup
 - [notes/IDC_TRANSFER.md](notes/IDC_TRANSFER.md) — current IDC transfer focus
+- [notes/CYCLE_WIZARD.md](notes/CYCLE_WIZARD.md) — the guided release cycle:
+  routes-as-stages, modals-as-actions, shared form modules, step plan
 
 ## Behavioral Guidelines
 

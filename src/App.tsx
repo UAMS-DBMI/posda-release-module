@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { CurrentUserContext, type CurrentUser } from "@/lib/useCurrentUser";
 
 import Home from "@/pages/Home";
+import NotFound from "@/pages/NotFound";
 
 import DashboardLayout from "@/pages/dashboard/Layout";
 import DashboardOverview from "@/pages/dashboard/Overview";
@@ -15,7 +16,14 @@ import DatasetsList from "@/pages/datasets/List";
 import DatasetCreate from "@/pages/datasets/Create";
 import DatasetById from "@/pages/datasets/Detail";
 import DatasetEdit from "@/pages/datasets/Edit";
-import DatasetCycle from "@/pages/datasets/Cycle";
+import StartCycle from "@/pages/datasets/cycle/StartCycle";
+import CycleLayout from "@/pages/datasets/cycle/CycleLayout";
+import SetupStage from "@/pages/datasets/cycle/SetupStage";
+import AssembleStage from "@/pages/datasets/cycle/AssembleStage";
+import VerifyStage from "@/pages/datasets/cycle/VerifyStage";
+import BundleStage from "@/pages/datasets/cycle/BundleStage";
+import TransferStage from "@/pages/datasets/cycle/TransferStage";
+import DisseminateStage from "@/pages/datasets/cycle/DisseminateStage";
 
 import DatasetReleaseCreate from "@/pages/datasets/releases/Create";
 import DatasetReleaseById from "@/pages/datasets/releases/Detail";
@@ -134,7 +142,15 @@ export default function App() {
           <Route path="create" element={<DatasetCreate />} />
           <Route path=":dataset_id" element={<DatasetById />} />
           <Route path=":dataset_id/edit" element={<DatasetEdit />} />
-          <Route path=":dataset_id/cycle" element={<DatasetCycle />} />
+          <Route path=":dataset_id/cycle/start" element={<StartCycle />} />
+          <Route path=":dataset_id/cycle" element={<CycleLayout />}>
+            <Route path="setup" element={<SetupStage />} />
+            <Route path="assemble" element={<AssembleStage />} />
+            <Route path="verify" element={<VerifyStage />} />
+            <Route path="bundle" element={<BundleStage />} />
+            <Route path="transfer" element={<TransferStage />} />
+            <Route path="disseminate" element={<DisseminateStage />} />
+          </Route>
           <Route path="releases/create" element={<DatasetReleaseCreate />} />
           <Route path="releases/:release_id" element={<DatasetReleaseById />} />
           <Route path="releases/:release_id/edit" element={<DatasetReleaseEdit />} />
@@ -163,6 +179,8 @@ export default function App() {
           <Route path="queue" element={<QcQueue />} />
           <Route path="reviews/:review_id" element={<QcReviewDetail />} />
         </Route>
+
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );

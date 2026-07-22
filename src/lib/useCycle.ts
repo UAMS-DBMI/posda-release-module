@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, type ItemEnvelope } from "@/lib/apiFetch";
 import type { TransferChipTransfer } from "@/components/TransferChip";
 import type { CycleStageState } from "@/components/CycleStrip";
@@ -78,6 +78,38 @@ export function useDatasetCycle(datasetId: string | undefined) {
   });
 }
 
+export type CycleDraftRequestItem = {
+  recordset_id: number;
+  activity_timepoint_id: number;
+};
+
+export type CreatedCycleDraft = {
+  recordset_id: number;
+  recordset_draft_id: number;
+  draft_name: string;
+  draft_status: string;
+  activity_timepoint_id: number;
+  file_count: number;
+};
+
+/** Starts a cycle: one transaction that creates a draft per recordset and
+ *  populates it from the chosen timepoint. All-or-nothing on the server. */
+export function useStartCycleDrafts(datasetId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: CycleDraftRequestItem[]) => {
+      const json = await apiFetch<ItemEnvelope<{ drafts: CreatedCycleDraft[] }>>(
+        `${BASE}/datasets/${datasetId}/cycle/drafts`,
+        { method: "POST", body: JSON.stringify({ items }) },
+      );
+      return json.data.drafts;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["dataset-cycle", datasetId ?? ""] });
+    },
+  });
+}
+
 /** True when a recordset's draft has passed the publish gate: at least one
  *  complete review and nothing open or stale. Mirrors the draft-detail gate. */
 export function isPublishable(qc: CycleQc): boolean {
@@ -91,12 +123,34 @@ export function unbundledRecordsets(cycle: DatasetCycle): CycleRecordset[] {
   );
 }
 
-export type StageKey = "draft" | "qc" | "release" | "distribute";
+// Stage names are activities; the data keeps its own names — assemble creates
+// drafts, verify runs QC reviews, bundle publishes releases.
+export type StageKey =
+  | "setup"
+  | "assemble"
+  | "verify"
+  | "bundle"
+  | "transfer"
+  | "disseminate";
 
 export type StageSummary = {
   state: CycleStageState;
   detail: string;
 };
+
+export const STAGE_LABELS: Record<StageKey, string> = {
+  setup: "Setup",
+  assemble: "Assemble",
+  verify: "Verify",
+  bundle: "Bundle",
+  transfer: "Transfer",
+  disseminate: "Disseminate",
+};
+
+/** Route path for a stage, under `/datasets/:id/cycle`. */
+export function stagePath(datasetId: string | undefined, stage: StageKey): string {
+  return `/datasets/${datasetId}/cycle/${stage}`;
+}
 
 /** Percent of a recordset's sampled series that have been decided. */
 export function qcPercent(qc: CycleQc): number {
@@ -104,7 +158,15 @@ export function qcPercent(qc: CycleQc): number {
   return Math.round(((qc.series_total - qc.series_pending) / qc.series_total) * 100);
 }
 
-function draftStage(cycle: DatasetCycle): StageSummary {
+// Provisional until step 2 adds destination + WP-collection readiness to the
+// cycle payload. For now the only signal available is whether recordsets exist.
+function setupStage(cycle: DatasetCycle): StageSummary {
+  return cycle.recordsets.length === 0
+    ? { state: "active", detail: "No recordsets" }
+    : { state: "done", detail: `${cycle.recordsets.length} recordsets` };
+}
+
+function assembleStage(cycle: DatasetCycle): StageSummary {
   if (cycle.recordsets.length === 0) {
     return { state: "pending", detail: "No recordsets" };
   }
@@ -118,7 +180,7 @@ function draftStage(cycle: DatasetCycle): StageSummary {
     : { state: "pending", detail: "No drafts" };
 }
 
-function qcStage(cycle: DatasetCycle): StageSummary {
+function verifyStage(cycle: DatasetCycle): StageSummary {
   const withDraft = cycle.recordsets.filter((r) => r.open_draft !== null);
   if (withDraft.length === 0) return { state: "pending", detail: "—" };
 
@@ -141,7 +203,7 @@ function qcStage(cycle: DatasetCycle): StageSummary {
     : { state: "pending", detail: "No QC yet" };
 }
 
-function releaseStage(cycle: DatasetCycle): StageSummary {
+function bundleStage(cycle: DatasetCycle): StageSummary {
   const release = cycle.latest_dataset_release;
   const unbundled = unbundledRecordsets(cycle);
 
@@ -162,7 +224,7 @@ function releaseStage(cycle: DatasetCycle): StageSummary {
   return { state: "done", detail: `v${release.release_number} ${release.release_status}` };
 }
 
-function distributeStage(cycle: DatasetCycle): StageSummary {
+function transferStage(cycle: DatasetCycle): StageSummary {
   const release = cycle.latest_dataset_release;
   if (!release) return { state: "pending", detail: "—" };
   if (release.release_status === "draft") {
@@ -185,23 +247,138 @@ function distributeStage(cycle: DatasetCycle): StageSummary {
     : { state: "pending", detail: `${transfers.length} draft` };
 }
 
+// Placeholder until step 7 wires WordPress state into the cycle payload. Stays
+// `pending` so it never hijacks the next-action banner before it's built.
+function disseminateStage(_cycle: DatasetCycle): StageSummary {
+  return { state: "pending", detail: "—" };
+}
+
 /** Per-stage rollups across every recordset, in pipeline order. */
 export function stageSummaries(
   cycle: DatasetCycle,
 ): Record<StageKey, StageSummary> {
   return {
-    draft: draftStage(cycle),
-    qc: qcStage(cycle),
-    release: releaseStage(cycle),
-    distribute: distributeStage(cycle),
+    setup: setupStage(cycle),
+    assemble: assembleStage(cycle),
+    verify: verifyStage(cycle),
+    bundle: bundleStage(cycle),
+    transfer: transferStage(cycle),
+    disseminate: disseminateStage(cycle),
   };
 }
 
-export const STAGE_ORDER: StageKey[] = ["draft", "qc", "release", "distribute"];
+export const STAGE_ORDER: StageKey[] = [
+  "setup",
+  "assemble",
+  "verify",
+  "bundle",
+  "transfer",
+  "disseminate",
+];
+
+export type NextAction = {
+  stage: StageKey;
+  /** What the cycle needs, in plain language. */
+  message: string;
+  /** Label for the action that addresses it. */
+  actionLabel: string;
+  /** True when something is wrong rather than merely in progress. */
+  blocked: boolean;
+};
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
+  const withDraft = cycle.recordsets.filter((r) => r.open_draft !== null);
+  const release = cycle.latest_dataset_release;
+
+  switch (stage) {
+    case "setup": {
+      if (cycle.recordsets.length === 0) {
+        return "This dataset has no recordsets — add at least one to begin.";
+      }
+      return `${plural(cycle.recordsets.length, "recordset")} ready.`;
+    }
+    case "assemble": {
+      const ready = withDraft.filter((r) => isPublishable(r.qc)).length;
+      if (ready > 0) {
+        return `${plural(ready, "draft")} ready to freeze.`;
+      }
+      return `${plural(withDraft.length, "draft")} open — add files, then set up QC.`;
+    }
+    case "verify": {
+      const stale = withDraft.reduce((n, r) => n + r.qc.stale, 0);
+      if (stale > 0) {
+        return `${plural(stale, "QC review")} went stale — the draft changed after sampling, so re-clone to pick up the new files.`;
+      }
+      const noReviews = withDraft.filter((r) => r.qc.reviews_total === 0).length;
+      if (noReviews > 0) {
+        return `${plural(noReviews, "draft")} has no QC review yet — publishing is blocked until one completes.`;
+      }
+      const total = withDraft.reduce((n, r) => n + r.qc.series_total, 0);
+      const pending = withDraft.reduce((n, r) => n + r.qc.series_pending, 0);
+      const percent = total === 0 ? 0 : Math.round(((total - pending) / total) * 100);
+      return `QC is ${percent}% reviewed — ${plural(pending, "series")} still to decide.`;
+    }
+    case "bundle": {
+      const unbundled = unbundledRecordsets(cycle);
+      if (unbundled.length > 0) {
+        return `${plural(unbundled.length, "recordset")} frozen but not in a dataset release — cut a release to distribute ${unbundled.length === 1 ? "it" : "them"}.`;
+      }
+      if (release?.release_status === "draft") {
+        return `v${release.release_number} is still a draft — mark it released when the contents are final.`;
+      }
+      return "Freeze a recordset before cutting a dataset release.";
+    }
+    case "transfer": {
+      if (!release) return "Nothing to transfer until a dataset release exists.";
+      const failed = release.transfers.filter((t) => t.transfer_status === "failed");
+      if (failed.length > 0) {
+        return `${plural(failed.length, "transfer")} failed — ${failed.map((t) => t.destination_abbr).join(", ")}.`;
+      }
+      if (release.transfers.length === 0) {
+        return `v${release.release_number} has no transfers yet — set up a destination.`;
+      }
+      const running = release.transfers.filter(
+        (t) => t.transfer_status === "queued" || t.transfer_status === "in_progress",
+      ).length;
+      return `${plural(running, "transfer")} in flight.`;
+    }
+    case "disseminate":
+      return "Publish the landing pages when the release is ready.";
+  }
+}
+
+const ACTION_LABELS: Record<StageKey, string> = {
+  setup: "Open Setup",
+  assemble: "Assemble",
+  verify: "Review QC",
+  bundle: "Bundle Release",
+  transfer: "Review Transfers",
+  disseminate: "Publish Pages",
+};
+
+/** The single thing this cycle most needs next: anything blocked, in pipeline
+ *  order, otherwise the earliest stage still in progress. Null when nothing is
+ *  outstanding. */
+export function nextAction(cycle: DatasetCycle): NextAction | null {
+  const summaries = stageSummaries(cycle);
+
+  const blocked = STAGE_ORDER.find((key) => summaries[key].state === "blocked");
+  const stage = blocked ?? STAGE_ORDER.find((key) => summaries[key].state === "active");
+  if (!stage) return null;
+
+  return {
+    stage,
+    message: stageMessage(cycle, stage),
+    actionLabel: ACTION_LABELS[stage],
+    blocked: blocked != null,
+  };
+}
 
 /** Opens the page where the cycle actually is: the earliest stage not done. */
 export function firstUnfinishedStage(
   summaries: Record<StageKey, StageSummary>,
 ): StageKey {
-  return STAGE_ORDER.find((key) => summaries[key].state !== "done") ?? "draft";
+  return STAGE_ORDER.find((key) => summaries[key].state !== "done") ?? "setup";
 }
