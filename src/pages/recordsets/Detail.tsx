@@ -2,15 +2,21 @@
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicTable from "@/components/DynamicTable";
 import CurrentCycleCard from "@/components/CurrentCycleCard";
+import RecordsetDestinationModal from "@/components/RecordsetDestinationModal";
+import WpLinkModal from "@/components/WpLinkModal";
 import CollapsibleSection from "@/components/ui/CollapsibleSection";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
-import { useToast } from "@/components/Toast";
-import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
 import { useFavorites } from "@/lib/useFavorites";
+import { useDestinationLookups } from "@/lib/recordsetForm";
+import {
+  useRecordsetDestinations,
+  type RecordsetDestination,
+} from "@/lib/recordsetDestinations";
+import { useWpMap } from "@/lib/wpObjectMap";
 import FavoriteStar from "@/components/FavoriteStar";
 import { LoadingState } from "@/components/ui/Spinner";
 
@@ -66,47 +72,6 @@ type RecordsetDraftsResponse = {
   drafts: RecordsetDraft[];
   total: number;
   timestamp: string;
-};
-
-type WpMap = {
-  map_id: number;
-  posda_object_type: string;
-  posda_object_id: number;
-  wp_object_type: string;
-  wp_object_id: number;
-  wp_edit_url: string | null;
-  wp_view_url: string | null;
-  parent_wp_object_id: number | null;
-  when_synced: string | null;
-};
-
-type WpSearchResult = {
-  id: number;
-  title: string;
-  type: string;
-  status: string;
-  view_url: string;
-  edit_url: string;
-};
-
-type RecordsetDestination = {
-  destination_id: number;
-  destination_name: string;
-  destination_abbr: string;
-  default_display: boolean;
-  transfer_mode_id: number;
-  transfer_mode_name: string;
-};
-
-type DestinationLookup = {
-  destination_id: number;
-  destination_name: string;
-  destination_abbr: string;
-};
-
-type TransferModeLookup = {
-  transfer_mode_id: number;
-  transfer_mode_name: string;
 };
 
 function normalizeRecordsetReleasesResponse(
@@ -183,7 +148,6 @@ export default function RecordsetDetail() {
   const navigate = useNavigate();
   const userMap = useUsers();
   const { favoriteKeys, toggle: toggleFavorite } = useFavorites();
-  const { addToast } = useToast();
   const { recordset_id: recordsetId } = useParams<{ recordset_id: string }>();
   const [data, setData] = useState<RecordsetResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -204,34 +168,11 @@ export default function RecordsetDetail() {
   const [isLoadingDrafts, setIsLoadingDrafts] = useState(false);
   const [draftsError, setDraftsError] = useState<string | null>(null);
 
-  const [destinations, setDestinations] = useState<RecordsetDestination[]>([]);
-  const [isLoadingDestinations, setIsLoadingDestinations] = useState(false);
-  const [destinationsError, setDestinationsError] = useState<string | null>(
-    null,
-  );
-  const [allDestinations, setAllDestinations] = useState<DestinationLookup[]>(
-    [],
-  );
-  const [transferModes, setTransferModes] = useState<TransferModeLookup[]>([]);
-
   const [showDestModal, setShowDestModal] = useState(false);
-  const [destModalIsAdding, setDestModalIsAdding] = useState(true);
-  const [destModalDestId, setDestModalDestId] = useState<number | null>(null);
-  const [destModalDefaultDisplay, setDestModalDefaultDisplay] = useState(false);
-  const [destModalTransferModeId, setDestModalTransferModeId] = useState<
-    number | null
-  >(null);
-  const [isSavingDest, setIsSavingDest] = useState(false);
-  const [destModalError, setDestModalError] = useState<string | null>(null);
+  const [editingDestination, setEditingDestination] =
+    useState<RecordsetDestination | null>(null);
 
-  const [wpMap, setWpMap] = useState<WpMap | null | undefined>(undefined);
-  const [isLoadingWpMap, setIsLoadingWpMap] = useState(false);
   const [showWpModal, setShowWpModal] = useState(false);
-  const [wpSearchQuery, setWpSearchQuery] = useState("");
-  const [wpResults, setWpResults] = useState<WpSearchResult[]>([]);
-  const [isSearchingWp, setIsSearchingWp] = useState(false);
-  const [isSavingWpMap, setIsSavingWpMap] = useState(false);
-  const [wpModalError, setWpModalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!recordsetId) {
@@ -369,220 +310,34 @@ export default function RecordsetDetail() {
     releasesItemsPerPage,
   ]);
 
-  useEffect(() => {
-    if (!recordsetId) return;
-    let isMounted = true;
-
-    setIsLoadingDestinations(true);
-    setDestinationsError(null);
-
-    async function loadDestinationsAndLookups() {
-      try {
-        const [destRes, allDestRes, modesRes] = await Promise.all([
-          fetch(`/papi/v1/distribution/recordsets/${recordsetId}/destinations`, {
-            cache: "no-store",
-          }),
-          fetch("/papi/v1/distribution/lookups/destinations", { cache: "no-store" }),
-          fetch("/papi/v1/distribution/lookups/transfer-modes", { cache: "no-store" }),
-        ]);
-
-        if (!isMounted) return;
-
-        if (destRes.ok) {
-          const json = (await destRes.json()) as
-            | { data?: RecordsetDestination[] }
-            | RecordsetDestination[];
-          setDestinations(Array.isArray(json) ? json : (json.data ?? []));
-        } else {
-          setDestinationsError("Could not load destinations.");
-        }
-
-        if (allDestRes.ok) {
-          const json = (await allDestRes.json()) as
-            | { data?: DestinationLookup[] }
-            | DestinationLookup[];
-          setAllDestinations(Array.isArray(json) ? json : (json.data ?? []));
-        }
-
-        if (modesRes.ok) {
-          const json = (await modesRes.json()) as
-            | { data?: TransferModeLookup[] }
-            | TransferModeLookup[];
-          setTransferModes(Array.isArray(json) ? json : (json.data ?? []));
-        }
-      } catch {
-        if (isMounted) setDestinationsError("Could not load destinations.");
-      } finally {
-        if (isMounted) setIsLoadingDestinations(false);
-      }
-    }
-
-    void loadDestinationsAndLookups();
-    return () => {
-      isMounted = false;
-    };
-  }, [recordsetId]);
-
   function openAddDestModal() {
-    setDestModalIsAdding(true);
-    setDestModalDestId(null);
-    setDestModalDefaultDisplay(false);
-    setDestModalTransferModeId(transferModes[0]?.transfer_mode_id ?? null);
-    setDestModalError(null);
+    setEditingDestination(null);
     setShowDestModal(true);
   }
 
   function openEditDestModal(dest: RecordsetDestination) {
-    setDestModalIsAdding(false);
-    setDestModalDestId(dest.destination_id);
-    setDestModalDefaultDisplay(dest.default_display);
-    setDestModalTransferModeId(dest.transfer_mode_id);
-    setDestModalError(null);
+    setEditingDestination(dest);
     setShowDestModal(true);
   }
 
   function closeDestModal() {
     setShowDestModal(false);
-    setDestModalError(null);
   }
 
-  async function handleSaveDestination() {
-    if (!recordsetId || !destModalDestId || !destModalTransferModeId) return;
+  const { data: wpMap, isLoading: isLoadingWpMap } = useWpMap(
+    "recordset",
+    recordsetId ? Number(recordsetId) : undefined,
+  );
 
-    setIsSavingDest(true);
-    setDestModalError(null);
-
-    try {
-      const res = await fetch(
-        `/papi/v1/distribution/recordsets/${recordsetId}/destinations/${destModalDestId}`,
-        {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            default_display: destModalDefaultDisplay,
-            default_transfer_mode_id: destModalTransferModeId,
-          }),
-        },
-      );
-
-      if (!res.ok) {
-        const json = (await res.json()) as unknown;
-        throw new Error(extractApiError(json, "Could not save destination."));
-      }
-
-      toastSuccess(
-        addToast,
-        destModalIsAdding ? "Destination added." : "Destination updated.",
-      );
-      closeDestModal();
-
-      const destRes = await fetch(
-        `/papi/v1/distribution/recordsets/${recordsetId}/destinations`,
-        { cache: "no-store" },
-      );
-      if (destRes.ok) {
-        const json = (await destRes.json()) as
-          | { data?: RecordsetDestination[] }
-          | RecordsetDestination[];
-        setDestinations(Array.isArray(json) ? json : (json.data ?? []));
-      }
-    } catch (e) {
-      setDestModalError(
-        e instanceof Error ? e.message : "Could not save destination.",
-      );
-      toastError(
-        addToast,
-        e instanceof Error ? e.message : "Could not save destination.",
-      );
-    } finally {
-      setIsSavingDest(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!recordsetId) return;
-    let isMounted = true;
-    setIsLoadingWpMap(true);
-    fetch(`/papi/v1/manager/posda/recordset/${recordsetId}/wp-map`, { cache: "no-store" })
-      .then(async (res) => {
-        if (!isMounted) return;
-        if (res.ok) {
-          const json = (await res.json()) as { data: WpMap };
-          setWpMap(json.data);
-        } else {
-          setWpMap(null);
-        }
-      })
-      .catch(() => {
-        if (isMounted) setWpMap(null);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoadingWpMap(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [recordsetId]);
-
-  async function searchWp() {
-    if (!wpSearchQuery.trim()) return;
-    setIsSearchingWp(true);
-    setWpResults([]);
-    try {
-      const res = await fetch(
-        `/papi/v1/manager/downloads?search=${encodeURIComponent(wpSearchQuery.trim())}`,
-      );
-      if (res.ok) setWpResults((await res.json()) as WpSearchResult[]);
-    } finally {
-      setIsSearchingWp(false);
-    }
-  }
-
-  async function saveWpLink(result: WpSearchResult) {
-    if (!recordsetId) return;
-    setIsSavingWpMap(true);
-    setWpModalError(null);
-    try {
-      const body = {
-        wp_object_type: "download",
-        wp_object_id: result.id,
-        wp_edit_url: result.edit_url,
-        wp_view_url: result.view_url,
-      };
-      const res = wpMap
-        ? await fetch(`/papi/v1/manager/wp-object-map/${wpMap.map_id}`, {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(body),
-          })
-        : await fetch("/papi/v1/manager/wp-object-map", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              posda_object_type: "recordset",
-              posda_object_id: parseInt(recordsetId, 10),
-              ...body,
-            }),
-          });
-      if (!res.ok) {
-        const json = (await res.json()) as unknown;
-        throw new Error(extractApiError(json, "Could not save link."));
-      }
-      const json = (await res.json()) as { data: WpMap };
-      setWpMap(json.data);
-      setShowWpModal(false);
-      setWpSearchQuery("");
-      setWpResults([]);
-      toastSuccess(addToast, "WordPress link saved.");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Could not save link.";
-      setWpModalError(msg);
-      toastError(addToast, msg);
-    } finally {
-      setIsSavingWpMap(false);
-    }
-  }
-
+  const {
+    data: destinations = [],
+    isLoading: isLoadingDestinations,
+    error: destinationsQueryError,
+  } = useRecordsetDestinations(recordsetId);
+  const destinationsError = destinationsQueryError
+    ? "Could not load destinations."
+    : null;
+  const { destinations: allDestinations } = useDestinationLookups();
   const configuredDestIds = new Set(destinations.map((d) => d.destination_id));
   const availableDestinations = allDestinations.filter(
     (d) => !configuredDestIds.has(d.destination_id),
@@ -910,202 +665,22 @@ export default function RecordsetDetail() {
         </>
       )}
 
-      {showDestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h2 className="text-lg font-semibold">
-              {destModalIsAdding ? "New Destination" : "Edit Destination"}
-            </h2>
+      <RecordsetDestinationModal
+        open={showDestModal}
+        onClose={closeDestModal}
+        recordsetId={recordsetId}
+        editing={editingDestination}
+      />
 
-            {destModalError && (
-              <p className="mt-3 text-sm text-red-600 dark:text-red-400">
-                {destModalError}
-              </p>
-            )}
-
-            <div className="mt-4 space-y-4">
-              {destModalIsAdding ? (
-                <div>
-                  <label className="block text-sm font-medium">
-                    Destination
-                  </label>
-                  <select
-                    value={destModalDestId ?? ""}
-                    onChange={(e) => setDestModalDestId(Number(e.target.value))}
-                    className="select mt-1 w-full"
-                  >
-                    <option value="">Select a destination...</option>
-                    {availableDestinations.map((d) => (
-                      <option key={d.destination_id} value={d.destination_id}>
-                        {d.destination_name} ({d.destination_abbr})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <span className="block text-sm font-medium">Destination</span>
-                  <span className="text-sm">
-                    {
-                      destinations.find(
-                        (d) => d.destination_id === destModalDestId,
-                      )?.destination_name
-                    }
-                  </span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium">
-                  Transfer Mode
-                </label>
-                <select
-                  value={destModalTransferModeId ?? ""}
-                  onChange={(e) =>
-                    setDestModalTransferModeId(Number(e.target.value))
-                  }
-                  className="select mt-1 w-full"
-                >
-                  <option value="">Select a transfer mode...</option>
-                  {transferModes.map((tm) => (
-                    <option
-                      key={tm.transfer_mode_id}
-                      value={tm.transfer_mode_id}
-                    >
-                      {tm.transfer_mode_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="dest_default_display"
-                  checked={destModalDefaultDisplay}
-                  onChange={(e) => setDestModalDefaultDisplay(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                <label
-                  htmlFor="dest_default_display"
-                  className="text-sm font-medium"
-                >
-                  Default Display
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <Button
-                variant="ghost"
-                onClick={closeDestModal}
-                disabled={isSavingDest}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => void handleSaveDestination()}
-                loading={isSavingDest}
-                disabled={!destModalDestId || !destModalTransferModeId}
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showWpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div
-            className="w-full max-w-lg rounded-lg p-6 shadow-xl"
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border-strong)",
-            }}
-          >
-            <h2 className="text-lg font-semibold">
-              Link to WordPress Download
-            </h2>
-            {wpModalError && (
-              <p className="mt-3 text-sm text-red-600 dark:text-red-400">
-                {wpModalError}
-              </p>
-            )}
-            <div className="mt-4 space-y-3">
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={wpSearchQuery}
-                  onChange={(e) => setWpSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void searchWp();
-                  }}
-                  placeholder="Search by title..."
-                  className="input w-full"
-                  autoFocus
-                />
-                <Button
-                  onClick={() => void searchWp()}
-                  disabled={isSearchingWp || !wpSearchQuery.trim()}
-                >
-                  {isSearchingWp ? "…" : "Search"}
-                </Button>
-              </div>
-              {wpResults.length > 0 && (
-                <ul
-                  className="max-h-64 overflow-y-auto divide-y rounded"
-                  style={{ border: "1px solid var(--border-strong)" }}
-                >
-                  {wpResults.map((r) => (
-                    <li
-                      key={r.id}
-                      className="flex cursor-pointer items-center justify-between gap-4 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                      onClick={() => {
-                        if (!isSavingWpMap) void saveWpLink(r);
-                      }}
-                    >
-                      <span className="text-sm">
-                        <span className="font-medium">{r.title}</span>
-                        <span
-                          className="ml-2 text-xs"
-                          style={{ color: "var(--muted)" }}
-                        >
-                          {r.status}
-                        </span>
-                      </span>
-                      <span
-                        className="shrink-0 text-xs"
-                        style={{ color: "var(--muted)" }}
-                      >
-                        ID {r.id}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {!isSearchingWp && wpResults.length === 0 && wpSearchQuery && (
-                <p className="text-sm" style={{ color: "var(--muted)" }}>
-                  No results.
-                </p>
-              )}
-            </div>
-            <div className="mt-6 flex justify-end">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setShowWpModal(false);
-                  setWpSearchQuery("");
-                  setWpResults([]);
-                  setWpModalError(null);
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <WpLinkModal
+        open={showWpModal}
+        onClose={() => setShowWpModal(false)}
+        posdaObjectType="recordset"
+        posdaObjectId={recordsetId ? Number(recordsetId) : undefined}
+        typeOptions={[
+          { value: "download", label: "Download", searchEndpoint: "manager/downloads" },
+        ]}
+      />
     </PageShell>
   );
 }

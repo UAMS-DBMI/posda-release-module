@@ -43,6 +43,9 @@ type DynamicTableProps<T extends RowLike> = {
   pagination?: DynamicTablePagination;
   // Scrolling applies only when pagination is disabled.
   scroll?: DynamicTableScroll;
+  /** Hides the "Showing X-Y of Z" summary bar -- for small, un-paginated
+   *  lists where the count is just noise (e.g. a dataset's recordsets). */
+  hideSummary?: boolean;
 };
 
 function toLabel(raw: string) {
@@ -83,6 +86,7 @@ export default function DynamicTable<T extends RowLike>({
   excludeKeys,
   onRowClick,
   getRowKey,
+  hideSummary,
 }: DynamicTableProps<T>) {
   const blocked = new Set<string>(excludeKeys ?? []);
   const inferredColumns: Array<DynamicTableColumn<T>> =
@@ -280,32 +284,34 @@ export default function DynamicTable<T extends RowLike>({
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
-        <p>
-          Showing {showingStart}-{showingEnd} of {showingTotal}
-        </p>
+      {!hideSummary && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
+          <p>
+            Showing {showingStart}-{showingEnd} of {showingTotal}
+          </p>
 
-        {paginationEnabled && (
-          <label className="inline-flex items-center gap-2 whitespace-nowrap">
-            <span className="whitespace-nowrap">Items per page</span>
-            <select
-              value={resolvedItemsPerPage}
-              onChange={(event) => {
-                const nextSize = Number(event.target.value);
-                updateItemsPerPage(nextSize);
-              }}
-              className="select select-sm w-auto! min-w-20 shrink-0"
-              style={{ background: "var(--background)" }}
-            >
-              {pageSizeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
+          {paginationEnabled && (
+            <label className="inline-flex items-center gap-2 whitespace-nowrap">
+              <span className="whitespace-nowrap">Items per page</span>
+              <select
+                value={resolvedItemsPerPage}
+                onChange={(event) => {
+                  const nextSize = Number(event.target.value);
+                  updateItemsPerPage(nextSize);
+                }}
+                className="select select-sm w-auto! min-w-20 shrink-0"
+                style={{ background: "var(--background)" }}
+              >
+                {pageSizeOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
 
       {hasScrollableRows ? (
         <div

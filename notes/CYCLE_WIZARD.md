@@ -117,7 +117,7 @@ after a save.
 
 | Module | Consumers | Status |
 |---|---|---|
-| `lib/recordsetForm.ts` | `recordsets/Create.tsx`, `CreateRecordsetModal` (Setup + Assemble) | ✅ done; destinations still to add |
+| `lib/recordsetForm.ts` | `recordsets/Create.tsx`, `CreateRecordsetModal` (Setup + Assemble) | ✅ done |
 | `components/ActivitySourcePicker.tsx` | Assemble source modal, draft `Files.tsx` | ⚠ built; `Files.tsx` not yet migrated |
 | `lib/qcReviewForm.ts` | `QcReviewsCard.tsx`, Verify modal | ☐ |
 | `lib/publishForm.ts` | `drafts/Detail.tsx`, Bundle modal | ☐ |
@@ -174,17 +174,132 @@ Each lands and is reviewed before the next.
 - [ ] **2 — Setup stage.** Everything downstream of the dataset but done once.
       The page lists recordsets with their readiness (destination set? WP
       download mapped?), plus the dataset's WP collection page status.
-      - **Recordsets** created here via `CreateRecordsetModal`; a shortcut to the
-        same modal stays on Assemble. Destination + transfer mode are collected as
-        part of creation (this is where the old "step 5a" lives) — extend
-        `lib/recordsetForm.ts` and the create endpoint to accept destinations and
-        write them in **one transaction**, so a recordset is never created
-        unshippable.
-      - **WP collection + downloads** attached-or-created here via
-        `lib/wpObjectForm.ts` (search-before-create; created as `draft`). Depends
-        on the `manager.py` WP routes — build those with this step.
+      - [x] **Recordsets** created here via `CreateRecordsetModal`; a shortcut to
+        the same modal stays on Assemble, unchanged by this step.
+      - [x] **Destinations** managed via a row-level "Destinations" button
+        (`RecordsetDestinationModal`, add/edit one at a time) rather than at
+        creation — reversed from the original "collect at create" plan (see
+        log). Same shared component is used from `recordsets/Detail.tsx`.
+        *(done 2026-07-22)*
+      - [x] **Destination pills.** *(done 2026-07-22)* `DATASET_CYCLE_RECORDSETS_SQL`
+        (the CTE backing `GET /datasets/{id}/cycle`) gained a `dest` CTE — two
+        parallel `array_agg`s (destination_abbr, default_display) joined per
+        recordset, avoiding `json_agg` (no precedent for it in
+        `distribution.py`). Also added a `wp_download` CTE / `wp_linked` flag in
+        the same query while touching it — used starting with the WP work below.
+        `CycleRecordset` gained `destinations`/`wp_linked`; `SetupStage.tsx`
+        renders one `StatusBadge` per destination (`success` for the default,
+        `neutral` for the rest) in its own column, instead of only a bare
+        button — reuses the pill primitive already used for QC/review/assignment
+        status, no new chip component.
+      - [x] **WP collection + downloads — link now, create is new backend work.**
+        *(done 2026-07-22, incl. Setup wiring)* `SetupStage.tsx` gained a
+        "Collection Page" card above the table (dataset-level, `useWpMap`)
+        and a per-row WordPress column (status badge + button, using the
+        `wp_linked` flag added to the cycle query alongside destinations).
+        `useSaveWpLink`/`useCreateWpObject` also invalidate `["dataset-cycle"]`
+        on success — same fix as the destinations save, so the Setup table
+        doesn't need a reload to reflect a change.
+        Search-and-link to an *existing* WP post already works today, hand-rolled
+        near-identically in `recordsets/Detail.tsx` (recordset → `download`) and
+        `datasets/Detail.tsx` (dataset → `collection`/`analysis_result`), both via
+        `GET/POST/PUT /manager/wp-object-map` +
+        `GET /manager/posda/{type}/{id}/wp-map`. Extracting it once:
+        - `lib/wpObjectMap.ts` — `useWpMap` (404 → `null`, not an error),
+          `useSaveWpLink`, plain `searchWpObjects` helper; consolidates the
+          `WpMap`/`WpSearchResult` types currently duplicated in both Detail
+          pages.
+        - `components/WpLinkModal.tsx` — shared modal (built on `Modal`, same
+          shape as `RecordsetDestinationModal`), parameterized by
+          `posdaObjectType` (`dataset`/`recordset`) and a `typeOptions` list
+          (1 entry ⇒ no selector; 2 ⇒ the dropdown `datasets/Detail.tsx`
+          already has for collection vs analysis_result). Two tabs: **Link
+          Existing** (today's search UI, moved verbatim) and **Create New**.
+        - **Create New is genuinely new backend work** — `POST /manager/wp-objects`
+          and `PUT /manager/wp-objects/{id}/status`, reusing `WP_TYPE_MAP` /
+          `wp_post` / `wp_patch` from `util/wp.py` (write plumbing exists, no
+          route has called it until now) and mirroring the existing
+          `create_wp_object_map` insert. Every `format_*` spreads `_base(item)`,
+          so `id`/`edit_url`/`view_url` exist regardless of WP type — one
+          generic route works for all of them. **DOI assignment stays out of
+          scope** — DEV.md says "Posda supplies title, slug, and DOI" but no
+          DOI-minting scheme exists anywhere yet; create with title+slug as a
+          draft stub, DOI stays a manual WP edit until that's designed.
+        - Both Detail pages migrate onto `WpLinkModal`/`useWpMap`, replacing
+          their hand-rolled state/effect/modal — refactor only, no behavior
+          change there.
+        - `SetupStage.tsx` gets two new surfaces: a dataset-level "Collection
+          Page" card above the recordset table (`useWpMap("dataset", id)`,
+          `typeOptions=[collection]`), and a per-row "WordPress" button
+          (`typeOptions=[download]`) beside the row's "Destinations" button.
+          Row-level linked/not-linked status reuses the same cycle-query
+          extension pattern as destination pills (another `left join` against
+          `wp_object_map`, not a per-row fetch).
+      - [x] **WordPress links required to leave Setup.** *(done 2026-07-22)*
+        `get_dataset_cycle` gained `dataset_wp_linked` (a `wp_object_map` lookup
+        for the dataset's `collection`). `setupStage()` in `useCycle.ts` is no
+        longer a placeholder: `done` requires every recordset's `wp_linked` **and**
+        `dataset_wp_linked` — otherwise `active` with a detail naming what's
+        missing (`"N not linked"` / `"Collection not linked"`). New
+        `unlinkedRecordsets()` helper (mirrors `unbundledRecordsets()`).
+        **Destinations are not part of this gate** — only WP links, per this
+        decision; the original step-1 note ("done once every recordset has a
+        destination and a WP collection map") is superseded on the destination
+        half until/unless that's explicitly asked for too.
+      - [x] **Destination pill delete + button label.** *(done 2026-07-22)*
+        New `DELETE /recordsets/{id}/destinations/{destination_id}` (no delete
+        route existed — only get/put). `dest` CTE in
+        `DATASET_CYCLE_RECORDSETS_SQL` gained `destination_ids` (needed to
+        target the delete); `CycleRecordsetDestination` gained `destination_id`.
+        `lib/recordsetDestinations.ts` gained `useDeleteRecordsetDestination()`
+        — takes `{recordsetId, destinationId}` **per call, not per hook**, so
+        one instance in `SetupStage.tsx` can serve every row in the table
+        (calling a hook inside a `.map()` render callback would break the
+        Rules of Hooks). Setup's destination pills now carry an inline "−"
+        button; the WordPress buttons (dataset collection card + per-row) were
+        relabeled "Link".
+      - [x] **WP link robustness pass.** *(done 2026-07-23)* Fixed Analysis
+        Result datasets always creating/linking a `collection` object instead
+        of `analysis_result` — neither Setup nor `datasets/Detail.tsx` derived
+        WP type from `dataset_type_name`; new `wpTypeOptionForDataset()` fixes
+        both. Live status is now fetched by immutable `wp_object_id` rather
+        than ever caching a slug (`useWpObject` + `wpObjectQueryKey`), and
+        shows "Broken Link" (deleted WP post) and "Trashed" (real WP `status`
+        field, not slug string-matching) states, with a skeleton placeholder
+        to avoid a "Linked" flash before the slug loads. Backend
+        `wp_collection_q` had a hardcoded `wp_object_type = 'collection'`
+        filter that silently broke Analysis Result linkage; removed (the
+        `wp_object_map` unique constraint means existence alone is enough).
+        `WpLinkModal` gained an **Unlink** action. Setup's status
+        message/gating now checks the dataset's WP link before recordsets',
+        matching the required link order.
+      - [x] **Recordset downloads auto-attach to the dataset's WP page.**
+        *(done 2026-07-23)* Linking a recordset's WP `download` now also adds
+        its post id to the dataset's `collection_downloads` /
+        `result_downloads` field (`manager.py`'s `_attach_download_to_dataset`),
+        non-fatal on failure (surfaces as a toast warning, doesn't fail the
+        link). A read-only banner flags downloads listed on the dataset's page
+        that aren't linked to any recordset here (detection only, no
+        auto-remediation), excluding trashed downloads from the count.
+      - [x] **Quick-edit modals.** *(done 2026-07-23)* `DatasetEditModal` /
+        `RecordsetEditModal` let a curator edit the dataset's or a recordset's
+        own record (name, type, DOI, license, active) without leaving Setup —
+        opened from a pencil-icon button beside each name. Built on new
+        `lib/datasetForm.ts` and an edit-mode extension of
+        `lib/recordsetForm.ts`, both shared with the full `Edit.tsx` pages
+        (migrated onto the same modules, refactor only).
+      - [x] **UI polish.** *(done 2026-07-23)* Icon-only action buttons
+        (`components/icons.tsx` — Edit/ExternalLink/Link, hand-rolled SVG
+        matching `FavoriteStar.tsx`) with tooltips replace text buttons for
+        WordPress link/view/edit and record-edit actions; dataset/recordset
+        name links open in a new tab so Setup stays in place; modal
+        backdrop-click-to-close disabled globally (`Modal`'s `closeOnBackdrop`
+        now defaults `false` — Escape and explicit buttons still work); tab
+        strip status dots gained a checkmark for `done` and a pulse for
+        `active`; WP search results decode HTML entities in titles.
       - **Relations** (`dataset_relation`, isDerivedFrom / isSourceOf) — an
-        analysis result points at its source collection here.
+        analysis result points at its source collection here. Not yet planned
+        in detail.
       - Setup has no bulk write of its own; it's create/attach actions plus a
         readiness view. A dataset with zero recordsets can't leave Setup.
 - [ ] **3 — Assemble stage does the work.** The page lists recordsets with
@@ -390,6 +505,43 @@ rather than the `recordset_draft` state. Bundle names the composition — the
 stage still freezes drafts first (irreversible), so its confirm step must say so.
 Entities keep their names: Assemble creates drafts, Verify runs QC reviews,
 Bundle publishes releases. Routes/`StageKey`/stage files follow the verbs.
+
+**2026-07-22 — step 2, destinations landed (reversed once, then via a shared
+modal).** First attempt made `destinations` required on `POST /recordsets`,
+writing `recordset` + `recordset_destination` in one transaction with a
+repeatable row editor on the create form/modal. **Reversed same day** — fully
+reverted the backend and `recordsetForm.ts` changes. Landed instead: a
+**"Destinations" button per recordset row** on `SetupStage.tsx` opening
+`RecordsetDestinationModal` (add/edit **one** destination at a time, matching
+scope already proven on `recordsets/Detail.tsx`), backed by the existing `PUT
+/recordsets/{id}/destinations/{destination_id}` upsert — no backend change
+needed. The modal and its data hooks (`lib/recordsetDestinations.ts` —
+`useRecordsetDestinations`, `useSaveRecordsetDestination`) are shared: `Detail.tsx`'s
+hand-rolled destination-modal state/effect (~150 lines) was extracted and
+replaced with the same component, so Setup and Detail now read/write through
+one cache entry instead of two independent fetches. `lib/recordsetForm.ts`
+keeps `useDestinationLookups` (used by the new modal) but the create
+form/payload/validation stay destination-free. Remaining step 2 pieces (WP
+collection/downloads, relations, the readiness view) are still open.
+
+**2026-07-23 — Setup WP linking hardened, quick-edit modals added.** Fixed
+Analysis Result datasets always creating a `collection` WP object (missing
+type derivation in Setup and `datasets/Detail.tsx`, plus a hardcoded
+`wp_object_type = 'collection'` filter in the backend's `wp_collection_q`).
+Replaced the "Linked" pill with the live WP slug, fetched by immutable
+`wp_object_id` rather than ever storing a slug — with "Broken Link" and
+"Trashed" detection and a loading skeleton to avoid a flash. Added Unlink to
+`WpLinkModal`, and required the dataset to link before its recordsets can
+(gate + reordered status message). Linking a recordset's `download` now
+auto-attaches it to the dataset's `collection_downloads`/`result_downloads`,
+with a read-only orphaned-download notice for anything left unlinked
+(excluding trashed items). Added `DatasetEditModal`/`RecordsetEditModal` for
+quick in-place edits, backed by new `lib/datasetForm.ts` and an edit-mode
+extension of `lib/recordsetForm.ts`, also adopted by the full `Edit.tsx`
+pages. Polish: icon-only action buttons with tooltips
+(`components/icons.tsx`), name links open in a new tab, modal
+backdrop-click-to-close disabled globally, tab-strip status dots redesigned,
+WP search results decode HTML entities. Build clean throughout.
 
 **2026-07-22 — step 1 done.** Route restructure landed. `CycleLayout` owns the
 `useDatasetCycle` query and renders header + next-action banner + routed tab

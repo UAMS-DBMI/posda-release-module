@@ -24,6 +24,11 @@ type LinkButtonProps = ButtonBaseProps &
     href: string;
   };
 
+type ExternalLinkButtonProps = ButtonBaseProps &
+  Omit<ComponentPropsWithoutRef<"a">, "className" | "href"> & {
+    href: string;
+  };
+
 const variantClasses: Record<ButtonVariant, string> = {
   primary: "btn-primary",
   ghost: "btn-ghost",
@@ -90,6 +95,27 @@ export function LinkButton({
     <Link
       {...props}
       to={href}
+      className={buildButtonClassName({ variant, size, wide, className })}
+    />
+  );
+}
+
+/** Button-styled anchor for external URLs (e.g. a WordPress page), opening in
+ *  a new tab. Use `LinkButton` instead for in-app navigation. */
+export function ExternalLinkButton({
+  variant = "primary",
+  size = "md",
+  wide,
+  className,
+  href,
+  ...props
+}: ExternalLinkButtonProps) {
+  return (
+    <a
+      {...props}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
       className={buildButtonClassName({ variant, size, wide, className })}
     />
   );

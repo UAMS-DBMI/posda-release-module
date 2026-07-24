@@ -1,37 +1,28 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import DynamicForm, { DynamicFormField } from "@/components/DynamicForm";
+import DynamicForm from "@/components/DynamicForm";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { SectionCard } from "@/components/ui/Card";
-import { extractApiError, extractArray } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
 import { LoadingState } from "@/components/ui/Spinner";
+import {
+  datasetFormFields,
+  datasetToFormValues,
+  useDataset,
+  useDatasetTypes,
+  useSaveDataset,
+  validateDatasetForm,
+  type DatasetFormValues,
+} from "@/lib/datasetForm";
 
-type Dataset = {
-  dataset_id: number;
-  dataset_type_id: number;
-  dataset_type_name: string;
-  dataset_doi: string;
-  dataset_name: string;
-  active: boolean;
-  when_created: string;
-  when_updated: string;
-  who_created: number;
-  who_updated: number;
-};
-
-type DatasetResponse = {
-  dataset?: Dataset;
-  data?: Dataset;
-  timestamp: string;
-};
-
-type DatasetType = {
-  dataset_type_id: number;
-  dataset_type_name: string;
+const EMPTY: DatasetFormValues = {
+  dataset_doi: "",
+  dataset_type_id: "",
+  dataset_name: "",
+  active: false,
 };
 
 export default function DatasetEdit() {
@@ -39,217 +30,45 @@ export default function DatasetEdit() {
   const userMap = useUsers();
   const { addToast } = useToast();
   const { dataset_id: datasetId } = useParams<{ dataset_id: string }>();
-  const [data, setData] = useState<DatasetResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [datasetTypes, setDatasetTypes] = useState<DatasetType[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const { data: dataset, isLoading, isError, error } = useDataset(datasetId);
+  const { datasetTypes, isLoading: isLoadingTypes } = useDatasetTypes();
+  const save = useSaveDataset(datasetId);
+
+  const [formData, setFormData] = useState<DatasetFormValues>(EMPTY);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const [formData, setFormData] = useState({
-    dataset_doi: "",
-    dataset_type_id: "",
-    dataset_name: "",
-    active: false,
-  });
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadDatasetTypes() {
-      try {
-        const response = await fetch("/papi/v1/distribution/lookups/dataset-types", {
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const json = (await response.json()) as unknown;
-        setDatasetTypes(
-          extractArray<DatasetType>(json, ["data", "dataset_types"]),
-        );
-      } catch {
-        setDatasetTypes([]);
-      }
-    }
-
-    void loadDatasetTypes();
-  }, []);
-
-  useEffect(() => {
-    if (!datasetId) {
-      setError("Could not load dataset id.");
-      setData(null);
-      setIsLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadDataset() {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(`/papi/v1/distribution/datasets/${datasetId}`, {
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          const fallbackMessage = `Could not load dataset ${datasetId}.`;
-          const json = (await response.json()) as unknown;
-          throw new Error(extractApiError(json, fallbackMessage));
-        }
-
-        const json = (await response.json()) as DatasetResponse;
-
-        if (!isMounted) {
-          return;
-        }
-
-        const dataset = json.dataset ?? json.data;
-        setData({ ...json, dataset });
-
-        if (dataset) {
-          setFormData({
-            dataset_doi: dataset.dataset_doi,
-            dataset_type_id: String(dataset.dataset_type_id),
-            dataset_name: dataset.dataset_name,
-            active: dataset.active,
-          });
-        }
-      } catch (caughtError) {
-        if (!isMounted) {
-          return;
-        }
-
-        if (caughtError instanceof Error) {
-          setError(caughtError.message);
-        } else {
-          setError(`Could not load dataset ${datasetId}.`);
-        }
-
-        setData(null);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    void loadDataset();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [datasetId]);
+    if (dataset) setFormData(datasetToFormValues(dataset));
+  }, [dataset]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaveError(null);
-    setFieldErrors({});
 
-    const nextFieldErrors: Record<string, string> = {};
-
-    if (!formData.dataset_doi.trim()) {
-      nextFieldErrors.dataset_doi = "DOI is required.";
-    }
-
-    if (!formData.dataset_type_id) {
-      nextFieldErrors.dataset_type_id = "Type is required.";
-    }
-
-    if (!formData.dataset_name.trim()) {
-      nextFieldErrors.dataset_name = "Name is required.";
-    }
-
+    const nextFieldErrors = validateDatasetForm(formData);
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
       setSaveError("Please fix the highlighted fields.");
       toastError(addToast, "Please fix the highlighted fields.");
       return;
     }
-
-    if (!datasetId) {
-      setSaveError("Could not save dataset: missing dataset id.");
-      toastError(addToast, "Could not save dataset: missing dataset id.");
-      return;
-    }
-
-    setIsSaving(true);
+    setFieldErrors({});
 
     try {
-      const response = await fetch(`/papi/v1/distribution/datasets/${datasetId}`, {
-        method: "PUT",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          dataset_type_id: Number(formData.dataset_type_id),
-          dataset_doi: formData.dataset_doi,
-          dataset_name: formData.dataset_name,
-          active: formData.active,
-        }),
-      });
-
-      if (!response.ok) {
-        const fallbackMessage = `Could not save dataset ${datasetId}.`;
-        const json = (await response.json()) as unknown;
-        throw new Error(extractApiError(json, fallbackMessage));
-      }
-
+      await save.mutateAsync(formData);
       toastSuccess(addToast, "Dataset saved successfully.");
       navigate(`/datasets/${datasetId}`);
     } catch (caughtError) {
-      if (caughtError instanceof Error) {
-        setSaveError(caughtError.message);
-        toastError(addToast, caughtError.message);
-      } else {
-        setSaveError(`Could not save dataset ${datasetId}.`);
-        toastError(addToast, `Could not save dataset ${datasetId}.`);
-      }
-    } finally {
-      setIsSaving(false);
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : `Could not save dataset ${datasetId}.`;
+      setSaveError(message);
+      toastError(addToast, message);
     }
   }
-
-  const dataset = data?.dataset ?? data?.data ?? null;
-  const fields: Array<DynamicFormField<typeof formData>> = [
-    {
-      key: "dataset_doi",
-      label: "DOI",
-      required: true,
-      controlClassName: "mt-1 input",
-    },
-    {
-      key: "dataset_type_id",
-      label: "Type",
-      type: "select",
-      required: true,
-      options: [
-        { value: "", label: "--- Select a value ---" },
-        ...datasetTypes.map((datasetType) => ({
-          value: String(datasetType.dataset_type_id),
-          label: datasetType.dataset_type_name,
-        })),
-      ],
-      controlClassName: "mt-1 select",
-    },
-    {
-      key: "dataset_name",
-      label: "Name",
-      required: true,
-      controlClassName: "mt-1 input",
-    },
-    {
-      key: "active",
-      label: "Active",
-      type: "checkbox",
-      className: "flex items-center gap-2",
-      controlClassName: "checkbox",
-    },
-  ];
 
   return (
     <PageShell size="3xl">
@@ -259,16 +78,18 @@ export default function DatasetEdit() {
       />
 
       <SectionCard>
-        {datasetTypes.length === 0 && (
+        {!isLoadingTypes && datasetTypes.length === 0 && (
           <p className="mb-4 text-sm text-red-600 dark:text-red-400">
             Could not load dataset types from the database.
           </p>
         )}
 
-        {isLoading && <LoadingState />}
+        {(isLoading || isLoadingTypes) && <LoadingState />}
 
-        {!isLoading && error && (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        {!isLoading && isError && (
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {error instanceof Error ? error.message : `Could not load dataset ${datasetId}.`}
+          </p>
         )}
 
         {!isLoading && dataset && (
@@ -291,7 +112,7 @@ export default function DatasetEdit() {
                 setFieldErrors({});
                 setSaveError(null);
               }}
-              fields={fields}
+              fields={datasetFormFields(datasetTypes)}
               className="space-y-3"
               errors={fieldErrors}
               actions={
@@ -308,7 +129,7 @@ export default function DatasetEdit() {
                   )}
 
                   <div className="flex gap-3 pt-2">
-                    <Button type="submit" loading={isSaving}>
+                    <Button type="submit" loading={save.isPending}>
                       Save Changes
                     </Button>
 

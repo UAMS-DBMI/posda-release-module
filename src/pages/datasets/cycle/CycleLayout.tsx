@@ -17,6 +17,7 @@ import {
   firstUnfinishedStage,
   stageSummaries,
   stagePath,
+  STAGE_BLURBS,
   STAGE_LABELS,
   STAGE_ORDER,
   useDatasetCycle,
@@ -150,6 +151,12 @@ export default function CycleLayout() {
               idPrefix="cycle"
               className="mb-4"
             />
+
+            {activeStage && STAGE_BLURBS[activeStage] && (
+              <p className="mb-4 text-sm" style={{ color: "var(--muted)" }}>
+                {STAGE_BLURBS[activeStage]}
+              </p>
+            )}
 
             <Outlet context={{ cycle: data, datasetId } satisfies CycleContext} />
           </SectionCard>

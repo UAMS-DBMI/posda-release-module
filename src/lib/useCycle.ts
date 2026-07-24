@@ -28,6 +28,12 @@ export type CycleRecordsetRelease = {
   release_date: string;
 };
 
+export type CycleRecordsetDestination = {
+  destination_id: number;
+  destination_abbr: string;
+  default_display: boolean;
+};
+
 export type CycleRecordset = {
   recordset_id: number;
   recordset_name: string;
@@ -37,6 +43,10 @@ export type CycleRecordset = {
   latest_release: CycleRecordsetRelease | null;
   /** False when the recordset is frozen but not yet bundled — the fan-in signal. */
   in_latest_dataset_release: boolean;
+  destinations: CycleRecordsetDestination[];
+  wp_linked: boolean;
+  wp_edit_url: string | null;
+  wp_download_object_id: number | null;
 };
 
 export type DatasetReleaseStatus = "draft" | "released" | "live" | "retracted";
@@ -60,6 +70,8 @@ export type DatasetCycle = {
   dataset_name: string;
   dataset_type_name: string;
   recordsets: CycleRecordset[];
+  /** Whether the dataset has a WordPress page linked. */
+  dataset_wp_linked: boolean;
   latest_dataset_release: CycleDatasetRelease | null;
 };
 
@@ -147,6 +159,11 @@ export const STAGE_LABELS: Record<StageKey, string> = {
   disseminate: "Disseminate",
 };
 
+/** One-line explanation shown under the tab strip for the active stage. */
+export const STAGE_BLURBS: Partial<Record<StageKey, string>> = {
+  setup: "Add recordsets, configure their destinations, and link everything to WordPress before starting a cycle.",
+};
+
 /** Route path for a stage, under `/datasets/:id/cycle`. */
 export function stagePath(datasetId: string | undefined, stage: StageKey): string {
   return `/datasets/${datasetId}/cycle/${stage}`;
@@ -158,12 +175,26 @@ export function qcPercent(qc: CycleQc): number {
   return Math.round(((qc.series_total - qc.series_pending) / qc.series_total) * 100);
 }
 
-// Provisional until step 2 adds destination + WP-collection readiness to the
-// cycle payload. For now the only signal available is whether recordsets exist.
+/** Recordsets missing a WordPress download link. */
+export function unlinkedRecordsets(cycle: DatasetCycle): CycleRecordset[] {
+  return cycle.recordsets.filter((r) => !r.wp_linked);
+}
+
+// Done once the dataset is linked to a WordPress collection page and every
+// recordset is linked to a WordPress download page. The dataset link comes
+// first -- recordsets can't be linked until it exists.
 function setupStage(cycle: DatasetCycle): StageSummary {
-  return cycle.recordsets.length === 0
-    ? { state: "active", detail: "No recordsets" }
-    : { state: "done", detail: `${cycle.recordsets.length} recordsets` };
+  if (cycle.recordsets.length === 0) {
+    return { state: "active", detail: "No recordsets" };
+  }
+  if (!cycle.dataset_wp_linked) {
+    return { state: "active", detail: "Collection not linked" };
+  }
+  const unlinked = unlinkedRecordsets(cycle);
+  if (unlinked.length > 0) {
+    return { state: "active", detail: `${unlinked.length} not linked` };
+  }
+  return { state: "done", detail: `${cycle.recordsets.length} recordsets` };
 }
 
 function assembleStage(cycle: DatasetCycle): StageSummary {
@@ -296,6 +327,13 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
     case "setup": {
       if (cycle.recordsets.length === 0) {
         return "This dataset has no recordsets — add at least one to begin.";
+      }
+      if (!cycle.dataset_wp_linked) {
+        return "The dataset has no WordPress page linked yet.";
+      }
+      const unlinked = unlinkedRecordsets(cycle);
+      if (unlinked.length > 0) {
+        return `${plural(unlinked.length, "recordset")} not linked to a WordPress download page.`;
       }
       return `${plural(cycle.recordsets.length, "recordset")} ready.`;
     }

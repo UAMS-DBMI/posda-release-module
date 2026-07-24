@@ -35,7 +35,7 @@ export default function Modal({
   children,
   footer,
   size = "md",
-  closeOnBackdrop = true,
+  closeOnBackdrop = false,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);

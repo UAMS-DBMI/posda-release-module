@@ -83,13 +83,18 @@ export default function Tabs({
         const isActive = tab.key === active;
         const state = tab.state ?? "pending";
         const className = classNames(
-          "-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm transition-colors",
+          "-mb-px flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2 text-sm transition-colors",
           "focus-visible:outline-2 focus-visible:outline-offset-[-2px]",
           isActive
             ? "border-accent font-semibold text-accent"
             : "border-transparent font-medium hover:text-foreground",
         );
-        const style = isActive ? {} : { color: "var(--muted)" };
+        const style = isActive
+          ? {
+              background:
+                "color-mix(in srgb, var(--accent) 14%, transparent)",
+            }
+          : { color: "var(--muted)" };
         const shared = {
           id: tabId(idPrefix, tab.key),
           role: "tab" as const,
@@ -101,14 +106,36 @@ export default function Tabs({
         };
         const inner = (
           <>
-            <span
-              aria-hidden
-              className={classNames(
-                "h-2.5 w-2.5 shrink-0 rounded-full border-2",
-                state === "blocked" ? "border-amber-500 bg-amber-500" : "",
-              )}
-              style={dotStyles[state]}
-            />
+            {state === "done" ? (
+              <span
+                aria-hidden
+                className="flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "var(--accent)" }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width={7}
+                  height={7}
+                  fill="none"
+                  stroke="white"
+                  strokeWidth={4}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            ) : (
+              <span
+                aria-hidden
+                className={classNames(
+                  "h-2.5 w-2.5 shrink-0 rounded-full border-2",
+                  state === "blocked" ? "border-amber-500 bg-amber-500" : "",
+                  state === "active" ? "animate-pulse" : "",
+                )}
+                style={dotStyles[state]}
+              />
+            )}
             {tab.label}
             {tab.detail && (
               <span
