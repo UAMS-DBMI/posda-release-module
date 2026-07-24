@@ -216,7 +216,9 @@ DOI, TCIA Collection Manager) or the `Collection` value of `dataset_type`.
   fixed schedule, so multiple TCIA releases of a dataset can land before IDC
   goes live with them.
 
-### File manifest
+---
+
+### FILE MANIFEST
 
 Carries the bulk of file-related metadata (DOIs, UIDs, hashes), deposited in
 the GCS bucket alongside the release data for IDC ingestion (see **Bucket
@@ -231,10 +233,7 @@ layout**).
 
 | Field | Meaning | In impl? |
 |---|---|---|
-| `dataset_type` | Collection or analysis result | ❌ needs adding |
-| `dataset_name` | The collection or analysis result name | ❌ needs adding |
 | `dataset_hash` | MD5 of the concatenation of patient hashes, ordered by hash | ✅ |
-| `dataset_doi` | TCIA collection DOI | ❌ needs adding |
 
 **Per-instance fields:**
 
@@ -283,13 +282,15 @@ file-manifest/generate`):
   `downloadable_file`, and sets `transfer_idc.file_manifest_file_id`.
 
 Fields still missing from the impl are marked "needs adding" in the spec tables
-above (`dataset_type`, `dataset_name`, `dataset_doi`, `collection_name`,
-`relative_file_url`); `posda_file_id` is emitted in code as `file_id`.
+above (`collection_name`, `relative_file_url`); `posda_file_id` is emitted in
+code as `file_id`.
 
 _(No open questions specific to this manifest — the remaining work is the
 generator fixes and the ❌ fields above.)_
 
-### Dataset manifest
+---
+
+### DATASET MANIFEST
 
 Carries **dataset-related metadata** (abstract, program, licensing, etc.) — a
 separate manifest because the timing of dataset metadata gathering won't always
@@ -334,7 +335,6 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 | `dataset_version` | Dataset version number | ✅ |
 | `dataset_version_date` | Current dataset version date | ✅ |
 | `dataset_url` | TCIA collection URL | ✅ |
-| `file_manifest_url` | Path to the file manifest, **relative to this manifest** | ❌ needs adding |
 | `dataset_tooltip` | Tooltip/short description — from the **NBIA API** (see Sources above) | ❌ needs adding |
 | `cancer_type` | Cancer types represented in dataset | ✅ |
 | `supporting_data` | Supporting data found in dataset | ✅ |
@@ -361,25 +361,34 @@ dataset-manifest/generate`):
   `downloadable_file`, and sets `transfer_idc.dataset_manifest_file_id`.
 
 Fields marked ❌ above are not yet emitted: `dataset_version_doi`,
-`file_manifest_url`, `dataset_tooltip`, and the 3 `license_*`.
+`dataset_tooltip`, and the 3 `license_*`.
 
 **Open questions specific to this manifest:**
 - Add the ❌ fields to the generated manifest — this means extending the
   generator beyond WordPress to also read Posda and the NBIA API.
 
-### Clinical manifest
+---
+
+### CLINICAL MANIFEST
 
 Points at the **tabular clinical files available on WordPress** and provides a
-link to them. Populates `transfer_idc.clinical_manifest_file_id`.
+link to them. Populates `transfer_idc.clinical_manifest_file_id`. **Scoped
+per-dataset** (one clinical manifest per dataset release), not a single global
+manifest across all collections/analysis results.
 
 - **Status:** **not yet implemented.** The endpoint
   `POST /transfers/{id}/idc/clinical-manifest/generate`
   (`generate_idc_clinical_manifest`) is a stub — TODO in code to build the
   manifest and set `clinical_manifest_file_id`.
+- **Content:** **links/URLs to clinical files only** — no need to copy the
+  clinical files themselves into the bucket.
 - **Timing risk:** since this manifest pulls from CM (WordPress), **CM may not be
   live yet** at generation time — the tabular clinical files it links to might
   not exist/be published when the transfer is initialized. Need a plan for the
   not-yet-live case (defer/regenerate, or block generation until CM is up).
+- **Clinical-only changes:** per-dataset scoping means a release where only
+  clinical data changed can ship with the file and dataset manifests unchanged
+  from the prior version — only the clinical manifest is regenerated.
 
 **What counts as "clinical data"** (per Bill, 2026-07-22) — note this stretches
 the usual definition of *clinical*; it is really "tabular supporting data."
@@ -391,11 +400,22 @@ Selection is a two-stage filter over **Collection Manager downloads**:
    - `image annotations`
    - `other`
 2. **By `file_type`** — a CM download's `file_type` is a **list**; keep those
-   including one or more of **CSV**, **XLS**, or **XLSX**.
+   including one or more of **CSV**, **TSV**, **XLS**, or **XLSX**.
 
 Then **a human decides which of the surviving downloads are actually relevant** —
 this is a curator judgement call, not a pure rule. Any implementation needs to
 surface candidates for selection rather than auto-including everything.
+
+**Fields (draft — not yet confirmed with Bill):** one row per selected CM
+download. Content is links/URLs only (see above), so no file copies, just
+enough to locate and label each one.
+
+| Field | Meaning | In impl? |
+|---|---|---|
+| `file_title` | CM download's display title/label | ❌ needs adding |
+| `file_url` | Link to the file on WordPress/CM | ❌ needs adding |
+| `download_type` | CM `download_type` (`clinical data` / `image annotations` / `other`) | ❌ needs adding |
+| `file_type` | CM `file_type` (CSV / TSV / XLS / XLSX) | ❌ needs adding |
 
 Open follow-ups on this:
 - Is the relevance decision recorded anywhere (per transfer? per dataset?), or
@@ -415,13 +435,19 @@ gs://posda_submit/
       files/          <-- DICOM blobs
 ```
 
+Manifest filenames are **fixed** — `dataset_manifest.csv`, `file_manifest.csv`,
+`clinical_manifest.csv` — always directly under the `<version>` folder, per
+Bill (2026-07-24).
+
 **URL scheme — one absolute anchor, everything else relative:**
 
 | Value | Form | Example |
 |---|---|---|
 | `transfer_idc.base_gcs_url` | **Absolute** GCS URL to the package | `gs://posda_submit/<dataset>/<version>` |
 | `relative_file_url` (file manifest) | Relative to the manifest, `./` notation | `./files/foo.dcm` |
-| `file_manifest_url` (dataset manifest) | Relative to the manifest | `./<file manifest>.csv` |
+
+No manifest-to-manifest URL fields (e.g. `file_manifest_url`,
+`clinical_manifest_url`) are needed — see *Decisions log*, 2026-07-24.
 
 Because the manifests are relocated as a unit and contain **only** relative
 references, moving the package across buckets/projects during ETL means updating
@@ -444,6 +470,10 @@ relative scheme.
 
 ## Open questions / things to figure out
 
+- **Bucket sync/concurrency:** Bill (IDC) is concerned about a race between
+  Posda writing to the bucket and IDC copying it across the security perimeter
+  — needs some kind of semaphore/locking on the bucket. Bill is investigating;
+  no mechanism decided yet.
 - Test datasets for use cases 3/4/7/8 (analysis-result cases) — still need
   real examples, not yet picked.
 - **Where does the Go daemon live?** Not yet located in the repos — need the
@@ -501,6 +531,29 @@ record, not the reference.
   destination-specific tables. Destination is derived via
   `dataset_release_transfer.destination_id`; destination *settings* tables stay
   as they are. → *DDL section*
+
+**2026-07-24 (from Bill, Slack)**
+- **File manifest:** only `dataset_hash` needs to be a per-instance
+  (repeated) field, kept purely for consistency with IDC's existing code.
+  `dataset_type` / `dataset_name` / `dataset_doi` are **dropped** from the file
+  manifest — IDC will read those from the dataset manifest instead. → *File
+  manifest*
+- **Clinical manifest stays scoped per-dataset** (one per dataset release), not
+  a single manifest covering all collections/analysis results — Bill offered
+  the global-manifest alternative (YAML of CM download objects, or a minimal
+  `(collection_name, file_url)` list) to handle files added/revised/dropped
+  without other dataset changes, but per-dataset scoping already covers that
+  case: file and dataset manifests are left unchanged, and only the clinical
+  manifest is regenerated. Content is links/URLs only — no need to copy the
+  clinical files into the bucket. → *Clinical manifest*
+- **No manifest-to-manifest URL fields needed** (`file_manifest_url`,
+  `clinical_manifest_url`) — manifest filenames are fixed
+  (`dataset_manifest.csv`, `file_manifest.csv`, `clinical_manifest.csv`),
+  always directly under the `<version>` folder. → *Dataset manifest*, *Bucket
+  layout & versioning*
+- **New concern raised:** bucket read/write synchronization between Posda and
+  IDC during the perimeter-crossing copy — Bill is investigating a
+  semaphore/locking approach. → *Open questions*
 
 **2026-07-22 (from Bill)**
 - `dataset_tooltip` is sourced from the **NBIA API**
