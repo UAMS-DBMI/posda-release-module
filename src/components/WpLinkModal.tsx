@@ -157,7 +157,17 @@ export default function WpLinkModal({
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title="WordPress" size="lg">
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title="WordPress"
+      size="lg"
+      footer={
+        <Button variant="ghost" onClick={handleClose}>
+          Cancel
+        </Button>
+      }
+    >
       <div className="mt-4 space-y-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex gap-2">
