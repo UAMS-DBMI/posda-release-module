@@ -32,6 +32,7 @@ export default function AssembleStage() {
     file_count: r.open_draft?.file_count ?? null,
     draft_id: r.open_draft?.recordset_draft_id ?? null,
     frozen: r.latest_release ? `v${r.latest_release.release_number}` : null,
+    last_bundled: r.last_bundled_dataset_release_number,
   }));
 
   if (cycle.recordsets.length === 0) {
@@ -96,7 +97,16 @@ export default function AssembleStage() {
           {
             key: "frozen",
             label: "Frozen At",
-            render: (v) => (v ? String(v) : "—"),
+            render: (v, row) => (
+              <div>
+                <div>{v ? String(v) : "—"}</div>
+                {row.last_bundled != null && (
+                  <div className="text-xs" style={{ color: "var(--muted)" }}>
+                    last bundled: dataset v{row.last_bundled}
+                  </div>
+                )}
+              </div>
+            ),
           },
           {
             key: "draft_id",

@@ -67,8 +67,8 @@ export function datasetToFormValues(dataset: DatasetRecord): DatasetFormValues {
 
 const PLACEHOLDER = { value: "", label: "--- Select a value ---" };
 
-/** Compact 2-column layout for the edit modal: Name spans both columns,
- *  Type + Active share a row, DOI spans both columns. */
+/** Compact 2-column layout for the edit modal: Name and DOI each span both
+ *  columns, Type + Active share a row. */
 export function datasetFormFields(
   datasetTypes: DatasetType[],
 ): Array<DynamicFormField<DatasetFormValues>> {
@@ -76,6 +76,13 @@ export function datasetFormFields(
     {
       key: "dataset_name",
       label: "Name",
+      required: true,
+      className: "col-span-2 block",
+      controlClassName: "mt-1 input",
+    },
+    {
+      key: "dataset_doi",
+      label: "DOI",
       required: true,
       className: "col-span-2 block",
       controlClassName: "mt-1 input",
@@ -100,13 +107,6 @@ export function datasetFormFields(
       type: "checkbox",
       className: "flex items-center gap-2 self-end pb-2",
       controlClassName: "checkbox",
-    },
-    {
-      key: "dataset_doi",
-      label: "DOI",
-      required: true,
-      className: "col-span-2 block",
-      controlClassName: "mt-1 input",
     },
   ];
 }

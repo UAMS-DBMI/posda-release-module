@@ -169,8 +169,9 @@ export default function RecordsetDetail() {
   const [draftsError, setDraftsError] = useState<string | null>(null);
 
   const [showDestModal, setShowDestModal] = useState(false);
-  const [editingDestination, setEditingDestination] =
-    useState<RecordsetDestination | null>(null);
+  const [editingDestinationId, setEditingDestinationId] = useState<number | null>(
+    null,
+  );
 
   const [showWpModal, setShowWpModal] = useState(false);
 
@@ -311,12 +312,12 @@ export default function RecordsetDetail() {
   ]);
 
   function openAddDestModal() {
-    setEditingDestination(null);
+    setEditingDestinationId(null);
     setShowDestModal(true);
   }
 
   function openEditDestModal(dest: RecordsetDestination) {
-    setEditingDestination(dest);
+    setEditingDestinationId(dest.destination_id);
     setShowDestModal(true);
   }
 
@@ -560,7 +561,6 @@ export default function RecordsetDetail() {
                   { key: "destination_name", label: "Destination" },
                   { key: "destination_abbr", label: "Abbr" },
                   { key: "default_display", label: "Default Display" },
-                  { key: "transfer_mode_name", label: "Transfer Mode" },
                 ]}
                 formatters={{
                   default_display: (value) => (value ? "Yes" : "No"),
@@ -669,7 +669,7 @@ export default function RecordsetDetail() {
         open={showDestModal}
         onClose={closeDestModal}
         recordsetId={recordsetId}
-        editing={editingDestination}
+        editingDestinationId={editingDestinationId}
       />
 
       <WpLinkModal

@@ -51,7 +51,7 @@ export default function WpLinkModal({
   typeOptions,
 }: WpLinkModalProps) {
   const { addToast } = useToast();
-  const [mode, setMode] = useState<"link" | "create">("link");
+  const [mode, setMode] = useState<"link" | "create" | "unlink">("link");
   const [wpObjectType, setWpObjectType] = useState(typeOptions[0]?.value ?? "");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<WpSearchResult[]>([]);
@@ -160,7 +160,7 @@ export default function WpLinkModal({
     <Modal
       open={open}
       onClose={handleClose}
-      title="WordPress"
+      title="Link WordPress"
       size="lg"
       footer={
         <Button variant="ghost" onClick={handleClose}>
@@ -169,36 +169,43 @@ export default function WpLinkModal({
       }
     >
       <div className="mt-4 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={mode === "link" ? "primary" : "ghost"}
-              onClick={() => setMode("link")}
-            >
-              Link Existing
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === "create" ? "primary" : "ghost"}
-              onClick={() => setMode("create")}
-            >
-              Create New
-            </Button>
-          </div>
+        <div
+          className="inline-flex rounded-md p-0.5"
+          style={{ background: "var(--surface-alt)" }}
+        >
+          <Button
+            size="sm"
+            variant={mode === "link" ? "primary" : "ghost"}
+            className={mode === "link" ? undefined : "bg-transparent!"}
+            onClick={() => setMode("link")}
+          >
+            Link Existing
+          </Button>
+          <Button
+            size="sm"
+            variant={mode === "create" ? "primary" : "ghost"}
+            className={mode === "create" ? undefined : "bg-transparent!"}
+            onClick={() => setMode("create")}
+          >
+            Create New
+          </Button>
           {wpMap && (
             <Button
               size="sm"
-              variant="ghost"
-              loading={deleteLink.isPending}
-              onClick={() => void handleUnlink()}
+              variant={mode === "unlink" ? "primary" : "ghost"}
+              className={
+                mode === "unlink"
+                  ? "bg-red-600! hover:bg-red-700!"
+                  : "bg-transparent! text-red-600! dark:text-red-400!"
+              }
+              onClick={() => setMode("unlink")}
             >
               Unlink
             </Button>
           )}
         </div>
 
-        {typeOptions.length > 1 && (
+        {mode !== "unlink" && typeOptions.length > 1 && (
           <div>
             <label className="block text-sm font-medium">Type</label>
             <select
@@ -221,7 +228,7 @@ export default function WpLinkModal({
 
         {mode === "link" ? (
           <div className="space-y-3">
-            <div className="space-y-2">
+            <div className="flex gap-2">
               <input
                 type="text"
                 value={query}
@@ -230,7 +237,7 @@ export default function WpLinkModal({
                   if (e.key === "Enter") void handleSearch();
                 }}
                 placeholder="Search by title..."
-                className="input w-full"
+                className="input flex-1"
                 autoFocus
               />
               <Button
@@ -271,6 +278,27 @@ export default function WpLinkModal({
                 No results.
               </p>
             )}
+          </div>
+        ) : mode === "unlink" ? (
+          <div
+            className="space-y-3 rounded-md bg-red-50 p-4 dark:bg-red-900/15"
+            style={{ border: "1px solid var(--border-strong)" }}
+          >
+            <p className="text-sm text-red-700 dark:text-red-400">
+              Remove the link between this {posdaObjectType} and its
+              WordPress page?
+            </p>
+            <p className="text-xs text-red-700/80 dark:text-red-400/80">
+              This only removes the connection in Posda — the WordPress post
+              itself is not deleted or changed.
+            </p>
+            <Button
+              className="bg-red-600! hover:bg-red-700!"
+              loading={deleteLink.isPending}
+              onClick={() => void handleUnlink()}
+            >
+              Confirm Unlink
+            </Button>
           </div>
         ) : (
           <div className="space-y-3">

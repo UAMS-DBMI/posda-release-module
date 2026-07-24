@@ -106,6 +106,28 @@ export function useDestinationLookups() {
   };
 }
 
+// Hidden from the user: each destination always uses one fixed transfer mode
+// (idc/gc/nbia bundle recordsets together; wp/asp move one dataset at a time).
+const DESTINATION_TRANSFER_MODE_NAME: Record<string, string> = {
+  idc: "grouped bundle",
+  gc: "grouped bundle",
+  nbia: "grouped bundle",
+  wp: "single dataset",
+  asp: "single dataset",
+};
+
+/** Looks up the transfer mode a destination is hardcoded to, by its abbr. */
+export function transferModeIdForDestination(
+  destinationAbbr: string,
+  transferModes: TransferMode[],
+): number | null {
+  const modeName = DESTINATION_TRANSFER_MODE_NAME[destinationAbbr];
+  return (
+    transferModes.find((m) => m.transfer_mode_name === modeName)
+      ?.transfer_mode_id ?? null
+  );
+}
+
 /** Only the full page needs this — the modal's dataset comes from context. */
 export function useDatasetOptions(enabled = true) {
   const datasets = useQuery({
@@ -296,8 +318,8 @@ export function recordsetToFormValues(recordset: RecordsetRecord): RecordsetEdit
   };
 }
 
-/** Compact 2-column layout for the edit modal: Name spans both columns,
- *  Type + License share a row, DOI + Active share a row. */
+/** Compact 2-column layout for the edit modal: Name, DOI, and Type each span
+ *  both columns on their own row; License + Active share the 4th row. */
 export function recordsetEditFormFields({
   recordsetTypes,
   licenses,
@@ -314,10 +336,17 @@ export function recordsetEditFormFields({
       controlClassName: "mt-1 input",
     },
     {
+      key: "recordset_doi",
+      label: "DOI",
+      className: "col-span-2 block",
+      controlClassName: "mt-1 input",
+    },
+    {
       key: "recordset_type_id",
       label: "Type",
       type: "select",
       required: true,
+      className: "col-span-2 block",
       options: [
         PLACEHOLDER,
         ...recordsetTypes.map((t) => ({
@@ -340,11 +369,6 @@ export function recordsetEditFormFields({
         })),
       ],
       controlClassName: "mt-1 select",
-    },
-    {
-      key: "recordset_doi",
-      label: "DOI",
-      controlClassName: "mt-1 input",
     },
     {
       key: "active",

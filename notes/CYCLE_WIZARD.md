@@ -300,6 +300,22 @@ Each lands and is reviewed before the next.
       - **Relations** (`dataset_relation`, isDerivedFrom / isSourceOf) — an
         analysis result points at its source collection here. Not yet planned
         in detail.
+      - [x] **"Latest release" ambiguity fixed.** *(done 2026-07-24)*
+        `DATASET_CYCLE_RECORDSETS_SQL` gained a `last_bundled` CTE — max
+        `dataset_release.release_number` reachable via
+        `dataset_release_recordset` for any of that recordset's releases —
+        exposed as `CycleRecordset.last_bundled_dataset_release_number`
+        (nullable). Both `SetupStage.tsx` ("Latest Release" column) and
+        `AssembleStage.tsx` ("Frozen At" column) now show a second line
+        ("last bundled: dataset vN") under the recordset's own version when
+        present.
+      - No removal action for recordsets in Setup — **confirmed correct, not
+        a gap.** Dataset↔recordset membership is structural; what varies per
+        release is only which `recordset_release` gets bundled (Bundle
+        stage's include-latest checkboxes — a recordset just goes unchecked,
+        it isn't removed). True recordset deletion is a rarer, heavier
+        operation and stays on `recordsets/Detail.tsx`/Edit, outside the
+        guided cycle.
       - Setup has no bulk write of its own; it's create/attach actions plus a
         readiness view. A dataset with zero recordsets can't leave Setup.
 - [ ] **3 — Assemble stage does the work.** The page lists recordsets with
@@ -449,6 +465,67 @@ dataset 4 (bare):
 7. `npm run build` clean at every step.
 
 ## Log
+
+**2026-07-24 — Setup completion gates all five incomplete states.** `setupStage()`
+(`lib/useCycle.ts`) previously only checked recordset count + dataset WP link +
+recordset WP links. Added the two missing gates: recordsets with no destination
+configured (`recordsetsMissingDestinations()`), and orphaned WordPress
+downloads. The orphan check used to be computed client-side only in
+`SetupStage.tsx` (via `useQueries` hitting `manager/downloads/{id}` per
+candidate) and never fed the shared stage-summary/tab-dot/next-action logic.
+Moved server-side: `GET /datasets/{id}/cycle` now returns
+`orphaned_download_count`, computed by a new `count_orphaned_wp_downloads()`
+helper in `distribution.py` that reads the dataset's WP collection/analysis-result
+object directly (`wp_get`) and checks each unattached download's status
+(best-effort — a WordPress hiccup returns 0 rather than failing the whole
+cycle payload). This makes the orphan signal consistent everywhere the cycle
+payload is read, at the cost of every cycle-stage page now carrying that
+external WP round-trip, not just Setup. `SetupStage.tsx`'s client-side
+computation was deleted in favor of reading `cycle.orphaned_download_count`.
+Also: the destinations column's "None" text became a `StatusBadge` (`warning`
+variant, distinct from the WordPress column's `neutral` "Not Linked" pill) so
+both missing-state pills read as pills, not one styled and one bare text.
+
+**2026-07-24 — default-destination integrity + pill click-to-edit.** Auditing
+`update_recordset_destination` while hiding transfer mode surfaced a gap: a
+recordset could end up with destinations but zero marked default (insert
+doesn't force the first one default; the unique index only forbids *two*
+defaults, not zero). Insert-time fix deferred (flagged below); **delete-time
+fix landed**: `delete_recordset_destination` now runs in a transaction and,
+if the deleted row was the default and others remain, promotes the lowest
+`destination_id` to default rather than leaving none. Since an auto-promote
+can't know which destination the user actually wants, `RecordsetDestinationModal`
+gained a `editingDestinationId` prop (replacing `editing: RecordsetDestination`)
+that resolves the row from the recordset's own fetched destinations, so
+callers only need to hold an id. `SetupStage.tsx`'s destination pills are now
+clickable (opens the modal in edit mode, e.g. to flip which one is default)
+instead of only add (+) / remove (−); `recordsets/Detail.tsx` migrated to the
+same prop, no behavior change there (row click already opened edit).
+**Insert-time gap closed same day:** `update_recordset_destination` now checks
+whether the recordset has any destination at all before inserting; if not,
+`effective_default` is forced `True` regardless of the payload. Frontend
+mirrors it — `RecordsetDestinationModal` pre-checks and disables the "Default
+Display" box (with an explanatory line) when adding a recordset's first
+destination, so the UI doesn't show unchecked while the server would force it
+checked anyway.
+
+**2026-07-24 — transfer mode hidden from the user.** The Transfer Mode picker
+in `RecordsetDestinationModal` (used by both `SetupStage.tsx` and
+`recordsets/Detail.tsx`) was confusing — curators don't have a real choice to
+make, since each destination is meant to always use the same mode. Replaced
+with a hardcoded frontend lookup, **`transferModeIdForDestination`**
+(`lib/recordsetForm.ts`): `idc`/`gc`/`nbia` → `grouped bundle`,
+`wp`/`asp` → `single dataset`; the recordset_destination save silently derives
+`transfer_mode_id` from the chosen destination's abbr. `clinical update` is
+unused by this mapping and left as dead lookup data. Also removed the
+now-redundant read-only "Transfer Mode"/"Mode" displays across
+`recordsets/Detail.tsx`, `datasets/releases/transfers/{List,Create}.tsx`, and
+`transfers/Detail.tsx` — the concept is now purely internal plumbing, no
+longer surfaced anywhere. `create_dataset_module_test_data.sql`'s
+`recordset_destination` seed rows updated to match (gc/nbia rows moved from
+`single dataset` to `grouped bundle`). Backend untouched — the upsert endpoint
+still accepts `default_transfer_mode_id`, the frontend just always sends the
+hardcoded value now.
 
 **2026-07-22 — planned.** Architecture agreed (routes as stages, the stage page
 as the working surface, modals as single-purpose inputs, shared form modules).

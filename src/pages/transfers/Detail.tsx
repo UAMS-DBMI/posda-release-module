@@ -325,7 +325,6 @@ export default function TransferDetail() {
         { label: "Transfer ID", value: transfer.dataset_release_transfer_id },
         { label: "Dataset Release ID", value: transfer.dataset_release_id },
         { label: "Destination", value: transfer.destination_name },
-        { label: "Transfer Mode", value: transfer.transfer_mode_name },
         { label: "Status", value: STATUS_LABELS[transfer.transfer_status] ?? transfer.transfer_status },
         ...(transfer.transfer_notes
           ? [

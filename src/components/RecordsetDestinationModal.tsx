@@ -4,19 +4,23 @@ import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/Spinner";
 import { useToast } from "@/components/Toast";
 import { toastSuccess } from "@/components/toastHelpers";
-import { useDestinationLookups } from "@/lib/recordsetForm";
+import {
+  transferModeIdForDestination,
+  useDestinationLookups,
+} from "@/lib/recordsetForm";
 import {
   useRecordsetDestinations,
   useSaveRecordsetDestination,
-  type RecordsetDestination,
 } from "@/lib/recordsetDestinations";
 
 type RecordsetDestinationModalProps = {
   open: boolean;
   onClose: () => void;
   recordsetId: string | number | undefined;
-  /** Pass an existing destination row to edit; omit/null to add a new one. */
-  editing?: RecordsetDestination | null;
+  /** Pass an existing destination's id to edit it; omit/null to add a new one.
+   *  The row itself is looked up from this recordset's own configured
+   *  destinations, so callers don't need to hold the full row. */
+  editingDestinationId?: number | null;
 };
 
 /** Add or edit one destination for a recordset. Shared by `recordsets/Detail.tsx`
@@ -26,7 +30,7 @@ export default function RecordsetDestinationModal({
   open,
   onClose,
   recordsetId,
-  editing,
+  editingDestinationId,
 }: RecordsetDestinationModalProps) {
   const { addToast } = useToast();
   const { destinations, transferModes, isLoading: lookupsLoading } =
@@ -36,33 +40,47 @@ export default function RecordsetDestinationModal({
   const save = useSaveRecordsetDestination(recordsetId);
 
   const [destinationId, setDestinationId] = useState<number | null>(null);
-  const [transferModeId, setTransferModeId] = useState<number | null>(null);
   const [defaultDisplay, setDefaultDisplay] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isEditing = Boolean(editing);
+  const isEditing = editingDestinationId != null;
   const isLoading = lookupsLoading || configuredLoading;
+  const editing =
+    (editingDestinationId != null &&
+      configured?.find((d) => d.destination_id === editingDestinationId)) ||
+    null;
+  // A recordset's first destination is always its default -- the backend
+  // forces this regardless of what's submitted, so reflect it rather than
+  // showing an unchecked box that saves as checked.
+  const isFirstDestination = !isEditing && (configured?.length ?? 0) === 0;
 
   useEffect(() => {
     if (!open) return;
     setError(null);
     if (editing) {
       setDestinationId(editing.destination_id);
-      setTransferModeId(editing.transfer_mode_id);
       setDefaultDisplay(editing.default_display);
-    } else {
+    } else if (!isEditing) {
       setDestinationId(null);
-      setTransferModeId(transferModes[0]?.transfer_mode_id ?? null);
-      setDefaultDisplay(false);
+      setDefaultDisplay(isFirstDestination);
     }
-    // Only re-run when the modal opens or which row it's editing changes.
+    // Only re-run when the modal opens, which row it's editing, or once that
+    // row's data arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editing]);
+  }, [open, editingDestinationId, editing, isFirstDestination]);
 
   const configuredIds = new Set((configured ?? []).map((d) => d.destination_id));
   const availableDestinations = destinations.filter(
     (d) => !configuredIds.has(d.destination_id),
   );
+
+  // Transfer mode is hidden from the user — each destination is hardcoded to
+  // one mode (see transferModeIdForDestination).
+  const selectedDestination =
+    destinations.find((d) => d.destination_id === destinationId) ?? null;
+  const transferModeId = selectedDestination
+    ? transferModeIdForDestination(selectedDestination.destination_abbr, transferModes)
+    : null;
 
   async function handleSave() {
     if (!destinationId || !transferModeId) return;
@@ -113,8 +131,13 @@ export default function RecordsetDestinationModal({
 
           {isEditing ? (
             <div>
-              <span className="block text-sm font-medium">Destination</span>
-              <span className="text-sm">{editing?.destination_name}</span>
+              <label className="block text-sm font-medium">Destination</label>
+              <input
+                type="text"
+                value={editing?.destination_name ?? ""}
+                readOnly
+                className="mt-1 input w-full opacity-60"
+              />
             </div>
           ) : (
             <div>
@@ -134,27 +157,12 @@ export default function RecordsetDestinationModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium">Transfer Mode</label>
-            <select
-              value={transferModeId ?? ""}
-              onChange={(e) => setTransferModeId(Number(e.target.value))}
-              className="select mt-1 w-full"
-            >
-              <option value="">Select a transfer mode...</option>
-              {transferModes.map((tm) => (
-                <option key={tm.transfer_mode_id} value={tm.transfer_mode_id}>
-                  {tm.transfer_mode_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
               id="dest_default_display"
               checked={defaultDisplay}
+              disabled={isFirstDestination}
               onChange={(e) => setDefaultDisplay(e.target.checked)}
               className="h-4 w-4"
             />
@@ -165,6 +173,11 @@ export default function RecordsetDestinationModal({
               Default Display
             </label>
           </div>
+          {isFirstDestination && (
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              A recordset's first destination is always its default.
+            </p>
+          )}
         </div>
       )}
     </Modal>

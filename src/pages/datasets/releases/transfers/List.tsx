@@ -291,7 +291,6 @@ export default function DatasetReleaseTransfersList() {
             columns={[
               { key: "transfer_name", label: "Name" },
               { key: "destination_name", label: "Destination" },
-              { key: "transfer_mode_name", label: "Mode" },
               {
                 key: "transfer_status",
                 label: "Status",

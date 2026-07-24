@@ -283,20 +283,6 @@ export default function DatasetReleaseTransferCreate() {
               )}
             </label>
 
-            {selectedDestination && (
-              <label className="block">
-                <span className={labelClass} style={{ color: "var(--muted)" }}>
-                  Transfer Mode
-                </span>
-                <input
-                  type="text"
-                  value={selectedDestination.transfer_mode_name}
-                  readOnly
-                  className="mt-1 input w-full opacity-60"
-                />
-              </label>
-            )}
-
             <label className="block">
               <span className={labelClass} style={{ color: "var(--muted)" }}>
                 Transfer Name <span className="text-red-500">*</span>

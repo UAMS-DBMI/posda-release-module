@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQueries } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import CreateRecordsetModal from "@/components/CreateRecordsetModal";
 import DatasetEditModal from "@/components/DatasetEditModal";
@@ -10,7 +9,6 @@ import DynamicTable from "@/components/DynamicTable";
 import { Button, ExternalLinkButton } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
-  fetchWpObjectByEndpoint,
   useWpMap,
   useWpObject,
   wpTypeOptionForDataset,
@@ -32,7 +30,7 @@ function wpBadgeState(
   isError: boolean,
   data: WpObjectLive | undefined,
 ): { label: string; variant: "success" | "danger" | "warning" | "neutral" } {
-  if (!linked) return { label: "Not Linked", variant: "neutral" };
+  if (!linked) return { label: "Not Linked", variant: "warning" };
   if (isError) return { label: "Broken Link", variant: "danger" };
   if (data?.status === "trash") return { label: "Trashed", variant: "warning" };
   return { label: data?.slug ?? "Linked", variant: "success" };
@@ -58,6 +56,9 @@ export default function SetupStage() {
   const { addToast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [destRecordsetId, setDestRecordsetId] = useState<number | null>(null);
+  const [editingDestinationId, setEditingDestinationId] = useState<number | null>(
+    null,
+  );
   const [wpRecordsetId, setWpRecordsetId] = useState<number | null>(null);
   const [showCollectionWp, setShowCollectionWp] = useState(false);
   const [showDatasetEdit, setShowDatasetEdit] = useState(false);
@@ -111,6 +112,7 @@ export default function SetupStage() {
     latest: r.latest_release
       ? `v${r.latest_release.release_number}`
       : "never released",
+    last_bundled: r.last_bundled_dataset_release_number,
     destinations: r.destinations,
     wp_linked: r.wp_linked,
     wp_edit_url: r.wp_edit_url,
@@ -118,29 +120,10 @@ export default function SetupStage() {
 
   // Downloads listed on the dataset's WP page that aren't the current
   // download for any recordset here -- left behind by unlinking/relinking a
-  // recordset's download, or added directly in WordPress. Detection only for
-  // now; no auto-remediation.
-  const datasetDownloadsField =
-    cycle.dataset_type_name === "Analysis Result" ? "result_downloads" : "collection_downloads";
-  const datasetDownloadIds = collectionObject?.[datasetDownloadsField] ?? [];
-  const attachedDownloadIds = new Set(
-    cycle.recordsets
-      .map((r) => r.wp_download_object_id)
-      .filter((id): id is number => id != null),
-  );
-  const orphanedIds = datasetDownloadIds.filter((id) => !attachedDownloadIds.has(id));
-  // Fetched by raw WP id -- these have no Posda-side mapping, so useWpObject
-  // (which requires one) doesn't apply. Assumed not-trashed while a status is
-  // still loading, so the banner doesn't undercount then jump up.
-  const orphanStatusQueries = useQueries({
-    queries: orphanedIds.map((id) => ({
-      queryKey: ["wp-download-status", id],
-      queryFn: () => fetchWpObjectByEndpoint("manager/downloads", id),
-    })),
-  });
-  const orphanedDownloadCount = orphanStatusQueries.filter(
-    (q) => q.data?.status !== "trash",
-  ).length;
+  // recordset's download, or added directly in WordPress. Computed
+  // server-side now (GET .../cycle) so it can also gate Setup completion;
+  // detection only, no auto-remediation.
+  const orphanedDownloadCount = cycle.orphaned_download_count;
 
   return (
     <div className="space-y-3">
@@ -298,16 +281,27 @@ export default function SetupStage() {
               ),
             },
             { key: "recordset_type_name", label: "Type" },
-            { key: "latest", label: "Latest Release" },
+            {
+              key: "latest",
+              label: "Latest Release",
+              render: (v, row) => (
+                <div>
+                  <div>{String(v)}</div>
+                  {row.last_bundled != null && (
+                    <div className="text-xs" style={{ color: "var(--muted)" }}>
+                      last bundled: dataset v{row.last_bundled}
+                    </div>
+                  )}
+                </div>
+              ),
+            },
             {
               key: "destinations",
               label: "Destinations",
               render: (_v, row) => (
                 <div className="flex flex-wrap items-center gap-1">
                   {row.destinations.length === 0 ? (
-                    <span className="text-sm" style={{ color: "var(--muted)" }}>
-                      None
-                    </span>
+                    <StatusBadge status="none" label="None" variant="warning" />
                   ) : (
                     row.destinations.map((d: CycleRecordsetDestination) => (
                       <span
@@ -319,7 +313,18 @@ export default function SetupStage() {
                             : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
                         )}
                       >
-                        {d.destination_abbr}
+                        <button
+                          type="button"
+                          aria-label={`Edit ${d.destination_abbr}`}
+                          title={`Edit ${d.destination_abbr}`}
+                          onClick={() => {
+                            setDestRecordsetId(row.recordset_id);
+                            setEditingDestinationId(d.destination_id);
+                          }}
+                          className="rounded-full hover:underline"
+                        >
+                          {d.destination_abbr}
+                        </button>
                         <button
                           type="button"
                           aria-label={`Remove ${d.destination_abbr}`}
@@ -341,7 +346,10 @@ export default function SetupStage() {
                     className="px-2"
                     aria-label="Add destination"
                     title="Add destination"
-                    onClick={() => setDestRecordsetId(row.recordset_id)}
+                    onClick={() => {
+                      setDestRecordsetId(row.recordset_id);
+                      setEditingDestinationId(null);
+                    }}
                   >
                     +
                   </Button>
@@ -400,8 +408,12 @@ export default function SetupStage() {
 
       <RecordsetDestinationModal
         open={destRecordsetId !== null}
-        onClose={() => setDestRecordsetId(null)}
+        onClose={() => {
+          setDestRecordsetId(null);
+          setEditingDestinationId(null);
+        }}
         recordsetId={destRecordsetId ?? undefined}
+        editingDestinationId={editingDestinationId}
       />
 
       <DatasetEditModal

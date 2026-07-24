@@ -858,6 +858,25 @@ CREATE TABLE "public".user_setting (
   optimistic `useMutation` — reuses item #2 machinery.
 - Remember to add the table to all three DB scripts (DDL / drop / test-data).
 
+### 11. Browser tab titles (document.title)
+
+Goal: pages currently all show the static `index.html` title ("Posda Release
+Module") in the browser tab, regardless of route — no page sets
+`document.title`. Add per-page tab titles so tabs are distinguishable when a
+user has several open (e.g. two dataset detail pages, a draft + its QC review).
+
+- [ ] Add a small `usePageTitle(title: string)` hook in `lib/` — sets
+      `document.title` (format TBD, e.g. `"${title} · Posda"`) on mount/update,
+      restores the previous title on unmount
+- [ ] Call it from each page component with a short, often dynamic string
+      (e.g. `Dataset ${dataset.name}`, `"Edit Dataset"`, `"QC Queue"`) — static
+      pages get a literal, detail/edit pages use the fetched entity name once
+      loaded (fall back to a generic label while loading)
+- [ ] Sweep all routes in `App.tsx` for coverage; no route should be left on
+      the default title
+- [ ] Decide title format/suffix convention and whether loading state shows a
+      generic title or the id until the name resolves
+
 ### 10. Server-side pagination on ALL list endpoints
 
 Goal: every list endpoint honors `page` + `limit` and returns `total`, per the

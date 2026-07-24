@@ -43,6 +43,12 @@ export type CycleRecordset = {
   latest_release: CycleRecordsetRelease | null;
   /** False when the recordset is frozen but not yet bundled — the fan-in signal. */
   in_latest_dataset_release: boolean;
+  /** Highest dataset release number any of this recordset's releases were
+   *  ever bundled into. Distinct from in_latest_dataset_release, which only
+   *  checks the dataset's *current* latest release -- can be ahead of or
+   *  behind the recordset's own latest_release since recordsets don't move
+   *  together (carry-forward). Null if never bundled. */
+  last_bundled_dataset_release_number: number | null;
   destinations: CycleRecordsetDestination[];
   wp_linked: boolean;
   wp_edit_url: string | null;
@@ -72,6 +78,9 @@ export type DatasetCycle = {
   recordsets: CycleRecordset[];
   /** Whether the dataset has a WordPress page linked. */
   dataset_wp_linked: boolean;
+  /** Downloads listed on the dataset's WordPress page that aren't the
+   *  current download for any recordset here (excludes trashed downloads). */
+  orphaned_download_count: number;
   latest_dataset_release: CycleDatasetRelease | null;
 };
 
@@ -180,9 +189,16 @@ export function unlinkedRecordsets(cycle: DatasetCycle): CycleRecordset[] {
   return cycle.recordsets.filter((r) => !r.wp_linked);
 }
 
-// Done once the dataset is linked to a WordPress collection page and every
-// recordset is linked to a WordPress download page. The dataset link comes
-// first -- recordsets can't be linked until it exists.
+/** Recordsets with no destination configured. */
+export function recordsetsMissingDestinations(cycle: DatasetCycle): CycleRecordset[] {
+  return cycle.recordsets.filter((r) => r.destinations.length === 0);
+}
+
+// Done once: the dataset has recordsets, is linked to a WordPress collection
+// page, every recordset has a destination and a WordPress download link, and
+// there are no orphaned WordPress downloads left dangling on the collection
+// page. The dataset link comes before recordset links -- recordsets can't be
+// linked until it exists.
 function setupStage(cycle: DatasetCycle): StageSummary {
   if (cycle.recordsets.length === 0) {
     return { state: "active", detail: "No recordsets" };
@@ -190,9 +206,16 @@ function setupStage(cycle: DatasetCycle): StageSummary {
   if (!cycle.dataset_wp_linked) {
     return { state: "active", detail: "Collection not linked" };
   }
+  const missingDestinations = recordsetsMissingDestinations(cycle);
+  if (missingDestinations.length > 0) {
+    return { state: "active", detail: `${missingDestinations.length} no destination` };
+  }
   const unlinked = unlinkedRecordsets(cycle);
   if (unlinked.length > 0) {
     return { state: "active", detail: `${unlinked.length} not linked` };
+  }
+  if (cycle.orphaned_download_count > 0) {
+    return { state: "active", detail: `${cycle.orphaned_download_count} orphaned` };
   }
   return { state: "done", detail: `${cycle.recordsets.length} recordsets` };
 }
@@ -331,9 +354,16 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       if (!cycle.dataset_wp_linked) {
         return "The dataset has no WordPress page linked yet.";
       }
+      const missingDestinations = recordsetsMissingDestinations(cycle);
+      if (missingDestinations.length > 0) {
+        return `${plural(missingDestinations.length, "recordset")} has no destination configured.`;
+      }
       const unlinked = unlinkedRecordsets(cycle);
       if (unlinked.length > 0) {
         return `${plural(unlinked.length, "recordset")} not linked to a WordPress download page.`;
+      }
+      if (cycle.orphaned_download_count > 0) {
+        return `${plural(cycle.orphaned_download_count, "download")} on the WordPress page ${cycle.orphaned_download_count === 1 ? "isn't" : "aren't"} linked to any recordset here.`;
       }
       return `${plural(cycle.recordsets.length, "recordset")} ready.`;
     }
