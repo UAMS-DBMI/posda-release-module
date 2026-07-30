@@ -4,6 +4,7 @@ import CreateRecordsetModal from "@/components/CreateRecordsetModal";
 import DynamicTable from "@/components/DynamicTable";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { isCycleActive } from "@/lib/useCycle";
 import { useCycleContext } from "./CycleLayout";
 
 function RecordsetLink({ id, name }: { id: number; name: string }) {
@@ -53,9 +54,21 @@ export default function AssembleStage() {
     );
   }
 
+  const cycleActive = isCycleActive(cycle);
+
   return (
     <div className="space-y-3">
-      {startable > 0 && (
+      {!cycleActive && (
+        <p className="text-sm" style={{ color: "var(--muted)" }}>
+          No cycle is currently in progress
+          {cycle.latest_dataset_release
+            ? ` — last release was v${cycle.latest_dataset_release.release_number} (${cycle.latest_dataset_release.release_status})`
+            : ""}
+          . Start one from the banner above before assembling drafts.
+        </p>
+      )}
+
+      {cycleActive && startable > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             {startable} recordset{startable === 1 ? " has" : "s have"} no open

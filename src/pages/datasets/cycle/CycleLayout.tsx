@@ -110,7 +110,10 @@ export default function CycleLayout() {
         ]}
         subtitle={
           data
-            ? `${data.dataset_type_name} · ${data.recordsets.length} recordset${data.recordsets.length === 1 ? "" : "s"}`
+            ? `${data.dataset_type_name} · ${data.recordsets.length} recordset${data.recordsets.length === 1 ? "" : "s"}` +
+              (data.latest_dataset_release
+                ? ` · v${data.latest_dataset_release.release_number} (${data.latest_dataset_release.release_status})`
+                : " · no release yet")
             : undefined
         }
         actions={
@@ -140,6 +143,7 @@ export default function CycleLayout() {
         <>
           <CycleNextAction
             cycle={data}
+            datasetId={datasetId}
             onGoToStage={(stage) => navigate(stagePath(datasetId, stage))}
           />
 

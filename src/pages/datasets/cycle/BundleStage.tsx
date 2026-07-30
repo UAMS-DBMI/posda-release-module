@@ -39,8 +39,9 @@ export default function BundleStage() {
         {release ? (
           <>
             <span className="font-medium">
-              v{release.release_number} ·{" "}
-              {new Date(release.release_date).toLocaleDateString()}
+              v{release.release_number}
+              {release.release_date &&
+                ` · ${new Date(release.release_date).toLocaleDateString()}`}
             </span>
             <StatusBadge status={release.release_status} />
             {release.release_doi && (

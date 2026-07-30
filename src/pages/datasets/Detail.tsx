@@ -39,7 +39,8 @@ type DatasetRelease = {
   dataset_release_id: number;
   dataset_id: number;
   release_number: number;
-  release_date: string;
+  /** Null while draft -- set when release_status transitions to released. */
+  release_date: string | null;
   release_notes: string;
   release_status: DatasetReleaseStatus;
 };
@@ -537,7 +538,7 @@ export default function DatasetDetail() {
                 ]}
                 formatters={{
                   release_date: (value) =>
-                    new Date(String(value)).toLocaleDateString(),
+                    value ? new Date(String(value)).toLocaleDateString() : "—",
                 }}
                 onRowClick={(row) =>
                   navigate(`/datasets/releases/${row.dataset_release_id}`)

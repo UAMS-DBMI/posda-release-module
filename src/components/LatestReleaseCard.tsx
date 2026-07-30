@@ -13,7 +13,8 @@ import type { DatasetReleaseStatus } from "@/lib/useCycle";
 export type LatestRelease = {
   dataset_release_id: number;
   release_number: number;
-  release_date: string;
+  /** Null while draft -- set when release_status transitions to released. */
+  release_date: string | null;
   release_status?: DatasetReleaseStatus;
 };
 
@@ -46,7 +47,11 @@ export default function LatestReleaseCard({
       <CardHeader className="mt-6 mb-0">
         <CardTitle>
           {release
-            ? `Latest Release: v${release.release_number} (${new Date(release.release_date).toLocaleDateString()})`
+            ? `Latest Release: v${release.release_number}${
+                release.release_date
+                  ? ` (${new Date(release.release_date).toLocaleDateString()})`
+                  : ""
+              }`
             : "Latest Release"}
         </CardTitle>
         {release?.release_status && (

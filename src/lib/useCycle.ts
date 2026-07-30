@@ -65,7 +65,8 @@ export type CycleTransfer = TransferChipTransfer & {
 export type CycleDatasetRelease = {
   dataset_release_id: number;
   release_number: number;
-  release_date: string;
+  /** Null while draft -- set when release_status transitions to released. */
+  release_date: string | null;
   release_doi: string | null;
   release_status: DatasetReleaseStatus;
   transfers: CycleTransfer[];
@@ -95,6 +96,26 @@ export function useDatasetCycle(datasetId: string | undefined) {
         `${BASE}/datasets/${datasetId}/cycle`,
       );
       return json.data;
+    },
+  });
+}
+
+/** Starts the next release cycle: creates a draft `dataset_release` for this
+ *  dataset (auto-assigned release_number, release_date null until published).
+ *  This is what gives a cycle its identity from the start -- membership
+ *  (which recordset releases go in) is still decided later, at Bundle. */
+export function useStartNextCycle(datasetId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const json = await apiFetch<ItemEnvelope<{ dataset_release_id: number; release_number: number }>>(
+        `${BASE}/datasets/${datasetId}/releases`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      return json.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["dataset-cycle", datasetId ?? ""] });
     },
   });
 }
@@ -129,6 +150,14 @@ export function useStartCycleDrafts(datasetId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ["dataset-cycle", datasetId ?? ""] });
     },
   });
+}
+
+/** True when a draft dataset_release exists -- this is what "a cycle is in
+ *  progress" means. Assemble/Verify gate their working controls on this;
+ *  when false, they show read-only state for the last completed release
+ *  instead (started via CycleNextAction's "Start Next Cycle"). */
+export function isCycleActive(cycle: DatasetCycle): boolean {
+  return cycle.latest_dataset_release?.release_status === "draft";
 }
 
 /** True when a recordset's draft has passed the publish gate: at least one

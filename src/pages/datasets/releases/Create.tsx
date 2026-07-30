@@ -38,7 +38,6 @@ export default function DatasetReleaseCreate() {
   const [formData, setFormData] = useState({
     dataset_id: "",
     release_number: "",
-    release_date: "",
     release_notes: "",
   });
 
@@ -88,19 +87,6 @@ export default function DatasetReleaseCreate() {
           },
     );
   }, [searchParams]);
-
-  useEffect(() => {
-    const today = new Date();
-    const todayIso = today.toISOString().slice(0, 10);
-    setFormData((prev) =>
-      prev.release_date
-        ? prev
-        : {
-            ...prev,
-            release_date: todayIso,
-          },
-    );
-  }, []);
 
   useEffect(() => {
     const datasetId = formData.dataset_id;
@@ -191,7 +177,6 @@ export default function DatasetReleaseCreate() {
           },
           body: JSON.stringify({
             release_number: Number(formData.release_number),
-            release_date: formData.release_date,
             release_notes: formData.release_notes,
           }),
         },
@@ -246,12 +231,6 @@ export default function DatasetReleaseCreate() {
       label: "Release Number",
       type: "number",
       inputMode: "numeric",
-      controlClassName: "mt-1 input",
-    },
-    {
-      key: "release_date",
-      label: "Release Date",
-      type: "date",
       controlClassName: "mt-1 input",
     },
     {

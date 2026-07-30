@@ -37,6 +37,61 @@ pipeline, not merely speed it up for people who already know it.
 | **`/cycle` is an overview** | A real landing view, not a redirect |
 | **Forms are extracted, never duplicated** | Pattern set by `lib/recordsetForm.ts` |
 | **Bulk writes are transactional** | One endpoint per stage action, all-or-nothing, so the page can be honest about what it will do |
+| **The cycle is built on a draft `dataset_release`** | A draft release is the cycle's identity, created explicitly via "Start Next Cycle" before Assemble does anything — but it does **not** constrain composition; Bundle still freely decides membership (see below) |
+
+**The cycle sits on a draft `dataset_release` (added 2026-07-24).** Until now,
+no `dataset_release` existed before Bundle composed one — "the cycle" had no
+identity, only inferred from which recordsets happened to have an open draft.
+Found while planning step 3: this is also *why* two known gaps existed (no
+one-draft-per-dataset guard; no way to say "what ends a cycle"). Both are now
+solved by giving the cycle an explicit container.
+
+- **Option A, not B:** the draft release is created early and gives the cycle
+  identity + the one-draft-per-dataset guard (via `unq_dataset_release_release_number`
+  + `release_status`), but `recordset_draft` stays **unlinked** to it. Bundle
+  still composes membership via include-latest checkboxes exactly as planned —
+  this preserves "recordsets don't move together" (above), which a tighter
+  Option B (drafts tied to a release from creation) would have broken.
+- **"Start Next Cycle"** (`CycleNextAction.tsx`, `useStartNextCycle` in
+  `lib/useCycle.ts`) creates the draft release by calling the existing
+  `POST /datasets/{id}/releases` with an empty body — `release_number`
+  auto-assigns (max+1 for the dataset) and `release_notes`/`release_doi` stay
+  null; deferred to Bundle. Surfaces in the next-action banner's "nothing
+  outstanding" branch (renamed "no cycle in progress"), which is only reached
+  when no draft exists (an existing draft keeps Bundle `active` until
+  released, so `nextAction()` is never null while one exists). **Also needs a
+  home on the Overview page (step 8)** once that's built — not done yet since
+  Overview doesn't exist.
+- **Gate:** `isCycleActive(cycle)` (`lib/useCycle.ts`) = `latest_dataset_release
+  ?.release_status === "draft"`. Assemble/Verify should show read-only "last
+  completed cycle" state and hide their working controls when false — this is
+  step 3's starting point, not yet wired into `AssembleStage.tsx`.
+- **Bug found immediately after landing:** `CycleNextAction` originally showed
+  the button only when `nextAction(cycle)` was `null` — but `nextAction()`
+  returns *Setup's* next-action first whenever Setup isn't fully done (WP
+  linking etc.), which is true for nearly every dataset, so the null branch
+  was practically unreachable and the button never appeared. Fixed to check
+  `isCycleActive(cycle)` directly, independent of per-stage readiness — a
+  cycle can start regardless of Setup's state. Also added the release number
+  to `CycleLayout`'s header subtitle (`· vN (status)` / `· no release yet`).
+- **Prerequisite landed same day:** `dataset_release.release_date` was
+  `NOT NULL`, which blocked creating a draft release before a date is known.
+  Made nullable (DDL + live DB + `DatasetReleaseInsert`); null while draft,
+  auto-stamped `now()` when `release_status` → `released` (`coalesce(release
+  _date, now())` in both `create_dataset_release` and `update_dataset_release`,
+  so an explicit caller-supplied date still wins). `recordset_release
+  .release_date` unaffected — freezing is a concrete moment, stays required.
+  Every frontend read of a dataset release's date is now null-guarded
+  (`useCycle.ts`, `BundleStage.tsx`, `LatestReleaseCard.tsx`, `datasets/Detail.tsx`,
+  `datasets/releases/Detail.tsx`, `transfers/List.tsx`); `releases/Create.tsx`
+  dropped the date field entirely (new releases always start as drafts);
+  `releases/Edit.tsx` made it optional with a "leave blank to auto-stamp" hint.
+  Fixture: dataset 3's draft release in `create_dataset_module_test_data.sql`
+  changed from a placeholder `NOW()` to `NULL`.
+- **Changes step 5 (Bundle)'s scope:** the plan had Bundle's confirm modal
+  *create* the release (collecting number/date/notes). Now the draft release
+  already exists by the time Bundle runs, so that step becomes an **update**
+  (finalize notes, flip `release_status` to `released`) rather than an insert.
 
 **Why no wizard modals.** An earlier draft had a multi-step `WizardModal` per
 stage. Once routes became stages, that collapsed: the stage page already provides
@@ -327,6 +382,15 @@ Each lands and is reviewed before the next.
       that already exists stays on its Files page, reached by the row's Open
       Draft link — that flow works, and its diff-and-add logic is the messiest
       code in the app.
+      - **New prerequisite (2026-07-24):** gate on `isCycleActive(cycle)`
+        (`lib/useCycle.ts`) — the checkboxes/source-picker/Create-N-Drafts
+        controls only render when a draft `dataset_release` exists. When it
+        doesn't, show the read-only "last completed cycle" state instead,
+        with a pointer to "Start Next Cycle" (the next-action banner already
+        has it; Overview will too once built). Also add the same gate note to
+        step 4 (Verify) below — both stages need it, not just Assemble.
+      - `Modal` needs its `xl` size added first (see "Shared shells" above) —
+        the activity/timepoint browser is cramped at today's `max-w-lg` cap.
 - [ ] **4 — Verify.** Select drafts, then one action creates **one full
       review per draft, assigned to the current user**. No sampling choice and no
       splitting in this pass — the model supports several reviews per draft and
@@ -334,6 +398,11 @@ Each lands and is reviewed before the next.
       reassignment stay on the review detail page. Extract
       `lib/qcReviewForm.ts` from `QcReviewsCard` so both create reviews the same
       way. New bulk `qc-reviews` endpoint.
+      - **Correction (2026-07-30):** `VerifyStage.tsx` today is a pure
+        read-only table over existing open drafts (no creation action yet —
+        that's this step's job to build). Nothing to gate until the "create
+        reviews" action exists; when it's built, gate *that action* on
+        `isCycleActive`, same as Assemble's "Start a Cycle" link.
 - [ ] **5 — Bundle.** Extract `lib/publishForm.ts` (migrating the
       **hand-rolled** publish modal in `drafts/Detail.tsx` onto `Modal` while
       there) and `lib/datasetReleaseForm.ts`. The page lists drafts to publish
@@ -341,8 +410,13 @@ Each lands and is reviewed before the next.
       recordset meaning "include its latest release", with an expander to pick an
       older version. **This is where carry-forward is expressed**: a just-frozen
       recordset and an unchanged one look the same in the list, differing only in
-      which version they contribute. Release number/date/notes go in a small
-      confirm modal. New `publish` + `release` endpoints.
+      which version they contribute. **Updated 2026-07-24:** the draft
+      `dataset_release` already exists by this point (created via "Start Next
+      Cycle") — the confirm modal now *finalizes* it (release notes, flip
+      `release_status` → `released`, which auto-stamps `release_date`) rather
+      than creating one; `release_number` was already auto-assigned at
+      cycle-start. New `publish` + `release` endpoints (`release` becomes an
+      update against the existing draft, not an insert).
 - [ ] **6 — Transfer.** Extract `lib/transferForm.ts`. The page lists
       destinations defaulted from `recordset_destination` (`default_display`,
       `transfer_mode_id`); a modal collects per-transfer settings. New
@@ -465,6 +539,75 @@ dataset 4 (bare):
 7. `npm run build` clean at every step.
 
 ## Log
+
+**2026-07-30 — `except HTTPException: raise` bug, found and fixed twice.**
+The draft-release guard above didn't actually block anything: `api_error()`
+raises `HTTPException`, but the surrounding `except Exception as e:
+db_error(...)` had no `except HTTPException: raise` before it, and `db_error`
+only special-cases `UniqueViolationError`/`ForeignKeyViolationError` before
+falling through to a generic `500 INTERNAL_ERROR` — so the 409 CONFLICT was
+getting swallowed and replaced. Fixed by adding `except HTTPException: raise`
+(the pattern `create_cycle_drafts` already used correctly). Auditing further
+found the **identical pre-existing bug** in `update_recordset_destination`'s
+"required for insert" 422 validation (unrelated to this session's changes
+there) — fixed the same way. Scanned the whole file afterward for the same
+shape (`api_error()` inside a `try:` whose `except` chain lacks `except
+HTTPException: raise`) — these two were the only instances.
+
+**2026-07-30 — one-draft-release-per-dataset guard added.** Flagged in this
+doc's "Open items" long before this session ("the release side has no
+guard") but low-stakes until now — with "Start Next Cycle" making release
+creation a one-click, repeatable action, a double-click, an invalidation
+race, or the standalone `releases/Create.tsx` form while a cycle is already
+active could all silently create a second `draft` `dataset_release` for the
+same dataset (`isCycleActive`/`latest_dataset_release` only look at the
+highest release number, so a stray second draft would go unseen). Fixed in
+`create_dataset_release` (`distribution.py`): check-then-insert inside a
+transaction, `409 CONFLICT` if the dataset already has a `draft` release —
+mirrors the existing one-open-draft-per-recordset guard in
+`create_cycle_drafts`. No frontend change needed; `extractApiError` already
+surfaces the message via toast on both call sites.
+
+**2026-07-30 — Assemble gated on `isCycleActive`.** After starting a cycle
+via the banner, nothing on the Assemble page changed — `AssembleStage.tsx`
+never referenced `isCycleActive`/`latest_dataset_release` at all, so the only
+visible feedback was the header subtitle and the banner itself. Gated the
+one real action there (the "Start a Cycle" prompt/link, which is how
+`recordset_draft`s get created) behind `isCycleActive(cycle)`: inactive shows
+a plain "no cycle in progress — start one from the banner above" line
+instead. The per-recordset status table stays visible either way — it's
+informational, not an action, same as Setup/Verify's tables. Checked
+`VerifyStage.tsx` while here: it's a pure read-only table today with no
+creation action yet (that's step 4's job), so the gate note added under step
+4 was corrected — nothing to gate there until that action exists.
+
+**2026-07-24 — `dataset_release.release_date` made nullable (prep for
+building the cycle on a draft release).** Raised while discussing step 3:
+today no `dataset_release` exists until Bundle composes one, so "the cycle"
+has no identity before then -- it's inferred from which recordsets have an
+open draft. Making the cycle sit on an explicit draft `dataset_release`
+created at cycle-start would fix two known gaps for free (one-draft-per-dataset
+guard, "what ends a cycle") **without** abandoning the locked-in "recordsets
+don't move together" composition model (Option A: release is an early
+container; Bundle still freely composes membership via include-latest
+checkboxes -- recordset_draft stays unlinked to any release). Blocker: a
+draft release created at cycle-start has no known `release_date` yet, and
+the column was `NOT NULL`. Fixed: `release_date` is now nullable (DDL +
+live DB, user-applied), null while draft, and auto-stamped `now()` server-side
+when `release_status` transitions to `released` (`create_dataset_release` /
+`update_dataset_release` in `distribution.py`, both via `coalesce(...,
+now())` so an explicit caller-supplied date always wins). `recordset_release
+.release_date` is unaffected -- freezing is a concrete moment, stays required.
+Frontend: `datasets/releases/Create.tsx` dropped the date field entirely (new
+releases always start as drafts); `Edit.tsx` made it optional with a
+"leave blank to auto-stamp" hint; every read path that renders a dataset
+release's date (`useCycle.ts`, `BundleStage.tsx`, `LatestReleaseCard.tsx`,
+`datasets/Detail.tsx`, `datasets/releases/Detail.tsx`, `transfers/List.tsx`)
+now null-guards it. Test fixture: dataset 3's draft release (`create_dataset
+_module_test_data.sql`) changed from a placeholder `NOW()` to `NULL` to match.
+**Still open:** the actual cycle-start flow (where "start next cycle" lives,
+whether Assemble requires an active draft release to create recordset_drafts)
+-- this was a prerequisite, not the decision itself.
 
 **2026-07-24 — Setup completion gates all five incomplete states.** `setupStage()`
 (`lib/useCycle.ts`) previously only checked recordset count + dataset WP link +

@@ -12,7 +12,7 @@ type DatasetRelease = {
   dataset_release_id: number;
   dataset_id: number;
   release_number: number;
-  release_date: string;
+  release_date: string | null;
   release_notes: string;
   release_status?: string;
   when_created?: string;
@@ -33,7 +33,7 @@ type Dataset = {
   dataset_name: string;
 };
 
-function toDateInput(value?: string) {
+function toDateInput(value?: string | null) {
   if (!value) {
     return "";
   }
@@ -168,7 +168,9 @@ export default function DatasetReleaseEdit() {
         body: JSON.stringify({
           dataset_id: Number(formData.dataset_id),
           release_number: Number(formData.release_number),
-          release_date: formData.release_date,
+          // Omit when blank -- null while draft, auto-stamped server-side
+          // when release_status transitions to released.
+          ...(formData.release_date ? { release_date: formData.release_date } : {}),
           release_status: formData.release_status,
           release_notes: formData.release_notes,
         }),
@@ -221,6 +223,7 @@ export default function DatasetReleaseEdit() {
       key: "release_date",
       label: "Release Date",
       type: "date",
+      helperText: "Leave blank to auto-stamp when status is set to Released.",
       controlClassName: "mt-1 input",
     },
     {
