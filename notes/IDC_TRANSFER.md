@@ -180,29 +180,33 @@ by hand.
   `draft, queued, in_progress, success, failed` (matches frontend
   `STATUS_LABELS`).
 
-## Use cases to cover (2026-07-14)
+## Use cases to cover
 
-Test/validation matrix for the IDC transfer flow — 4 scenarios × 2 states
-(new vs. version update) = 8 cases. "Collection" / "Analysis Result" below are
-`dataset_type` values; the thing being submitted is always a **dataset release**.
+Test/validation matrix for the IDC transfer flow. "Collection" / "Analysis
+Result" below are `dataset_type` values; the thing being submitted is always a
+**dataset release**.
 
-**New:**
-1. Dataset (type Collection), single recordset — test dataset: **pseudo midi**
-2. Dataset (type Collection), multiple recordsets — test dataset: **midi-b**
-3. Dataset (type Analysis Result), sourced from a single collection — **TBD**
-4. Dataset (type Analysis Result), sourced from multiple collections — **TBD**
-
-**Version update (same 4 scenarios, a new `dataset_release` of an existing one):**
-5. Type Collection, single recordset (pseudo midi)
-6. Type Collection, multiple recordsets (midi-b)
-7. Type Analysis Result, single source collection (TBD)
-8. Type Analysis Result, multiple source collections (TBD)
+1. Dataset (type Collection), single recordset, new — test dataset: **pseudo midi**
+2. Dataset (type Collection), multiple recordsets, new — test dataset: **midi-b**
+3. Dataset (type Analysis Result), single source collection, new — **TBD**
+4. Dataset (type Analysis Result), multiple source collections, new — **TBD**
+5. Dataset (type Collection), single recordset, version update — pseudo midi
+6. Dataset (type Collection), multiple recordsets, version update — midi-b
+7. Dataset (type Analysis Result), single source collection, version update — **TBD**
+8. Dataset (type Analysis Result), multiple source collections, version update — **TBD**
+9. Metadata-only update — a dataset-level field changes (e.g. species
+   correction), no file or clinical changes; only the dataset manifest ships,
+   file and clinical manifests unchanged from the prior version — **TBD**
+10. Clinical-only update — only clinical files change (added/revised/dropped),
+    no imaging or dataset-metadata changes; only the clinical manifest (+ its
+    new/changed files in `clinical/`) is regenerated, file and dataset
+    manifests unchanged — **TBD**
 
 ## Manifest generation
 
-Three manifests — **file** (hashes, UIDs, collection name), **dataset** (DOIs,
-titles, status, licensing, citations), and **clinical** (links to tabular
-clinical data). There is no "collection manifest."
+Three manifests — **dataset** (DOIs, titles, status, licensing, citations),
+**imaging** (hashes, UIDs, collection name), and **clinical** (links to
+tabular clinical data).
 
 **Terminology:** "dataset" names the manifest's own subject/record; "collection"
 refers only to the external TCIA collection (`collection_name`, the collection
@@ -218,79 +222,7 @@ DOI, TCIA Collection Manager) or the `Collection` value of `dataset_type`.
 
 ---
 
-### FILE MANIFEST
-
-Carries the bulk of file-related metadata (DOIs, UIDs, hashes), deposited in
-the GCS bucket alongside the release data for IDC ingestion (see **Bucket
-layout**).
-
-- **Format:** CSV — final, no JSON variant.
-- **Content scope:** the DICOM instance data *deposited* is only files **new or
-  revised** in the release, but the manifest itself lists **all** file info for
-  the dataset being submitted — full picture even though only deltas ship.
-
-**Dataset-level fields:**
-
-| Field | Meaning | In impl? |
-|---|---|---|
-| `dataset_hash` | MD5 of the concatenation of patient hashes, ordered by hash | ✅ |
-
-**Per-instance fields:**
-
-| Field | Meaning | In impl? |
-|---|---|---|
-| `collection_name` | TCIA collection (or analysis result) short name | ❌ needs adding |
-| `patient_id` | DICOM Patient identifier | ✅ |
-| `patient_hash` | MD5 of concatenation of study hashes, ordered by hash | ✅ |
-| `study_instance_uid` | DICOM Study instance UID | ✅ |
-| `study_hash` | MD5 of concatenation of series hashes, ordered by hash | ✅ |
-| `series_instance_uid` | DICOM Series instance UID | ✅ |
-| `series_hash` | MD5 of concatenation of instance hashes, ordered by hash | ✅ |
-| `sop_instance_uid` | DICOM SOP instance UID | ✅ |
-| `instance_hash` | MD5 of the DICOM instance | ✅ |
-| `relative_file_url` | Instance file path relative to the manifest | ❌ needs adding |
-| `posda_file_id` | Posda `file_id` of the instance | ✅ |
-
-**`relative_file_url` form:** per-instance paths are **relative to the manifest's
-own location**, dot notation (e.g. `./files/bar.dcm`) — never absolute GCS URLs.
-It is **computed independently** at manifest-generation time, *not* derived from
-`transfer_file.file_dest_url` or `base_gcs_url`.
-
-Why: the package (blobs + manifest) is copied first to a bucket in the
-`idc-submission` project — **outside IDC's security boundary** — and then again
-into a bucket in a project **inside IDC's boundary**. Absolute URLs change across
-that ETL move; relative ones don't. This implies the manifest and its blobs
-travel together as one relocatable package.
-
-**As implemented** — from `generate_idc_file_manifest`
-(`../oneposda/.../routes/distribution.py`, `POST /transfers/{id}/idc/
-file-manifest/generate`):
-
-- **Format:** CSV (via `csv.DictWriter`).
-- **One row per instance**, ordered patient → study → series → SOP. No separate
-  top-level header block; `dataset_hash` is repeated on every row (`CROSS JOIN`).
-- **Columns emitted (in order):** `dataset_hash`, `patient_id`, `patient_hash`,
-  `study_instance_uid`, `study_hash`, `series_instance_uid`, `series_hash`,
-  `sop_instance_uid`, `instance_hash`, `file_id`.
-- **Hashes computed at generation time** (not read from storage), bottom-up via
-  `md5(string_agg(... ORDER BY ...))`: `series_hash` ← instance `digest`s;
-  `study_hash` ← `series_hash`es; `patient_hash` ← `study_hash`es;
-  `dataset_hash` ← `patient_hash`es. `instance_hash` = `file.digest`.
-- **Scope filter:** only `recordset_type_name = 'Radiology Images'` and
-  `f.is_dicom_file = true`.
-- **Persistence:** writes the CSV to file storage, upserts a `file` +
-  `downloadable_file`, and sets `transfer_idc.file_manifest_file_id`.
-
-Fields still missing from the impl are marked "needs adding" in the spec tables
-above (`collection_name`, `relative_file_url`); `posda_file_id` is emitted in
-code as `file_id`.
-
-_(No open questions specific to this manifest — the remaining work is the
-generator fixes and the ❌ fields above.)_
-
----
-
-### DATASET MANIFEST
+## 📄 **DATASET MANIFEST**
 
 Carries **dataset-related metadata** (abstract, program, licensing, etc.) — a
 separate manifest because the timing of dataset metadata gathering won't always
@@ -328,8 +260,8 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 | `dataset_slug` | WordPress slug | ✅ |
 | `dataset_type` | WordPress post type | ✅ |
 | `dataset_doi` | TCIA collection DOI | ✅ |
-| `dataset_version_doi` | DOI for this specific dataset version | ❌ needs adding |
-| `dataset_short_name` | Collection / Analysis Result short name | ✅ |
+| `dataset_version_doi` | DOI for this specific dataset version [^1] | ❌ needs adding |
+| `dataset_short_name` | Collection / Analysis Result short name [^2] | ✅ |
 | `dataset_title` | The dataset title | ✅ |
 | `dataset_status` | Dataset status (blank for analysis results) | ✅ |
 | `dataset_version` | Dataset version number | ✅ |
@@ -347,6 +279,13 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 | `license_long_name` | License long name | ❌ needs adding |
 | `license_short_name` | License short name | ❌ needs adding |
 
+[^1]: **TCIA's DOI for TCIA-sourced datasets, IDC's own DOI for IDC-sourced
+    datasets** — TCIA to provide versioned DOIs going forward (2026-07-30
+    meeting).
+[^2]: **⚠ Pending confirmation (2026-07-30 meeting):** whether this correctly
+    maps to the public-facing TCIA collection short name — Michael to verify
+    against real examples.
+
 **As implemented (2026-07-16)** — from `generate_idc_dataset_manifest`
 (`../oneposda/.../routes/distribution.py`, `POST /transfers/{id}/idc/
 dataset-manifest/generate`):
@@ -360,35 +299,120 @@ dataset-manifest/generate`):
 - **Persistence:** writes the CSV to file storage, upserts a `file` +
   `downloadable_file`, and sets `transfer_idc.dataset_manifest_file_id`.
 
-Fields marked ❌ above are not yet emitted: `dataset_version_doi`,
-`dataset_tooltip`, and the 3 `license_*`.
-
 **Open questions specific to this manifest:**
 - Add the ❌ fields to the generated manifest — this means extending the
   generator beyond WordPress to also read Posda and the NBIA API.
 
 ---
 
-### CLINICAL MANIFEST
+## 📄 **IMAGING MANIFEST**
 
-Points at the **tabular clinical files available on WordPress** and provides a
-link to them. Populates `transfer_idc.clinical_manifest_file_id`. **Scoped
-per-dataset** (one clinical manifest per dataset release), not a single global
-manifest across all collections/analysis results.
+Carries the bulk of file-related metadata (DOIs, UIDs, hashes), deposited in
+the GCS bucket alongside the release data for IDC ingestion (see **Bucket
+layout**).
 
-- **Status:** **not yet implemented.** The endpoint
-  `POST /transfers/{id}/idc/clinical-manifest/generate`
-  (`generate_idc_clinical_manifest`) is a stub — TODO in code to build the
-  manifest and set `clinical_manifest_file_id`.
-- **Content:** **links/URLs to clinical files only** — no need to copy the
-  clinical files themselves into the bucket.
-- **Timing risk:** since this manifest pulls from CM (WordPress), **CM may not be
-  live yet** at generation time — the tabular clinical files it links to might
-  not exist/be published when the transfer is initialized. Need a plan for the
-  not-yet-live case (defer/regenerate, or block generation until CM is up).
+- **Format:** CSV — final, no JSON variant.
+- **Content scope:** the DICOM instance data *deposited* is only files **new or
+  revised** in the release, but the manifest itself lists **all** file info for
+  the dataset being submitted — full picture even though only deltas ship.
+
+**Dataset-level fields:**
+
+| Field | Meaning | In impl? |
+|---|---|---|
+| `dataset_hash` | MD5 of the concatenation of patient hashes, ordered by hash | ✅ |
+
+**Per-instance fields:**
+
+| Field | Meaning | In impl? |
+|---|---|---|
+| `collection_name` | TCIA collection (or analysis result) short name | ❌ needs adding |
+| `patient_id` | DICOM Patient identifier | ✅ |
+| `patient_hash` | MD5 of concatenation of study hashes, ordered by hash | ✅ |
+| `study_instance_uid` | DICOM Study instance UID | ✅ |
+| `study_hash` | MD5 of concatenation of series hashes, ordered by hash | ✅ |
+| `series_instance_uid` | DICOM Series instance UID | ✅ |
+| `series_hash` | MD5 of concatenation of instance hashes, ordered by hash | ✅ |
+| `sop_instance_uid` | DICOM SOP instance UID | ✅ |
+| `instance_hash` | MD5 of the DICOM instance | ✅ |
+| `relative_file_url` | Instance file path relative to the manifest | ❌ needs adding |
+| `posda_file_id` | Posda `file_id` of the instance | ✅ |
+
+**`relative_file_url` form:** per-instance paths are **relative to the manifest's
+own location**, dot notation (e.g. `./imaging/bar.dcm`) — never absolute GCS URLs.
+It is **computed independently** at manifest-generation time, *not* derived from
+`transfer_file.file_dest_url` or `base_gcs_url`.
+
+Why: the package (blobs + manifest) is copied first to a bucket in the
+`idc-submission` project — **outside IDC's security boundary** — and then again
+into a bucket in a project **inside IDC's boundary**. Absolute URLs change across
+that ETL move; relative ones don't. This implies the manifest and its blobs
+travel together as one relocatable package.
+
+**As implemented** — from `generate_idc_file_manifest`
+(`../oneposda/.../routes/distribution.py`, `POST /transfers/{id}/idc/
+file-manifest/generate`):
+
+- **Format:** CSV (via `csv.DictWriter`).
+- **One row per instance**, ordered patient → study → series → SOP. No separate
+  top-level header block; `dataset_hash` is repeated on every row (`CROSS JOIN`).
+- **Columns emitted (in order):** `dataset_hash`, `patient_id`, `patient_hash`,
+  `study_instance_uid`, `study_hash`, `series_instance_uid`, `series_hash`,
+  `sop_instance_uid`, `instance_hash`, `file_id`.
+- **Hashes computed at generation time** (not read from storage), bottom-up via
+  `md5(string_agg(... ORDER BY ...))`: `series_hash` ← instance `digest`s;
+  `study_hash` ← `series_hash`es; `patient_hash` ← `study_hash`es;
+  `dataset_hash` ← `patient_hash`es. `instance_hash` = `file.digest`.
+- **Scope filter:** only `recordset_type_name = 'Radiology Images'` and
+  `f.is_dicom_file = true`.
+- **Persistence:** writes the CSV to file storage, upserts a `file` +
+  `downloadable_file`, and sets `transfer_idc.file_manifest_file_id`.
+
+Fields still missing from the impl are marked "needs adding" in the spec tables
+above (`collection_name`, `relative_file_url`); `posda_file_id` is emitted in
+code as `file_id`.
+
+_(No open questions specific to this manifest — the remaining work is the
+generator fixes and the ❌ fields above.)_
+
+---
+
+## 📄 **CLINICAL MANIFEST**
+
+Lists the clinical (tabular supporting-data) files included in this release.
+Populates `transfer_idc.clinical_manifest_file_id`. **Scoped per-dataset** (one
+clinical manifest per dataset release), not a single global manifest across all
+collections/analysis results.
+
+**⚠ Superseded (2026-07-30 meeting)** — clinical files are no longer just
+linked on WordPress; they're now handled **the same way as imaging files**:
+
+- **Manifest mirrors the imaging manifest's completeness rule:** if a clinical
+  manifest is present for a version, it's **complete** (full picture of every
+  clinical file for the dataset, same as the imaging manifest's "lists all file
+  info even though only deltas ship" rule); if **absent**, no clinical files
+  changed in this release.
+- **Content is now files, not just links:** new/changed clinical files are
+  **dropped into the bucket** (a dedicated `clinical` subfolder, alongside the
+  `imaging` subfolder — see *Bucket layout*), which is what enables
+  **hash generation** and lets clinical files be handled consistently with
+  imaging files instead of as a special link-only case.
+- **Status:** endpoint (`POST /transfers/{id}/idc/clinical-manifest/generate`
+  / `generate_idc_clinical_manifest`) is still a stub — TODO to implement
+  against this (now-changed) model.
+- **Timing risk still applies:** since clinical files are sourced from CM
+  (WordPress) downloads, **CM may not be live yet** at generation time — the
+  files it would pull might not exist/be published when the transfer is
+  initialized. Need a plan for the not-yet-live case (defer/regenerate, or
+  block generation until CM is up).
 - **Clinical-only changes:** per-dataset scoping means a release where only
   clinical data changed can ship with the file and dataset manifests unchanged
-  from the prior version — only the clinical manifest is regenerated.
+  from the prior version — only the clinical manifest (and its new/changed
+  files) is regenerated/dropped.
+- **Dataset-level identification is derived from the dataset manifest** in the
+  same version folder — consistent with how the imaging manifest already works —
+  so no redundant dataset-identifying fields are needed on the clinical
+  manifest itself.
 
 **What counts as "clinical data"** (per Bill, 2026-07-22) — note this stretches
 the usual definition of *clinical*; it is really "tabular supporting data."
@@ -406,22 +430,37 @@ Then **a human decides which of the surviving downloads are actually relevant** 
 this is a curator judgement call, not a pure rule. Any implementation needs to
 surface candidates for selection rather than auto-including everything.
 
-**Fields (draft — not yet confirmed with Bill):** one row per selected CM
-download. Content is links/URLs only (see above), so no file copies, just
-enough to locate and label each one.
+**Fields (updated 2026-07-31)** — one row per selected CM download. Not the
+full CM download object after all — an explicit field list, everything
+available from Collection Manager plus what dropping the file into the bucket
+enables:
 
 | Field | Meaning | In impl? |
 |---|---|---|
-| `file_title` | CM download's display title/label | ❌ needs adding |
-| `file_url` | Link to the file on WordPress/CM | ❌ needs adding |
-| `download_type` | CM `download_type` (`clinical data` / `image annotations` / `other`) | ❌ needs adding |
+| `download_slug` | CM download's slug | ❌ needs adding |
+| `download_id` | CM download's WordPress post ID | ❌ needs adding |
+| `date_updated` | CM download's last-updated date | ❌ needs adding |
+| `download_title` | CM download's display title/label | ❌ needs adding |
 | `file_type` | CM `file_type` (CSV / TSV / XLS / XLSX) | ❌ needs adding |
+| `file_name` | Original file name | ❌ needs adding |
+| `download_size` | File size | ❌ needs adding |
+| `download_size_unit` | Unit for `download_size` (e.g. KB/MB) | ❌ needs adding |
+| `download_url` | Link to the file's original location on WordPress/CM | ❌ needs adding |
+| `download_type` | CM `download_type` (`clinical data` / `image annotations` / `other`) | ❌ needs adding |
+| `file_hash` | Hash of the deposited file — same idea as the imaging manifest's `instance_hash`, only possible now that clinical files are dropped into the bucket | ❌ needs adding |
+| `relative_file_url` | Path relative to the manifest, dot notation — same scheme as the imaging manifest's field of the same name | ❌ needs adding |
+| `posda_file_id` | Posda `file_id` once the clinical file is imported | ❌ needs adding |
 
 Open follow-ups on this:
-- Is the relevance decision recorded anywhere (per transfer? per dataset?), or
-  re-made each time a manifest is generated?
+- **Field list still open-ended** — flagged as "[others?]" when drafted; add
+  more if Collection Manager exposes other useful download attributes.
+- Is the relevance decision (which downloads are "actually relevant") recorded
+  anywhere (per transfer? per dataset?), or re-made each time a manifest is
+  generated?
 - `download_type` matching — substring/"includes" or exact set membership, and
   is it case-sensitive?
+- Software changes needed: emit this field list (not the full CM object) in
+  the clinical manifest output.
 
 ## Bucket layout & versioning
 
@@ -431,9 +470,15 @@ A **single** Google Cloud bucket, keyed by dataset then version:
 gs://posda_submit/
   <dataset>/
     <version>/
-      <manifests: file, dataset, clinical>
-      files/          <-- DICOM blobs
+      <manifests: dataset, file, clinical>
+      imaging/        <-- DICOM blobs
+      clinical/       <-- clinical/tabular files (2026-07-30 meeting — see Clinical manifest)
 ```
+
+**⚠ Folder rename (2026-07-30 meeting):** the imaging blobs folder is now
+named **`imaging/`** (previously `files/`), alongside a new **`clinical/`**
+subfolder for clinical files — both are peers under the `<version>` folder,
+same level as the manifests.
 
 Manifest filenames are **fixed** — `dataset_manifest.csv`, `file_manifest.csv`,
 `clinical_manifest.csv` — always directly under the `<version>` folder, per
@@ -444,7 +489,7 @@ Bill (2026-07-24).
 | Value | Form | Example |
 |---|---|---|
 | `transfer_idc.base_gcs_url` | **Absolute** GCS URL to the package | `gs://posda_submit/<dataset>/<version>` |
-| `relative_file_url` (file manifest) | Relative to the manifest, `./` notation | `./files/foo.dcm` |
+| `relative_file_url` (imaging manifest) | Relative to the manifest, `./` notation | `./imaging/foo.dcm` |
 
 No manifest-to-manifest URL fields (e.g. `file_manifest_url`,
 `clinical_manifest_url`) are needed — see *Decisions log*, 2026-07-24.
@@ -459,7 +504,19 @@ relative scheme.
   ingestion **overwrite the prior submission** in place. A new version number is
   only needed **post-release**, once IDC has ingested/gone live with a version.
 - **Metadata-only changes** (e.g. species, cancer type) ship via the **dataset
-  manifest alone** — no file changes, no new file manifest.
+  manifest alone** — no file *or* clinical manifest needed if those are
+  unchanged (2026-07-30 meeting — extends the original file-manifest-only
+  framing to clinical too).
+
+**Pending confirmation (2026-07-30 meeting):**
+- **Up-versioning mandate:** whether *every* change — including metadata-only
+  or clinical-only updates — should require an up-version, to simplify
+  software logic. The current build assumes up-versioning for any change;
+  Michael is leaning toward requiring it, not yet finalized.
+- **Resubmission to an already-published version folder:** still open whether
+  the software should delete-and-recreate that folder, or just reset its
+  `status.json` (see *Bucket sync & status file*) back to
+  `"ready for processing"`.
 
 **Deferred / out of scope for now:**
 - **YAML / IDC Comet PR workflow** — the team will *not* commit to updating IDC
@@ -468,12 +525,64 @@ relative scheme.
   bucket is sufficient. Whether a dedicated GCP project is needed to allow
   per-collection bucket creation stays open, but isn't needed yet.
 
+### Bucket sync & status file (Slack thread w/ Bill Clifford, folded in 2026-07-31)
+
+**Problem:** a dataset might miss the deadline / not be ready to ingest by the
+time IDC's ETL comes looking, and separately, Posda writing to the bucket can
+race with IDC copying it across the security perimeter. Need a per-version
+readiness signal, not just a race-avoidance lock.
+
+**Proposal — `status.json` per dataset *version*** (i.e. in the
+`<dataset>/<version>/` folder alongside the manifests — see *Bucket layout*),
+**not** a single index file at the bucket root. IDC ignores any version whose
+status isn't `"Ready for processing"`.
+
+**States** (Bill's original four, plus `Errored` added later in the thread):
+- `Draft`
+- `Ready for processing`
+- `Processing`
+- `Processed`
+- `Errored` — when IDC finds a problem mid-processing, it sets status to
+  `Errored` (not back to `"Ready for processing"`) so Posda can tell "this
+  needs fixing" apart from "this was never submitted yet," then query
+  specifically which items errored, fix them, and set status back to
+  `"Ready for processing"` itself.
+
+**Ownership sequence** (one mutex **per dataset version**, not per-bucket —
+avoids a lock on a version already "Ready for processing" blocking work on a
+separate version being drafted next, if that scenario turns out to be real):
+```
+Posda:  acquire lock → status = Draft → ... finish curating ...
+        → status = "Ready for processing" → release lock
+IDC:    acquire lock → status = "Processing" → process
+        → status = "Processed" (or "Errored" on a problem) → release lock
+Posda:  (on Errored) fix the flagged items → status = "Ready for processing"
+```
+**No full state-transition diagram drawn yet** — Bill flagged this as still
+needed, not done.
+
+**Mutex mechanism (untested):** GCS conditional-write lock — create a lock
+object with `if_generation_match=0` (atomic create-if-absent, retried with
+backoff if held), release by deleting conditioned on the held generation
+(`if_generation_match=<generation>`) to avoid deleting a newer lock out from
+under a timed-out holder. Bill shared Python/gcloud-CLI/bash reference
+implementations (AI-generated via Gemini) — **neither side has tried this
+yet**, it's a starting point, not a decision.
+
+**Open items from this thread:**
+- Finalize the state list + actually draw the transition diagram (including
+  the `Errored` path).
+- Verify the mutex approach works as intended (untried code).
+- Confirm whether "draft next version while current version is ready/being
+  processed" is a real scenario worth the per-version (vs. per-dataset)
+  granularity — motivated the per-version choice but isn't confirmed as
+  realistic yet.
+
 ## Open questions / things to figure out
 
-- **Bucket sync/concurrency:** Bill (IDC) is concerned about a race between
-  Posda writing to the bucket and IDC copying it across the security perimeter
-  — needs some kind of semaphore/locking on the bucket. Bill is investigating;
-  no mechanism decided yet.
+- **Bucket sync/concurrency:** now has a proposed mechanism — see *Bucket sync
+  & status file* above (`status.json` per dataset version + a GCS conditional-
+  write mutex) — but it's unverified/untested by either side, not yet decided.
 - Test datasets for use cases 3/4/7/8 (analysis-result cases) — still need
   real examples, not yet picked.
 - **Where does the Go daemon live?** Not yet located in the repos — need the
@@ -490,6 +599,16 @@ relative scheme.
   (Michael to confirm with Kirk / wider curator group).
 - **Manifest generation is meant to happen at transfer initialization** but the
   impl only exposes explicit `POST .../generate` endpoints — needs wiring in.
+- **Up-versioning mandate (2026-07-30 meeting):** whether to require an
+  up-version for *every* change, including metadata-only or clinical-only
+  ones, to keep software logic simple. Current build assumes this; not
+  finalized. → *Bucket layout & versioning*
+- **Resubmission to an already-published version folder (2026-07-30
+  meeting):** delete-and-recreate the folder, or reset its `status.json` to
+  `"ready to process"`? Not decided. → *Bucket layout & versioning*
+- **`dataset_short_name` mapping (2026-07-30 meeting):** needs verification
+  against real collection examples that it correctly maps to the public-facing
+  TCIA collection short name. → *Dataset manifest*
 
 ## Decisions log
 
@@ -499,9 +618,9 @@ record, not the reference.
 **2026-07-16 (meeting)**
 - Three manifests: **file**, **dataset**, **clinical** — no "collection
   manifest." → *Manifest generation*
-- File manifest format is **CSV**, final. → *File manifest*
+- Imaging manifest format is **CSV**, final. → *Imaging manifest*
 - `relative_file_url`: paths **relative to the manifest**, dot notation. →
-  *File manifest*
+  *Imaging manifest*
 - Manifests are generated at **transfer initialization**. → *Manifest generation*
 - IDC ingests manifests in **submission order**. → *Manifest generation*
 - **Single GCS bucket**, `dataset → version → manifests + files/`. →
@@ -518,10 +637,12 @@ record, not the reference.
 - The recordset manifest is renamed the **file manifest** (DB
   `file_manifest_file_id`). "Collection" is reserved for the external TCIA
   collection or the `Collection` value of `dataset_type`. → *Manifest generation*
+  — **⚠ renamed again 2026-07-31,** see below.
 
 **2026-07-17**
 - Clinical manifest **points at the tabular clinical files on WordPress** and
-  links to them. → *Clinical manifest*
+  links to them. → *Clinical manifest* — **⚠ superseded 2026-07-30:** clinical
+  files are now dropped into the bucket like imaging files, not just linked.
 - License is **derived from the recordsets** (no dataset-level license column),
   dataset-level value as the starting point. → *Dataset manifest*
 
@@ -533,7 +654,7 @@ record, not the reference.
   as they are. → *DDL section*
 
 **2026-07-24 (from Bill, Slack)**
-- **File manifest:** only `dataset_hash` needs to be a per-instance
+- **Imaging manifest:** only `dataset_hash` needs to be a per-instance
   (repeated) field, kept purely for consistency with IDC's existing code.
   `dataset_type` / `dataset_name` / `dataset_doi` are **dropped** from the file
   manifest — IDC will read those from the dataset manifest instead. → *File
@@ -545,7 +666,9 @@ record, not the reference.
   without other dataset changes, but per-dataset scoping already covers that
   case: file and dataset manifests are left unchanged, and only the clinical
   manifest is regenerated. Content is links/URLs only — no need to copy the
-  clinical files into the bucket. → *Clinical manifest*
+  clinical files into the bucket. → *Clinical manifest* — **⚠ "links only"
+  superseded 2026-07-30:** clinical files now get dropped into the bucket too;
+  the per-dataset scoping/regeneration behavior still holds.
 - **No manifest-to-manifest URL fields needed** (`file_manifest_url`,
   `clinical_manifest_url`) — manifest filenames are fixed
   (`dataset_manifest.csv`, `file_manifest.csv`, `clinical_manifest.csv`),
@@ -568,13 +691,49 @@ record, not the reference.
   `file_manifest_url` are **relative to their manifest**. Relocation updates
   `base_gcs_url` only. → *Bucket layout & versioning*
 - `relative_file_url` is **computed independently** at generation time, not
-  derived from `transfer_file` / `base_gcs_url`. → *File manifest*
+  derived from `transfer_file` / `base_gcs_url`. → *Imaging manifest*
 - **Live source reads are fine:** manifests are generated at transfer
   initialization, before the Go daemon runs. Posda does all sourcing and writes
   static CSVs; the daemon only transports them. → *Dataset manifest → Sources*
 
-## Action items (from 2026-07-16 meeting)
+**2026-07-30 (meeting)**
+- **Clinical manifest now mirrors the imaging manifest's rules:** present =
+  complete, absent = nothing clinical changed. → *Clinical manifest*
+- **New/changed clinical files are dropped into the bucket** (enables hash
+  generation, consistent handling with imaging files) — reverses the
+  2026-07-17/2026-07-24 "links only" decisions. → *Clinical manifest*
+- **Folder structure:** imaging blobs move to an `imaging/` subfolder
+  (renamed from `files/`); clinical files get their own `clinical/` subfolder.
+  Manifests stay at the `<version>` folder level. → *Bucket layout & versioning*
+- **Dataset manifest alone is sufficient for metadata-only changes** — no file
+  or clinical manifest needed if those are unchanged (extends the original
+  file-manifest-only framing to clinical too). → *Bucket layout & versioning*
+- **Clinical manifest fields:** `download_slug` and `download_id` (WordPress
+  post ID) per clinical file, plus the **full CM download object** so IDC can
+  pick whatever fields it needs. → *Clinical manifest*
+- **Dataset identification in the clinical manifest comes from the dataset
+  manifest** in the same folder — no redundant dataset fields, consistent with
+  how the imaging manifest already works. → *Clinical manifest*
+- **Version DOI:** TCIA will provide versioned DOIs going forward; IDC uses
+  TCIA's DOI for TCIA-sourced datasets, its own DOI for IDC-sourced datasets. →
+  *Dataset manifest*
+- **Pending confirmation:** `dataset_short_name` → public TCIA collection
+  short-name mapping (Michael to verify); whether resubmission to an
+  already-published version folder requires an up-version (leaning yes, not
+  finalized). → *Open questions*
 
+**2026-07-31**
+- **File manifest renamed the imaging manifest** — doc-only for now; the DB
+  column (`file_manifest_file_id`), code (`generate_idc_file_manifest`),
+  endpoint (`.../idc/file-manifest/generate`), and manifest filename
+  (`file_manifest.csv`) are all unchanged until that rename lands separately.
+  → *Imaging manifest*
+- **Bucket folder renamed:** `files/` → `imaging/`, alongside the new
+  `clinical/` folder from the 2026-07-30 meeting. → *Bucket layout & versioning*
+
+## Action items
+
+**2026-07-16 (meeting)**
 - ~~**Michael:** finalize the manifest data model and share via GitHub.~~
   ✅ model finalized 2026-07-21 (release DOIs + `transfer_file` consolidation).
 - **Michael:** add `file_manifest_url` and `dataset_version_doi` fields to the
@@ -594,6 +753,17 @@ record, not the reference.
   *Dataset manifest → Sources*.
 - **Quasar:** continue Go daemon development (queue statuses, push to Google
   bucket).
+
+**2026-07-30 (meeting)**
+- **Michael:** confirm `dataset_short_name` maps correctly to the public TCIA
+  collection short name, against real collection examples.
+- **Michael:** update submission software to support dataset-manifest-only
+  submissions (no imaging/clinical manifest) for metadata-only changes, and
+  resolve the up-versioning question for non-imaging-only updates.
+- **Michael:** emit the clinical manifest's agreed field list (`download_slug`,
+  `download_id`, etc. — see *Clinical manifest*) in the generator output.
+- **Team:** define and document test cases covering metadata-only updates and
+  non-versioned clinical file changes.
 
 ## Session notes
 
@@ -626,12 +796,12 @@ _(running log)_
   need a click-through to confirm.
 
 Pick back up here (nothing in flight, no half-done edits):
-1. **File manifest generator fixes** — the two silent-data-loss risks in
+1. **Imaging manifest generator fixes** — the two silent-data-loss risks in
    `generate_idc_file_manifest`: the hardcoded `'Radiology Images'` filter,
    and the INNER joins on `file_patient`/`file_study`/`file_series`/
    `file_sop_common` that silently drop files. Agreed these come *before*
    adding the missing manifest fields.
-2. **Then** the ❌ fields: file manifest (`dataset_type`, `dataset_name`,
+2. **Then** the ❌ fields: imaging manifest (`dataset_type`, `dataset_name`,
    `dataset_doi`, `collection_name`, `relative_file_url`) and dataset manifest
    (`dataset_version_doi` — now has a source in `dataset_release.release_doi`,
    `file_manifest_url`, `license_*`).
