@@ -376,7 +376,11 @@ export default function RecordsetDraftFiles() {
       const res = await fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}/files/add`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ file_ids: diff.removed_file_ids }),
+        // Bulk content add from a diff -- no chosen names, so the backend
+        // auto-sources each (non-DICOM) name from file_import.
+        body: JSON.stringify({
+          files: diff.removed_file_ids.map((file_id) => ({ file_id })),
+        }),
       });
 
       if (!res.ok) {
@@ -405,7 +409,11 @@ export default function RecordsetDraftFiles() {
       const res = await fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}/files/add`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ file_ids: releaseDiff.removed_file_ids }),
+        // Bulk content add from a diff -- no chosen names, so the backend
+        // auto-sources each (non-DICOM) name from file_import.
+        body: JSON.stringify({
+          files: releaseDiff.removed_file_ids.map((file_id) => ({ file_id })),
+        }),
       });
 
       if (!res.ok) {
