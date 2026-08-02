@@ -32,9 +32,9 @@ type DestSettings = {
   dataset_manifest_file_id?: number | null;
   dataset_manifest_downloadable_file_id?: number | null;
   dataset_manifest_security_hash?: string | null;
-  file_manifest_file_id?: number | null;
-  file_manifest_downloadable_file_id?: number | null;
-  file_manifest_security_hash?: string | null;
+  imaging_manifest_file_id?: number | null;
+  imaging_manifest_downloadable_file_id?: number | null;
+  imaging_manifest_security_hash?: string | null;
   clinical_manifest_file_id?: number | null;
   clinical_manifest_downloadable_file_id?: number | null;
   clinical_manifest_security_hash?: string | null;
@@ -99,7 +99,7 @@ export default function TransferDetail() {
   const [settingsWpMediaFileId, setSettingsWpMediaFileId] = useState("");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
-  const [generatingIdcManifest, setGeneratingIdcManifest] = useState<"dataset" | "file" | "clinical" | null>(null);
+  const [generatingIdcManifest, setGeneratingIdcManifest] = useState<"dataset" | "imaging" | "clinical" | null>(null);
 
   function populateSettingsFields(data: DestSettings) {
     setSettingsPublished(data.published ?? false);
@@ -230,7 +230,7 @@ export default function TransferDetail() {
     }
   }
 
-  async function generateIdcManifest(type: "dataset" | "file" | "clinical") {
+  async function generateIdcManifest(type: "dataset" | "imaging" | "clinical") {
     if (!transferId) return;
     setGeneratingIdcManifest(type);
     try {
@@ -467,7 +467,7 @@ export default function TransferDetail() {
                     <div>
                       <span className={labelClass} style={{ color: "var(--muted)" }}>IDC Manifests</span>
                       <ul className="mt-1 divide-y text-sm" style={{ borderColor: "var(--border-strong)" }}>
-                        {(["dataset", "file", "clinical"] as const).map((type) => {
+                        {(["dataset", "imaging", "clinical"] as const).map((type) => {
                           const fileIdKey  = `${type}_manifest_file_id`                as keyof DestSettings;
                           const dfIdKey    = `${type}_manifest_downloadable_file_id`   as keyof DestSettings;
                           const hashKey    = `${type}_manifest_security_hash`          as keyof DestSettings;

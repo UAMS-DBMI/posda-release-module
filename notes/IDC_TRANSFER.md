@@ -106,15 +106,18 @@ by hand.
   the DB backing for the manifest's `dataset_version_doi` — a per-release DOI
   distinct from the dataset-level `dataset_doi`.
 - **`transfer_idc` columns:** `dataset_release_transfer_id` (PK/FK),
-  `base_gcs_url`, `dataset_manifest_file_id`, `file_manifest_file_id`,
-  `clinical_manifest_file_id`, `published`, `"public"`. Each manifest FK →
-  `file(file_id)`, `ON DELETE RESTRICT`.
+  `base_gcs_url`, `dataset_manifest_file_id`, `imaging_manifest_file_id`
+  (renamed 2026-08-02, was `file_manifest_file_id`), `clinical_manifest_file_id`,
+  `published`, `"public"`. Each manifest FK → `file(file_id)`, `ON DELETE
+  RESTRICT`.
   - `base_gcs_url` = the **absolute** GCS location of the package/manifest,
     `gs://posda_submit/<dataset>/<version>`. This is the single absolute anchor;
     everything *inside* the manifests is relative to the manifest, so only this
     value changes when the package is relocated during ETL.
-  - `file_manifest_file_id`'s FK constraint is confusingly named
-    `fk_transfer_idc_file_recordset_manifest` — name lag, not a second column.
+  - `imaging_manifest_file_id`'s FK constraint was renamed alongside it
+    (`fk_transfer_idc_file_imaging_manifest`, was the confusingly-named
+    `fk_transfer_idc_file_recordset_manifest` — name lag from the old
+    "recordset manifest" name, now fixed).
 - **`file` table** (`all.sql`, base Posda schema): `file_id`, `digest text NOT
   NULL`, `size`, `is_dicom_file`, `file_type`, `processing_priority`,
   `ready_to_process`. `digest` is the content hash (used elsewhere for QC
@@ -349,9 +352,9 @@ into a bucket in a project **inside IDC's boundary**. Absolute URLs change acros
 that ETL move; relative ones don't. This implies the manifest and its blobs
 travel together as one relocatable package.
 
-**As implemented** — from `generate_idc_file_manifest`
+**As implemented** — from `generate_idc_imaging_manifest`
 (`../oneposda/.../routes/distribution.py`, `POST /transfers/{id}/idc/
-file-manifest/generate`):
+imaging-manifest/generate`):
 
 - **Format:** CSV (via `csv.DictWriter`).
 - **One row per instance**, ordered patient → study → series → SOP. No separate
@@ -366,7 +369,7 @@ file-manifest/generate`):
 - **Scope filter:** only `recordset_type_name = 'Radiology Images'` and
   `f.is_dicom_file = true`.
 - **Persistence:** writes the CSV to file storage, upserts a `file` +
-  `downloadable_file`, and sets `transfer_idc.file_manifest_file_id`.
+  `downloadable_file`, and sets `transfer_idc.imaging_manifest_file_id`.
 
 Fields still missing from the impl are marked "needs adding" in the spec tables
 above (`collection_name`, `relative_file_url`); `posda_file_id` is emitted in
@@ -480,7 +483,7 @@ named **`imaging/`** (previously `files/`), alongside a new **`clinical/`**
 subfolder for clinical files — both are peers under the `<version>` folder,
 same level as the manifests.
 
-Manifest filenames are **fixed** — `dataset_manifest.csv`, `file_manifest.csv`,
+Manifest filenames are **fixed** — `dataset_manifest.csv`, `imaging_manifest.csv`,
 `clinical_manifest.csv` — always directly under the `<version>` folder, per
 Bill (2026-07-24).
 
@@ -671,7 +674,7 @@ record, not the reference.
   the per-dataset scoping/regeneration behavior still holds.
 - **No manifest-to-manifest URL fields needed** (`file_manifest_url`,
   `clinical_manifest_url`) — manifest filenames are fixed
-  (`dataset_manifest.csv`, `file_manifest.csv`, `clinical_manifest.csv`),
+  (`dataset_manifest.csv`, `imaging_manifest.csv`, `clinical_manifest.csv`),
   always directly under the `<version>` folder. → *Dataset manifest*, *Bucket
   layout & versioning*
 - **New concern raised:** bucket read/write synchronization between Posda and
@@ -723,13 +726,23 @@ record, not the reference.
   finalized). → *Open questions*
 
 **2026-07-31**
-- **File manifest renamed the imaging manifest** — doc-only for now; the DB
-  column (`file_manifest_file_id`), code (`generate_idc_file_manifest`),
-  endpoint (`.../idc/file-manifest/generate`), and manifest filename
-  (`file_manifest.csv`) are all unchanged until that rename lands separately.
+- **File manifest renamed the imaging manifest** — doc-only at first (2026-07-31).
   → *Imaging manifest*
 - **Bucket folder renamed:** `files/` → `imaging/`, alongside the new
   `clinical/` folder from the 2026-07-30 meeting. → *Bucket layout & versioning*
+
+**2026-08-02**
+- **Imaging manifest rename landed in DB + code**: `transfer_idc.
+  file_manifest_file_id` → `imaging_manifest_file_id` (+ its FK constraint,
+  `fk_transfer_idc_file_recordset_manifest` →
+  `fk_transfer_idc_file_imaging_manifest`, fixing the name-lag flagged in
+  *DDL as of 2026-07-21*); endpoint `/idc/file-manifest/generate` →
+  `/idc/imaging-manifest/generate`; function `generate_idc_file_manifest` →
+  `generate_idc_imaging_manifest`; frontend `DestSettings` fields and the
+  `generateIdcManifest` type union (`"dataset" | "imaging" | "clinical"`) in
+  `transfers/Detail.tsx` follow; manifest filename convention
+  `file_manifest.csv` → `imaging_manifest.csv`. → *Imaging manifest*, *DDL as
+  of 2026-07-21*, *Bucket layout & versioning*
 
 ## Action items
 
@@ -797,7 +810,7 @@ _(running log)_
 
 Pick back up here (nothing in flight, no half-done edits):
 1. **Imaging manifest generator fixes** — the two silent-data-loss risks in
-   `generate_idc_file_manifest`: the hardcoded `'Radiology Images'` filter,
+   `generate_idc_imaging_manifest`: the hardcoded `'Radiology Images'` filter,
    and the INNER joins on `file_patient`/`file_study`/`file_series`/
    `file_sop_common` that silently drop files. Agreed these come *before*
    adding the missing manifest fields.
