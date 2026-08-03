@@ -16,7 +16,6 @@ import DatasetsList from "@/pages/datasets/List";
 import DatasetCreate from "@/pages/datasets/Create";
 import DatasetById from "@/pages/datasets/Detail";
 import DatasetEdit from "@/pages/datasets/Edit";
-import StartCycle from "@/pages/datasets/cycle/StartCycle";
 import CycleLayout from "@/pages/datasets/cycle/CycleLayout";
 import SetupStage from "@/pages/datasets/cycle/SetupStage";
 import AssembleStage from "@/pages/datasets/cycle/AssembleStage";
@@ -142,7 +141,6 @@ export default function App() {
           <Route path="create" element={<DatasetCreate />} />
           <Route path=":dataset_id" element={<DatasetById />} />
           <Route path=":dataset_id/edit" element={<DatasetEdit />} />
-          <Route path=":dataset_id/cycle/start" element={<StartCycle />} />
           <Route path=":dataset_id/cycle" element={<CycleLayout />}>
             <Route path="setup" element={<SetupStage />} />
             <Route path="assemble" element={<AssembleStage />} />

@@ -1,16 +1,22 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import CreateDraftModal from "@/components/CreateDraftModal";
 import CreateRecordsetModal from "@/components/CreateRecordsetModal";
 import DynamicTable from "@/components/DynamicTable";
-import { Button, LinkButton } from "@/components/ui/Button";
+import EditDraftModal from "@/components/EditDraftModal";
+import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { isCycleActive } from "@/lib/useCycle";
 import { useCycleContext } from "./CycleLayout";
 
+/** Recordset links leave the cycle, so they open in a new tab -- the only
+ *  navigation allowed off a cycle page. */
 function RecordsetLink({ id, name }: { id: number; name: string }) {
   return (
     <Link
       to={`/recordsets/${id}`}
+      target="_blank"
+      rel="noopener noreferrer"
       className="hover:text-accent"
       style={{ color: "var(--accent)" }}
     >
@@ -21,9 +27,37 @@ function RecordsetLink({ id, name }: { id: number; name: string }) {
 
 export default function AssembleStage() {
   const { cycle, datasetId } = useCycleContext();
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreateRecordset, setShowCreateRecordset] = useState(false);
+  const [createFor, setCreateFor] = useState<{
+    id: number;
+    name: string;
+    wpLinked: boolean;
+  } | null>(null);
+  const [editDraft, setEditDraft] = useState<{
+    id: number;
+    name: string;
+    wpLinked: boolean;
+  } | null>(null);
 
-  const startable = cycle.recordsets.filter((r) => r.open_draft === null).length;
+  if (cycle.recordsets.length === 0) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm" style={{ color: "var(--muted)" }}>
+          This dataset has no recordsets yet. Add one to start a release cycle.
+        </p>
+        <Button size="sm" onClick={() => setShowCreateRecordset(true)}>
+          Create a Recordset
+        </Button>
+        <CreateRecordsetModal
+          open={showCreateRecordset}
+          onClose={() => setShowCreateRecordset(false)}
+          datasetId={datasetId}
+        />
+      </div>
+    );
+  }
+
+  const cycleActive = isCycleActive(cycle);
 
   const rows = cycle.recordsets.map((r) => ({
     recordset_id: r.recordset_id,
@@ -34,27 +68,9 @@ export default function AssembleStage() {
     draft_id: r.open_draft?.recordset_draft_id ?? null,
     frozen: r.latest_release ? `v${r.latest_release.release_number}` : null,
     last_bundled: r.last_bundled_dataset_release_number,
+    never_released: r.latest_release === null,
+    wp_linked: r.wp_linked,
   }));
-
-  if (cycle.recordsets.length === 0) {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          This dataset has no recordsets yet. Add one to start a release cycle.
-        </p>
-        <Button size="sm" onClick={() => setShowCreate(true)}>
-          Create a Recordset
-        </Button>
-        <CreateRecordsetModal
-          open={showCreate}
-          onClose={() => setShowCreate(false)}
-          datasetId={datasetId}
-        />
-      </div>
-    );
-  }
-
-  const cycleActive = isCycleActive(cycle);
 
   return (
     <div className="space-y-3">
@@ -66,18 +82,6 @@ export default function AssembleStage() {
             : ""}
           . Start one from the banner above before assembling drafts.
         </p>
-      )}
-
-      {cycleActive && startable > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm" style={{ color: "var(--muted)" }}>
-            {startable} recordset{startable === 1 ? " has" : "s have"} no open
-            draft.
-          </p>
-          <LinkButton size="sm" href={`/datasets/${datasetId}/cycle/start`}>
-            Start a Cycle
-          </LinkButton>
-        </div>
       )}
 
       <DynamicTable
@@ -94,8 +98,29 @@ export default function AssembleStage() {
           },
           {
             key: "draft_name",
-            label: "Open Draft",
-            render: (v) => (v ? String(v) : "—"),
+            label: "Draft",
+            render: (v, row) => {
+              if (v) return String(v);
+              if (row.never_released) {
+                return (
+                  <div>
+                    <StatusBadge
+                      status="never-released"
+                      label="Never released"
+                      variant="warning"
+                    />
+                    <div className="text-xs" style={{ color: "var(--muted)" }}>
+                      won't be in this release without a draft
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <span className="text-xs" style={{ color: "var(--muted)" }}>
+                  carrying forward
+                </span>
+              );
+            },
           },
           {
             key: "draft_status",
@@ -125,18 +150,60 @@ export default function AssembleStage() {
             key: "draft_id",
             label: "",
             sortable: false,
-            render: (_v, row) =>
-              row.draft_id ? (
-                <LinkButton
+            render: (_v, row) => {
+              if (row.draft_id) {
+                return (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setEditDraft({
+                        id: row.draft_id as number,
+                        name: row.recordset_name,
+                        wpLinked: row.wp_linked,
+                      })
+                    }
+                  >
+                    Edit Draft
+                  </Button>
+                );
+              }
+              if (!cycleActive) return null;
+              return (
+                <Button
                   size="sm"
-                  variant="ghost"
-                  href={`/recordsets/drafts/${row.draft_id}`}
+                  onClick={() =>
+                    setCreateFor({
+                      id: row.recordset_id,
+                      name: row.recordset_name,
+                      wpLinked: row.wp_linked,
+                    })
+                  }
                 >
-                  Open Draft
-                </LinkButton>
-              ) : null,
+                  Create Draft
+                </Button>
+              );
+            },
           },
         ]}
+      />
+
+      <CreateDraftModal
+        open={createFor !== null}
+        onClose={() => setCreateFor(null)}
+        datasetId={datasetId}
+        recordsetId={createFor?.id ?? 0}
+        recordsetName={createFor?.name ?? ""}
+        wpLinked={createFor?.wpLinked ?? false}
+      />
+
+      <EditDraftModal
+        open={editDraft !== null}
+        onClose={() => setEditDraft(null)}
+        datasetId={datasetId}
+        draftId={editDraft?.id ?? null}
+        recordsetName={editDraft?.name ?? ""}
+        wpLinked={editDraft?.wpLinked ?? false}
       />
     </div>
   );

@@ -5,12 +5,13 @@ import classNames from "@/lib/classNames";
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-type ModalSize = "sm" | "md" | "lg";
+type ModalSize = "sm" | "md" | "lg" | "xl";
 
 const sizeClasses: Record<ModalSize, string> = {
   sm: "max-w-sm",
   md: "max-w-md",
   lg: "max-w-lg",
+  xl: "max-w-3xl",
 };
 
 type ModalProps = {
@@ -110,7 +111,7 @@ export default function Modal({
         aria-modal="true"
         tabIndex={-1}
         className={classNames(
-          "w-full rounded-lg p-6 shadow-xl outline-none",
+          "flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-lg p-6 shadow-xl outline-none",
           sizeClasses[size],
         )}
         style={{
@@ -118,10 +119,10 @@ export default function Modal({
           border: "1px solid var(--border-strong)",
         }}
       >
-        {title && <h2 className="text-lg font-semibold">{title}</h2>}
-        {children}
+        {title && <h2 className="shrink-0 text-lg font-semibold">{title}</h2>}
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         {footer && (
-          <div className="mt-6 flex justify-end gap-3">{footer}</div>
+          <div className="mt-6 flex shrink-0 justify-end gap-3">{footer}</div>
         )}
       </div>
     </div>,

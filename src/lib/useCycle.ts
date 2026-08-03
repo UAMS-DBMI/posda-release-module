@@ -120,31 +120,28 @@ export function useStartNextCycle(datasetId: string | undefined) {
   });
 }
 
-export type CycleDraftRequestItem = {
+export type CreateRecordsetDraftInput = {
   recordset_id: number;
-  activity_timepoint_id: number;
+  /** A single source, or neither for an empty draft. Mutually exclusive. */
+  activity_timepoint_id?: number;
+  cloned_from_release_id?: number;
+  draft_name?: string;
 };
 
-export type CreatedCycleDraft = {
-  recordset_id: number;
-  recordset_draft_id: number;
-  draft_name: string;
-  draft_status: string;
-  activity_timepoint_id: number;
-  file_count: number;
-};
-
-/** Starts a cycle: one transaction that creates a draft per recordset and
- *  populates it from the chosen timepoint. All-or-nothing on the server. */
-export function useStartCycleDrafts(datasetId: string | undefined) {
+/** Creates one recordset draft from any source (activity timepoint, release
+ *  clone, or empty). The per-row action in Assemble; server auto-names and
+ *  enforces one open draft per recordset. */
+export function useCreateRecordsetDraft(datasetId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (items: CycleDraftRequestItem[]) => {
-      const json = await apiFetch<ItemEnvelope<{ drafts: CreatedCycleDraft[] }>>(
-        `${BASE}/datasets/${datasetId}/cycle/drafts`,
-        { method: "POST", body: JSON.stringify({ items }) },
-      );
-      return json.data.drafts;
+    mutationFn: async ({ recordset_id, ...body }: CreateRecordsetDraftInput) => {
+      const json = await apiFetch<
+        ItemEnvelope<{ recordset_draft_id: number; draft_name: string; file_count: number }>
+      >(`${BASE}/recordsets/${recordset_id}/drafts`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      return json.data;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["dataset-cycle", datasetId ?? ""] });
@@ -253,14 +250,43 @@ function assembleStage(cycle: DatasetCycle): StageSummary {
   if (cycle.recordsets.length === 0) {
     return { state: "pending", detail: "No recordsets" };
   }
+
   const open = cycle.recordsets.filter((r) => r.open_draft !== null);
   if (open.length > 0) {
-    return { state: "active", detail: `${open.length} open` };
+    const ready = open.filter(
+      (r) => r.open_draft?.draft_status === "ready",
+    ).length;
+    // Every open draft marked ready fulfils Assemble -- hand off to Verify.
+    if (ready === open.length) {
+      return { state: "done", detail: `${ready} ready` };
+    }
+    return {
+      state: "active",
+      detail: ready > 0 ? `${ready}/${open.length} ready` : `${open.length} open`,
+    };
   }
-  const frozen = cycle.recordsets.filter((r) => r.latest_release !== null);
-  return frozen.length > 0
-    ? { state: "done", detail: "All frozen" }
-    : { state: "pending", detail: "No drafts" };
+
+  // No open drafts. With no cycle in progress the tabs reflect the last
+  // completed release, so show that historical state rather than nudging.
+  if (!isCycleActive(cycle)) {
+    const frozen = cycle.recordsets.filter((r) => r.latest_release !== null);
+    return frozen.length > 0
+      ? { state: "done", detail: "All frozen" }
+      : { state: "pending", detail: "No drafts" };
+  }
+
+  // Cycle active, nothing open: hand off to Bundle when something is frozen and
+  // waiting; otherwise nudge -- nothing is changing yet, which wouldn't warrant
+  // a new release. Never a hard gate: a never-released recordset left without a
+  // draft simply won't be available to bundle.
+  const unbundled = unbundledRecordsets(cycle);
+  if (unbundled.length > 0) {
+    return { state: "done", detail: `${unbundled.length} ready to bundle` };
+  }
+  if (cycle.recordsets.some((r) => r.in_latest_dataset_release)) {
+    return { state: "done", detail: "Bundled" };
+  }
+  return { state: "active", detail: "No drafts" };
 }
 
 function verifyStage(cycle: DatasetCycle): StageSummary {
@@ -288,21 +314,32 @@ function verifyStage(cycle: DatasetCycle): StageSummary {
 
 function bundleStage(cycle: DatasetCycle): StageSummary {
   const release = cycle.latest_dataset_release;
+  if (!release) {
+    return { state: "pending", detail: "None yet" };
+  }
+
   const unbundled = unbundledRecordsets(cycle);
 
-  if (!release) {
-    return unbundled.length > 0
-      ? { state: "active", detail: "Ready to cut" }
-      : { state: "pending", detail: "None yet" };
-  }
-  if (unbundled.length > 0) {
-    return { state: "blocked", detail: `${unbundled.length} not bundled` };
-  }
   if (release.release_status === "retracted") {
     return { state: "blocked", detail: "Retracted" };
   }
+
   if (release.release_status === "draft") {
-    return { state: "active", detail: `v${release.release_number} draft` };
+    // The draft dataset_release exists from cycle start, so its mere existence
+    // isn't Bundle's turn. Only frozen-and-waiting content (or members already
+    // in, ready to finalize) makes it active; an empty draft waits on Assemble.
+    if (unbundled.length > 0) {
+      return { state: "active", detail: `${unbundled.length} to add` };
+    }
+    if (cycle.recordsets.some((r) => r.in_latest_dataset_release)) {
+      return { state: "active", detail: `v${release.release_number} finalize` };
+    }
+    return { state: "pending", detail: "Nothing to bundle yet" };
+  }
+
+  // Released / live: content frozen after the cut isn't in the release.
+  if (unbundled.length > 0) {
+    return { state: "blocked", detail: `${unbundled.length} not bundled` };
   }
   return { state: "done", detail: `v${release.release_number} ${release.release_status}` };
 }
@@ -397,11 +434,16 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       return `${plural(cycle.recordsets.length, "recordset")} ready.`;
     }
     case "assemble": {
-      const ready = withDraft.filter((r) => isPublishable(r.qc)).length;
-      if (ready > 0) {
-        return `${plural(ready, "draft")} ready to freeze.`;
+      if (withDraft.length === 0) {
+        return "No recordsets are being changed yet — open a draft for each recordset that's changing this release.";
       }
-      return `${plural(withDraft.length, "draft")} open — add files, then set up QC.`;
+      const ready = withDraft.filter(
+        (r) => r.open_draft?.draft_status === "ready",
+      ).length;
+      if (ready === withDraft.length) {
+        return `All ${plural(withDraft.length, "draft")} marked ready.`;
+      }
+      return `${ready}/${withDraft.length} drafts ready — mark the rest ready once their files are set.`;
     }
     case "verify": {
       const stale = withDraft.reduce((n, r) => n + r.qc.stale, 0);
@@ -420,12 +462,12 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
     case "bundle": {
       const unbundled = unbundledRecordsets(cycle);
       if (unbundled.length > 0) {
-        return `${plural(unbundled.length, "recordset")} frozen but not in a dataset release — cut a release to distribute ${unbundled.length === 1 ? "it" : "them"}.`;
+        return `${plural(unbundled.length, "recordset")} frozen and ready to add to v${release?.release_number ?? "?"}.`;
       }
       if (release?.release_status === "draft") {
-        return `v${release.release_number} is still a draft — mark it released when the contents are final.`;
+        return `v${release.release_number} is a draft — finalize it once its contents are complete.`;
       }
-      return "Freeze a recordset before cutting a dataset release.";
+      return "Nothing to bundle yet — freeze a recordset in Assemble first.";
     }
     case "transfer": {
       if (!release) return "Nothing to transfer until a dataset release exists.";

@@ -30,6 +30,7 @@ const dotClasses: Record<BadgeVariant, string> = {
 const statusVariant: Record<string, BadgeVariant> = {
   // review lifecycle
   open: "info",
+  ready: "success",
   complete: "success",
   cancelled: "neutral",
   stale: "warning",
