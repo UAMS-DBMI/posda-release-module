@@ -195,7 +195,7 @@ after a save.
 One transaction each, reusing `item_response` / `api_error` / `logged_in_user`.
 
 ```
-POST /datasets/{id}/cycle/drafts      [{recordset_id, activity_timepoint_id}]   ✅ built
+POST /datasets/{id}/cycle/drafts      [{recordset_id, activity_timepoint_id}]   ✂ retired 2026-08-04
 POST /datasets/{id}/cycle/qc-reviews  [{recordset_draft_id}] -- full review each,
                                       assignment assigned_to = caller            ☐
 POST /datasets/{id}/cycle/publish     [{recordset_draft_id, release_number?}]    ☐
@@ -373,15 +373,16 @@ Each lands and is reviewed before the next.
         guided cycle.
       - Setup has no bulk write of its own; it's create/attach actions plus a
         readiness view. A dataset with zero recordsets can't leave Setup.
-- [ ] **3 — Assemble stage does the work.** The page lists recordsets with
-      checkboxes; each selected row gets a **Choose Source** button opening a
-      one-recordset modal (`ActivitySourcePicker`), and shows the chosen
-      activity/timepoint + file count once picked. **Create N Drafts** fires the
-      already-built `POST /cycle/drafts`. Delete `StartCycle.tsx` and its route
-      once absorbed. **Scope:** this stage *starts* cycles. Topping up a draft
-      that already exists stays on its Files page, reached by the row's Open
-      Draft link — that flow works, and its diff-and-add logic is the messiest
-      code in the app.
+- [x] **3 — Assemble stage does the work.** *(done 2026-08-04 — see log)* The
+      page is a hand-rolled table over the cycle's recordsets. Each row without a
+      draft gets **Create Draft** (`CreateDraftModal`, per-recordset source pick);
+      each row with one gets **Mark Ready / Reopen** (a `draft_status` action,
+      gated on `file_count > 0`) and **Manage** (`ManageFilesModal`), plus an
+      expand chevron that reveals `DraftSummary` inline. Draft editing now lives
+      **inside the cycle** — no more Open-Draft excursion to `Files.tsx` (its
+      diff-and-add flow was replaced by the series endpoints below). The old
+      checkbox / Choose-Source / Create-N-Drafts / `POST /cycle/drafts` design
+      and `StartCycle.tsx` were all removed.
       - **New prerequisite (2026-07-24):** gate on `isCycleActive(cycle)`
         (`lib/useCycle.ts`) — the checkboxes/source-picker/Create-N-Drafts
         controls only render when a draft `dataset_release` exists. When it
@@ -458,8 +459,10 @@ Each lands and is reviewed before the next.
 - [ ] **8 — Overview page.** Per-stage summary cards plus a recordset × stage
       matrix (rows = recordsets, columns = Setup / Assemble / Verify / Frozen), then
       fan-in, transfer, and landing-page rows.
-- [ ] **9 — Cleanup.** Migrate `Files.tsx` onto `ActivitySourcePicker`; migrate
-      the remaining hand-rolled modals (draft publish, WP-link in
+- [ ] **9 — Cleanup.** ~~Migrate `Files.tsx` onto `ActivitySourcePicker`~~
+      (obsolete — the standalone draft-Files flow was retired in step 3; draft
+      editing is now the Assemble stage's `ManageFilesModal`). Still open:
+      migrate the remaining hand-rolled modals (draft publish, WP-link in
       `datasets/Detail.tsx`) onto `Modal`.
 - [ ] **10 — Tests.** Add **vitest** (a one-line Vite integration; the project has
       no frontend test runner at all today) and cover the pure modules this plan
@@ -539,6 +542,49 @@ dataset 4 (bare):
 7. `npm run build` clean at every step.
 
 ## Log
+
+**2026-08-04 — Assemble stage built (step 3).** The stage went from a
+read-only table to the working surface for draft assembly, decomposed so no
+single modal is overloaded:
+
+- **Row-hosted lifecycle + summary.** `AssembleStage.tsx` is now a hand-rolled
+  table (not `DynamicTable`). Per draft row: **Mark Ready / Reopen**
+  (`draft_status` → `ready`/`open`, gated on `file_count > 0`; `ready` pill is
+  green via a new `StatusBadge` `success` mapping), a plain **Manage** button,
+  and an expand chevron that renders `DraftSummary` in a full-width detail row.
+  `useCycle.ts` `assembleStage()` is now real: **done when every open draft is
+  `ready`** (`ready === open.length`), else `N/M ready` / `N open`.
+- **`DraftSummary`** (self-fetches `/summary`): borderless inline stat line
+  (files · size · patients/studies/series) + inline-labelled wrapping chips for
+  file types and modalities. No inner scrollbars (rejected), no `max-w` cap
+  (was clipping modality chips onto a second line).
+- **`ManageFilesModal`** (replaced the deleted `EditDraftModal.tsx`): tabs
+  **Add / Remove / Details**. Add = `DraftAddFiles`; Remove = `DraftFileList`
+  (non-DICOM, per-row red Remove w/ confirm) + `DraftSeriesRemove`; Details =
+  name/notes + **Discard** (soft-delete via `DELETE`). Opens on the launcher's
+  chosen tab.
+- **Draft sources.** `CreateDraftModal` gained **WordPress** (pull the file on
+  the recordset's WP `download` object — new `POST …/files/from-wp`, reuses the
+  importer pipeline) and **folder upload** (relative subpath kept as filename)
+  alongside activity/release/upload/empty.
+- **Series reconcile — counts-driven, scales.** For release/activity-derived
+  drafts, `DraftSeriesReconcile` offers **Merge** (add-new / replace-**changed**
+  series / add non-DICOM — "changed" detected by comparing per-series `file_id`
+  sets, since files are content-addressed, so identical series are skipped) and
+  **Replace-all** (destructive, exact-count confirm). No upfront series lists.
+- **Series removal — search, not lists.** `DraftSeriesRemove` searches by any
+  of patient / study UID / series UID / SOP UID / file id (paged at 10); a
+  result drills into `DraftSeriesFiles` for per-file removal. Matched by
+  `SeriesInstanceUID`.
+- **New backend endpoints** (`distribution.py`, all under
+  `recordsets/drafts/{id}`): `series-summary`, `series-search`
+  (`series|files` granularity), `series/merge`, `content/replace-all`,
+  `series/remove`, `series/apply` (not yet wired to UI), `files/from-wp`, and a
+  `dicom` filter on `files`. **Removed:** the `series-diff` endpoint + models,
+  and `create_cycle_drafts` / `POST /cycle/drafts` (superseded by per-recordset
+  Create Draft). ⚠ uvicorn runs without `--reload` — restart after pulling.
+- **Deleted:** `StartCycle.tsx` (+ `/cycle/start` route), `EditDraftModal.tsx`,
+  a transient `Dropdown.tsx`.
 
 **2026-07-30 — `except HTTPException: raise` bug, found and fixed twice.**
 The draft-release guard above didn't actually block anything: `api_error()`
