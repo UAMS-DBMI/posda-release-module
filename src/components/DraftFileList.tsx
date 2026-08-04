@@ -1,5 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { draftSummaryKey } from "@/components/DraftSummary";
 import { LoadingState } from "@/components/ui/Spinner";
+import { useToast } from "@/components/Toast";
+import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { extractApiError } from "@/lib/apiUtils";
 
 type DraftFile = {
   recordset_draft_file_id: number;
@@ -22,9 +27,28 @@ export function draftFilesKey(draftId: number) {
   return ["draft-files", draftId, "non-dicom"] as const;
 }
 
-/** Scrollable list of a draft's non-DICOM files by name -- DICOM files are
- *  covered by the summary's modality breakdown, not their (meaningless) names. */
-export default function DraftFileList({ draftId }: { draftId: number }) {
+/** Scrollable, editable list of a draft's non-DICOM files by name. DICOM files
+ *  are covered by the summary's modality breakdown, not their (meaningless)
+ *  names -- and DICOM edits are per-series, handled elsewhere. Replace a file by
+ *  removing it here, then adding its replacement below. */
+export default function DraftFileList({
+  draftId,
+  datasetId,
+}: {
+  draftId: number;
+  datasetId: string | undefined;
+}) {
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+
+  // A primed remove reverts on its own so a stray first click can't linger.
+  useEffect(() => {
+    if (confirmId === null) return;
+    const t = setTimeout(() => setConfirmId(null), 4000);
+    return () => clearTimeout(t);
+  }, [confirmId]);
+
   const files = useQuery({
     queryKey: draftFilesKey(draftId),
     queryFn: async () => {
@@ -35,6 +59,39 @@ export default function DraftFileList({ draftId }: { draftId: number }) {
       if (!res.ok) throw new Error("Could not load files.");
       const json = (await res.json()) as { data: DraftFile[] };
       return json.data;
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: async (recordsetDraftFileId: number) => {
+      const res = await fetch(
+        `/papi/v1/distribution/recordsets/drafts/${draftId}/files/remove`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            recordset_draft_file_ids: [recordsetDraftFileId],
+          }),
+        },
+      );
+      if (!res.ok) {
+        throw new Error(
+          extractApiError(await res.json(), "Could not remove the file."),
+        );
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: draftFilesKey(draftId) });
+      void queryClient.invalidateQueries({ queryKey: draftSummaryKey(draftId) });
+      void queryClient.invalidateQueries({
+        queryKey: ["dataset-cycle", datasetId ?? ""],
+      });
+      setConfirmId(null);
+      toastSuccess(addToast, "File removed.");
+    },
+    onError: (e) => {
+      setConfirmId(null);
+      toastError(addToast, e instanceof Error ? e.message : "Could not remove the file.");
     },
   });
 
@@ -60,17 +117,36 @@ export default function DraftFileList({ draftId }: { draftId: number }) {
         Non-DICOM Files ({files.data.length.toLocaleString()})
       </div>
       <ul className="max-h-52 divide-y overflow-y-auto" style={{ borderColor: "var(--border)" }}>
-        {files.data.map((f) => (
-          <li
-            key={f.recordset_draft_file_id}
-            className="flex items-center justify-between gap-3 px-3 py-1.5"
-          >
-            <span className="truncate">{f.file_name ?? `file #${f.file_id}`}</span>
-            <span className="shrink-0 text-xs" style={{ color: "var(--muted)" }}>
-              {f.size != null ? formatBytes(f.size) : "—"}
-            </span>
-          </li>
-        ))}
+        {files.data.map((f) => {
+          const removing =
+            remove.isPending && remove.variables === f.recordset_draft_file_id;
+          const armed = confirmId === f.recordset_draft_file_id;
+          return (
+            <li
+              key={f.recordset_draft_file_id}
+              className="flex items-center justify-between gap-3 px-3 py-1.5"
+            >
+              <span className="truncate">{f.file_name ?? `file #${f.file_id}`}</span>
+              <span className="flex shrink-0 items-center gap-3">
+                <span className="text-xs" style={{ color: "var(--muted)" }}>
+                  {f.size != null ? formatBytes(f.size) : "—"}
+                </span>
+                <button
+                  type="button"
+                  disabled={removing}
+                  onClick={() =>
+                    armed
+                      ? remove.mutate(f.recordset_draft_file_id)
+                      : setConfirmId(f.recordset_draft_file_id)
+                  }
+                  className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                >
+                  {removing ? "Removing…" : armed ? "Confirm remove?" : "Remove"}
+                </button>
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

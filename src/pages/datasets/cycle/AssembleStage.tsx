@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import CreateDraftModal from "@/components/CreateDraftModal";
 import CreateRecordsetModal from "@/components/CreateRecordsetModal";
-import DynamicTable from "@/components/DynamicTable";
-import EditDraftModal from "@/components/EditDraftModal";
+import DraftSummary from "@/components/DraftSummary";
+import ManageFilesModal, { type ManageTab } from "@/components/ManageFilesModal";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useToast } from "@/components/Toast";
+import { toastError, toastSuccess } from "@/components/toastHelpers";
+import { extractApiError } from "@/lib/apiUtils";
 import { isCycleActive } from "@/lib/useCycle";
 import { useCycleContext } from "./CycleLayout";
 
@@ -25,19 +29,51 @@ function RecordsetLink({ id, name }: { id: number; name: string }) {
   );
 }
 
+const TH = "px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-white";
+
+type ManageTarget = { id: number; name: string; wpLinked: boolean; tab: ManageTab };
+
 export default function AssembleStage() {
   const { cycle, datasetId } = useCycleContext();
+  const { addToast } = useToast();
+  const queryClient = useQueryClient();
+
   const [showCreateRecordset, setShowCreateRecordset] = useState(false);
   const [createFor, setCreateFor] = useState<{
     id: number;
     name: string;
     wpLinked: boolean;
   } | null>(null);
-  const [editDraft, setEditDraft] = useState<{
-    id: number;
-    name: string;
-    wpLinked: boolean;
-  } | null>(null);
+  const [manage, setManage] = useState<ManageTarget | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  function invalidateCycle() {
+    void queryClient.invalidateQueries({
+      queryKey: ["dataset-cycle", datasetId ?? ""],
+    });
+  }
+
+  const setStatus = useMutation({
+    mutationFn: async (v: { draftId: number; status: "ready" | "open" }) => {
+      const res = await fetch(
+        `/papi/v1/distribution/recordsets/drafts/${v.draftId}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ draft_status: v.status }),
+        },
+      );
+      if (!res.ok) {
+        throw new Error(extractApiError(await res.json(), "Could not update the draft status."));
+      }
+    },
+    onSuccess: (_d, v) => {
+      invalidateCycle();
+      toastSuccess(addToast, v.status === "ready" ? "Draft marked ready." : "Draft reopened.");
+    },
+    onError: (e) =>
+      toastError(addToast, e instanceof Error ? e.message : "Could not update the draft status."),
+  });
 
   if (cycle.recordsets.length === 0) {
     return (
@@ -59,19 +95,6 @@ export default function AssembleStage() {
 
   const cycleActive = isCycleActive(cycle);
 
-  const rows = cycle.recordsets.map((r) => ({
-    recordset_id: r.recordset_id,
-    recordset_name: r.recordset_name,
-    draft_name: r.open_draft?.draft_name ?? null,
-    draft_status: r.open_draft?.draft_status ?? null,
-    file_count: r.open_draft?.file_count ?? null,
-    draft_id: r.open_draft?.recordset_draft_id ?? null,
-    frozen: r.latest_release ? `v${r.latest_release.release_number}` : null,
-    last_bundled: r.last_bundled_dataset_release_number,
-    never_released: r.latest_release === null,
-    wp_linked: r.wp_linked,
-  }));
-
   return (
     <div className="space-y-3">
       {!cycleActive && (
@@ -84,109 +107,150 @@ export default function AssembleStage() {
         </p>
       )}
 
-      <DynamicTable
-        rows={rows}
-        getRowKey={(row) => row.recordset_id}
-        emptyMessage="This dataset has no recordsets yet."
-        columns={[
-          {
-            key: "recordset_name",
-            label: "Recordset",
-            render: (_v, row) => (
-              <RecordsetLink id={row.recordset_id} name={row.recordset_name} />
-            ),
-          },
-          {
-            key: "draft_name",
-            label: "Draft",
-            render: (v, row) => {
-              if (v) return String(v);
-              if (row.never_released) {
-                return (
-                  <div>
-                    <StatusBadge
-                      status="never-released"
-                      label="Never released"
-                      variant="warning"
-                    />
-                    <div className="text-xs" style={{ color: "var(--muted)" }}>
-                      won't be in this release without a draft
-                    </div>
-                  </div>
-                );
+      <div className="overflow-x-auto">
+        <table className="data-table min-w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="bg-accent">
+              <th className="w-8 px-2 py-1" />
+              <th className={TH}>Recordset</th>
+              <th className={TH}>Draft</th>
+              <th className={TH}>Status</th>
+              <th className={TH}>Files</th>
+              <th className={TH}>Frozen At</th>
+              <th className={TH} />
+            </tr>
+          </thead>
+          <tbody>
+            {cycle.recordsets.map((r) => {
+              const draft = r.open_draft;
+              const draftId = draft?.recordset_draft_id ?? null;
+              const status = draft?.draft_status ?? null;
+              const fileCount = draft?.file_count ?? null;
+              const frozen = r.latest_release ? `v${r.latest_release.release_number}` : null;
+              const neverReleased = r.latest_release === null;
+              const isReady = status === "ready";
+              const hasFiles = (fileCount ?? 0) > 0;
+              const expanded = draftId != null && expandedId === draftId;
+
+              function openManage(tab: ManageTab) {
+                if (draftId == null) return;
+                setManage({ id: draftId, name: r.recordset_name, wpLinked: r.wp_linked, tab });
               }
+
               return (
-                <span className="text-xs" style={{ color: "var(--muted)" }}>
-                  carrying forward
-                </span>
+                <Fragment key={r.recordset_id}>
+                  <tr className="table-row">
+                    <td className="px-2 py-1">
+                      {draftId != null && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(expanded ? null : draftId)}
+                          className="px-1 text-xs"
+                          style={{ color: "var(--muted)" }}
+                          title={expanded ? "Hide contents" : "Show contents"}
+                        >
+                          {expanded ? "▾" : "▸"}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-2 py-1">
+                      <RecordsetLink id={r.recordset_id} name={r.recordset_name} />
+                    </td>
+                    <td className="px-2 py-1">
+                      {draft?.draft_name ? (
+                        draft.draft_name
+                      ) : neverReleased ? (
+                        <div>
+                          <StatusBadge status="never-released" label="Never released" variant="warning" />
+                          <div className="text-xs" style={{ color: "var(--muted)" }}>
+                            won't be in this release without a draft
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs" style={{ color: "var(--muted)" }}>
+                          carrying forward
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1">
+                      {status ? <StatusBadge status={status} /> : "—"}
+                    </td>
+                    <td className="px-2 py-1">
+                      {fileCount == null ? "—" : fileCount.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1">
+                      <div>{frozen ?? "—"}</div>
+                      {r.last_bundled_dataset_release_number != null && (
+                        <div className="text-xs" style={{ color: "var(--muted)" }}>
+                          last bundled: dataset v{r.last_bundled_dataset_release_number}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2 py-1">
+                      {draftId != null ? (
+                        <div className="flex items-center justify-end gap-2">
+                          {isReady ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setStatus.mutate({ draftId, status: "open" })}
+                              loading={setStatus.isPending && setStatus.variables?.draftId === draftId}
+                            >
+                              Reopen
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => setStatus.mutate({ draftId, status: "ready" })}
+                              disabled={!hasFiles}
+                              title={hasFiles ? undefined : "Add files before marking ready"}
+                              loading={setStatus.isPending && setStatus.variables?.draftId === draftId}
+                            >
+                              Mark Ready
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" onClick={() => openManage("add")}>
+                            Manage
+                          </Button>
+                        </div>
+                      ) : cycleActive ? (
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              setCreateFor({
+                                id: r.recordset_id,
+                                name: r.recordset_name,
+                                wpLinked: r.wp_linked,
+                              })
+                            }
+                          >
+                            Create Draft
+                          </Button>
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                  {expanded && draftId != null && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-4 py-3"
+                        style={{
+                          background: "var(--surface)",
+                          borderTop: "1px solid var(--border-strong)",
+                        }}
+                      >
+                        <DraftSummary draftId={draftId} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
-            },
-          },
-          {
-            key: "draft_status",
-            label: "Status",
-            render: (v) => (v ? <StatusBadge status={String(v)} /> : "—"),
-          },
-          {
-            key: "file_count",
-            label: "Files",
-            render: (v) => (v == null ? "—" : Number(v).toLocaleString()),
-          },
-          {
-            key: "frozen",
-            label: "Frozen At",
-            render: (v, row) => (
-              <div>
-                <div>{v ? String(v) : "—"}</div>
-                {row.last_bundled != null && (
-                  <div className="text-xs" style={{ color: "var(--muted)" }}>
-                    last bundled: dataset v{row.last_bundled}
-                  </div>
-                )}
-              </div>
-            ),
-          },
-          {
-            key: "draft_id",
-            label: "",
-            sortable: false,
-            render: (_v, row) => {
-              if (row.draft_id) {
-                return (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setEditDraft({
-                        id: row.draft_id as number,
-                        name: row.recordset_name,
-                        wpLinked: row.wp_linked,
-                      })
-                    }
-                  >
-                    Edit Draft
-                  </Button>
-                );
-              }
-              if (!cycleActive) return null;
-              return (
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    setCreateFor({
-                      id: row.recordset_id,
-                      name: row.recordset_name,
-                      wpLinked: row.wp_linked,
-                    })
-                  }
-                >
-                  Create Draft
-                </Button>
-              );
-            },
-          },
-        ]}
-      />
+            })}
+          </tbody>
+        </table>
+      </div>
 
       <CreateDraftModal
         open={createFor !== null}
@@ -197,13 +261,14 @@ export default function AssembleStage() {
         wpLinked={createFor?.wpLinked ?? false}
       />
 
-      <EditDraftModal
-        open={editDraft !== null}
-        onClose={() => setEditDraft(null)}
+      <ManageFilesModal
+        open={manage !== null}
+        onClose={() => setManage(null)}
         datasetId={datasetId}
-        draftId={editDraft?.id ?? null}
-        recordsetName={editDraft?.name ?? ""}
-        wpLinked={editDraft?.wpLinked ?? false}
+        draftId={manage?.id ?? null}
+        recordsetName={manage?.name ?? ""}
+        wpLinked={manage?.wpLinked ?? false}
+        initialTab={manage?.tab ?? "add"}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LoadingState } from "@/components/ui/Spinner";
 
@@ -57,17 +57,6 @@ export function useDraftSummary(draftId: number, enabled = true) {
   });
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <span>
-      <span className="font-semibold">{value}</span>{" "}
-      <span className="text-xs uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-        {label}
-      </span>
-    </span>
-  );
-}
-
 /** One breakdown entry as a compact pill: bold label + muted detail. Chips wrap,
  *  so a long modality list stays a few lines tall with no inner scrollbar. */
 function Chip({ label, detail }: { label: string; detail: string }) {
@@ -82,19 +71,24 @@ function Chip({ label, detail }: { label: string; detail: string }) {
   );
 }
 
-function ChipGroup({ title, children }: { title: string; children: ReactNode }) {
+/** Fixed-width label column + a wrapping chip area, so chips that wrap align
+ *  under the first chip rather than flowing back under the label. */
+function ChipRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-        {title}
-      </p>
+    <div className="flex items-start gap-2">
+      <span
+        className="w-24 shrink-0 pt-1.5 text-xs font-semibold uppercase tracking-wide"
+        style={{ color: "var(--muted)" }}
+      >
+        {label}
+      </span>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
   );
 }
 
-/** File / DICOM breakdown for a draft. Self-contained (fetches its own summary)
- *  so both the draft pages and the cycle Edit Draft modal can drop it in. */
+/** File / DICOM breakdown for a draft. Self-contained (fetches its own summary);
+ *  rendered in the Assemble row's expanded detail. */
 export default function DraftSummary({
   draftId,
   enabled = true,
@@ -117,25 +111,39 @@ export default function DraftSummary({
   const s = summary.data;
   const hasDicom = s.dicom.series_count > 0;
 
+  const stats: [string, string][] = [
+    [s.total_files.toLocaleString(), "Files"],
+    [formatBytes(s.total_size_bytes), "Size"],
+  ];
+  if (hasDicom) {
+    stats.push([s.dicom.patient_count.toLocaleString(), "Patients"]);
+    stats.push([s.dicom.study_count.toLocaleString(), "Studies"]);
+    stats.push([s.dicom.series_count.toLocaleString(), "Series"]);
+  }
+
   return (
-    <div className="space-y-3 text-sm">
-      <div
-        className="flex flex-wrap gap-x-5 gap-y-1 rounded-md px-3 py-2"
-        style={{ background: "var(--surface-alt)", borderLeft: "4px solid var(--accent)" }}
-      >
-        <Stat label="Files" value={s.total_files.toLocaleString()} />
-        <Stat label="Size" value={formatBytes(s.total_size_bytes)} />
-        {hasDicom && (
-          <>
-            <Stat label="Patients" value={s.dicom.patient_count.toLocaleString()} />
-            <Stat label="Studies" value={s.dicom.study_count.toLocaleString()} />
-            <Stat label="Series" value={s.dicom.series_count.toLocaleString()} />
-          </>
-        )}
+    <div className="space-y-2 text-sm">
+      <div className="flex flex-wrap items-baseline">
+        {stats.map(([value, label], i) => (
+          <Fragment key={label}>
+            {i > 0 && (
+              <span className="mx-2" style={{ color: "var(--border-strong)" }}>
+                ·
+              </span>
+            )}
+            <span className="font-semibold">{value}</span>
+            <span
+              className="ml-1 text-xs uppercase tracking-wide"
+              style={{ color: "var(--muted)" }}
+            >
+              {label}
+            </span>
+          </Fragment>
+        ))}
       </div>
 
       {s.by_file_type.length > 0 && (
-        <ChipGroup title="File Types">
+        <ChipRow label="File types">
           {s.by_file_type.map((ft) => (
             <Chip
               key={ft.file_type}
@@ -143,11 +151,11 @@ export default function DraftSummary({
               detail={`${ft.file_count.toLocaleString()} · ${formatBytes(ft.total_size_bytes)}`}
             />
           ))}
-        </ChipGroup>
+        </ChipRow>
       )}
 
       {hasDicom && s.dicom.by_modality.length > 0 && (
-        <ChipGroup title="Modalities">
+        <ChipRow label="Modalities">
           {s.dicom.by_modality.map((m) => (
             <Chip
               key={m.modality}
@@ -155,7 +163,7 @@ export default function DraftSummary({
               detail={`${m.series_count.toLocaleString()} series · ${m.file_count.toLocaleString()}`}
             />
           ))}
-        </ChipGroup>
+        </ChipRow>
       )}
     </div>
   );

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DraftAddFiles from "@/components/DraftAddFiles";
 import DraftFileList from "@/components/DraftFileList";
-import DraftSummary, { useDraftSummary } from "@/components/DraftSummary";
+import DraftSeriesRemove from "@/components/DraftSeriesRemove";
 import Modal from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/Spinner";
@@ -10,7 +10,13 @@ import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
 
-type Tab = "contents" | "details";
+export type ManageTab = "add" | "remove" | "details";
+
+const TABS: { key: ManageTab; label: string }[] = [
+  { key: "add", label: "Add" },
+  { key: "remove", label: "Remove" },
+  { key: "details", label: "Details" },
+];
 
 type Draft = {
   recordset_draft_id: number;
@@ -39,31 +45,38 @@ function useDraft(draftId: number | null, open: boolean) {
   });
 }
 
-type EditDraftModalProps = {
+type ManageFilesModalProps = {
   open: boolean;
   onClose: () => void;
   datasetId: string | undefined;
   draftId: number | null;
   recordsetName: string;
   wpLinked: boolean;
+  initialTab: ManageTab;
 };
 
-/** Manage one recordset draft from inside the cycle -- contents (summary; the
- *  add-files browser lands in 2b-2) and editable name/notes. QC and Publish
- *  deliberately live in the Verify/Bundle stages, not here. */
-export default function EditDraftModal({
+/** Edit one recordset draft's files (Add / Remove) and metadata (Details). The
+ *  draft summary and lifecycle (Mark Ready / Discard) live on the Assemble row,
+ *  so this modal stays focused on one concern per tab. */
+export default function ManageFilesModal({
   open,
   onClose,
   datasetId,
   draftId,
   recordsetName,
   wpLinked,
-}: EditDraftModalProps) {
+  initialTab,
+}: ManageFilesModalProps) {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("contents");
+  const [tab, setTab] = useState<ManageTab>(initialTab);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const draft = useDraft(draftId, open);
+
+  // Open on whichever tab the launcher chose.
+  useEffect(() => {
+    if (open) setTab(initialTab);
+  }, [open, initialTab]);
 
   // A primed discard reverts on its own so a stray first click can't linger.
   useEffect(() => {
@@ -74,7 +87,6 @@ export default function EditDraftModal({
 
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
-
   useEffect(() => {
     if (draft.data) {
       setName(draft.data.draft_name ?? "");
@@ -93,9 +105,7 @@ export default function EditDraftModal({
         },
       );
       if (!res.ok) {
-        throw new Error(
-          extractApiError(await res.json(), "Could not save the draft."),
-        );
+        throw new Error(extractApiError(await res.json(), "Could not save the draft."));
       }
     },
     onSuccess: () => {
@@ -106,10 +116,7 @@ export default function EditDraftModal({
       toastSuccess(addToast, "Draft saved.");
     },
     onError: (e) =>
-      toastError(
-        addToast,
-        e instanceof Error ? e.message : "Could not save the draft.",
-      ),
+      toastError(addToast, e instanceof Error ? e.message : "Could not save the draft."),
   });
 
   const discard = useMutation({
@@ -119,9 +126,7 @@ export default function EditDraftModal({
         { method: "DELETE" },
       );
       if (!res.ok) {
-        throw new Error(
-          extractApiError(await res.json(), "Could not discard the draft."),
-        );
+        throw new Error(extractApiError(await res.json(), "Could not discard the draft."));
       }
     },
     onSuccess: () => {
@@ -129,127 +134,63 @@ export default function EditDraftModal({
         queryKey: ["dataset-cycle", datasetId ?? ""],
       });
       toastSuccess(addToast, "Draft discarded.");
-      handleClose();
+      setConfirmDiscard(false);
+      onClose();
     },
-    onError: (e) =>
-      toastError(
-        addToast,
-        e instanceof Error ? e.message : "Could not discard the draft.",
-      ),
+    onError: (e) => {
+      setConfirmDiscard(false);
+      toastError(addToast, e instanceof Error ? e.message : "Could not discard the draft.");
+    },
   });
-
-  const setStatus = useMutation({
-    mutationFn: async (status: "ready" | "open") => {
-      const res = await fetch(
-        `/papi/v1/distribution/recordsets/drafts/${draftId}`,
-        {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ draft_status: status }),
-        },
-      );
-      if (!res.ok) {
-        throw new Error(
-          extractApiError(await res.json(), "Could not update the draft status."),
-        );
-      }
-    },
-    onSuccess: (_data, status) => {
-      void queryClient.invalidateQueries({ queryKey: ["draft", draftId] });
-      void queryClient.invalidateQueries({
-        queryKey: ["dataset-cycle", datasetId ?? ""],
-      });
-      toastSuccess(
-        addToast,
-        status === "ready" ? "Draft marked ready." : "Draft reopened.",
-      );
-    },
-    onError: (e) =>
-      toastError(
-        addToast,
-        e instanceof Error ? e.message : "Could not update the draft status.",
-      ),
-  });
-
-  function handleClose() {
-    setTab("contents");
-    setConfirmDiscard(false);
-    onClose();
-  }
-
-  const isReady = draft.data?.draft_status === "ready";
-  const summary = useDraftSummary(draftId ?? 0, open && draftId != null);
-  const hasFiles = (summary.data?.total_files ?? 0) > 0;
 
   const dirty = draft.data
-    ? name !== (draft.data.draft_name ?? "") ||
-      notes !== (draft.data.draft_notes ?? "")
+    ? name !== (draft.data.draft_name ?? "") || notes !== (draft.data.draft_notes ?? "")
     : false;
 
   return (
     <Modal
       open={open}
-      onClose={handleClose}
+      onClose={onClose}
       size="xl"
-      title={`Edit Draft — ${recordsetName}`}
+      title={`Manage Files — ${recordsetName}`}
       footer={
-        <>
-          {draft.data &&
-            (isReady ? (
-              <Button
-                variant="ghost"
-                onClick={() => setStatus.mutate("open")}
-                loading={setStatus.isPending}
-              >
-                Reopen Draft
-              </Button>
-            ) : (
-              <Button
-                onClick={() => setStatus.mutate("ready")}
-                loading={setStatus.isPending}
-                disabled={!hasFiles}
-                title={hasFiles ? undefined : "Add files before marking ready"}
-              >
-                Mark Ready
-              </Button>
-            ))}
-          <Button variant="ghost" onClick={handleClose}>
-            Close
-          </Button>
-        </>
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
       }
     >
       <div className="mt-3 flex gap-1 border-b" style={{ borderColor: "var(--border)" }}>
-        {(["contents", "details"] as const).map((t) => (
+        {TABS.map((t) => (
           <button
-            key={t}
+            key={t.key}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => setTab(t.key)}
             className="px-4 py-2 text-sm font-medium transition-colors"
             style={
-              tab === t
+              tab === t.key
                 ? { color: "var(--accent)", borderBottom: "2px solid var(--accent)" }
                 : { color: "var(--muted)" }
             }
           >
-            {t === "contents" ? "Contents" : "Details"}
+            {t.label}
           </button>
         ))}
       </div>
 
       <div className="mt-4">
-        {tab === "contents" && draftId != null && (
+        {tab === "add" && draftId != null && draft.data && (
+          <DraftAddFiles
+            draftId={draftId}
+            recordsetId={draft.data.recordset_id}
+            datasetId={datasetId}
+            wpLinked={wpLinked}
+          />
+        )}
+
+        {tab === "remove" && draftId != null && (
           <div className="space-y-4">
-            <DraftSummary draftId={draftId} />
-            <DraftFileList draftId={draftId} />
-            {draft.data && (
-              <DraftAddFiles
-                draftId={draftId}
-                recordsetId={draft.data.recordset_id}
-                datasetId={datasetId}
-                wpLinked={wpLinked}
-              />
-            )}
+            <DraftFileList draftId={draftId} datasetId={datasetId} />
+            <DraftSeriesRemove draftId={draftId} datasetId={datasetId} />
           </div>
         )}
 

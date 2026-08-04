@@ -5,6 +5,7 @@ import ActivitySourcePicker, {
 } from "@/components/ActivitySourcePicker";
 import FilePicker from "@/components/FilePicker";
 import ReleasePicker from "@/components/ReleasePicker";
+import DraftSeriesReconcile from "@/components/DraftSeriesReconcile";
 import { draftFilesKey } from "@/components/DraftFileList";
 import { draftSummaryKey } from "@/components/DraftSummary";
 import { Button } from "@/components/ui/Button";
@@ -29,30 +30,17 @@ type DiffResult = {
   added_count: number;
 };
 
-// A draft diff reports, relative to the chosen source: removed = in the source
+// A draft diff reports, relative to a previous release: removed = in the release
 // but not the draft (i.e. what "add" would pull in), unchanged = already in the
-// draft, added = in the draft but not the source.
-function useDraftDiff(
-  draftId: number,
-  mode: Mode,
-  source: ActivitySource | null,
-  releaseId: number | null,
-) {
-  const enabled =
-    (mode === "activity" && source !== null) ||
-    (mode === "release" && releaseId !== null);
-  const params =
-    mode === "activity" && source
-      ? `compare_activity_id=${source.activityId}&compare_timepoint_id=${source.timepointId}`
-      : releaseId != null
-        ? `compare_release_id=${releaseId}`
-        : "";
+// draft, added = in the draft but not the release. (Activity sources use the
+// series reconcile instead -- file-level add can't replace corrected series.)
+function useDraftDiff(draftId: number, releaseId: number | null) {
   return useQuery({
-    queryKey: ["draft-diff", draftId, mode, source?.timepointId ?? null, releaseId],
-    enabled,
+    queryKey: ["draft-diff", draftId, releaseId],
+    enabled: releaseId !== null,
     queryFn: async () => {
       const res = await fetch(
-        `/papi/v1/distribution/recordsets/drafts/${draftId}/diff?${params}`,
+        `/papi/v1/distribution/recordsets/drafts/${draftId}/diff?compare_release_id=${releaseId}`,
         { cache: "no-store" },
       );
       if (!res.ok) throw new Error("Could not load diff.");
@@ -89,9 +77,9 @@ export default function DraftAddFiles({
     ...BASE_MODES,
     ...(wpLinked ? [{ key: "wordpress" as Mode, label: "WordPress" }] : []),
   ];
-  const isDiffMode = mode === "activity" || mode === "release";
+  const isDiffMode = mode === "release";
 
-  const diff = useDraftDiff(draftId, mode, source, releaseId);
+  const diff = useDraftDiff(draftId, releaseId);
   const toAdd = diff.data?.removed_file_ids ?? [];
 
   function invalidateAfterChange() {
@@ -154,10 +142,8 @@ export default function DraftAddFiles({
       className="rounded-md p-3"
       style={{ border: "1px solid var(--border-strong)" }}
     >
-      <p className="text-sm font-medium">Add files</p>
-
       <div
-        className="mt-2 flex gap-1 rounded-md p-1"
+        className="flex gap-1 rounded-md p-1"
         style={{ background: "var(--surface-alt)" }}
       >
         {modes.map((m) => (
@@ -179,7 +165,16 @@ export default function DraftAddFiles({
 
       <div className="mt-3">
         {mode === "activity" && (
-          <ActivitySourcePicker value={source} onChange={setSource} />
+          <>
+            <ActivitySourcePicker value={source} onChange={setSource} />
+            {source && (
+              <DraftSeriesReconcile
+                draftId={draftId}
+                datasetId={datasetId}
+                source={source}
+              />
+            )}
+          </>
         )}
         {mode === "release" && (
           <ReleasePicker
