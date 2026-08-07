@@ -15,7 +15,6 @@ import DashboardSettings from "@/pages/dashboard/Settings";
 import DatasetsList from "@/pages/datasets/List";
 import DatasetCreate from "@/pages/datasets/Create";
 import DatasetById from "@/pages/datasets/Detail";
-import DatasetEdit from "@/pages/datasets/Edit";
 import CycleLayout from "@/pages/datasets/cycle/CycleLayout";
 import SetupStage from "@/pages/datasets/cycle/SetupStage";
 import AssembleStage from "@/pages/datasets/cycle/AssembleStage";
@@ -33,7 +32,6 @@ import DatasetReleaseTransferCreate from "@/pages/datasets/releases/transfers/Cr
 import RecordsetsList from "@/pages/recordsets/List";
 import RecordsetCreate from "@/pages/recordsets/Create";
 import RecordsetById from "@/pages/recordsets/Detail";
-import RecordsetEdit from "@/pages/recordsets/Edit";
 import RecordsetReleaseById from "@/pages/recordsets/releases/Detail";
 import RecordsetDraftCreate from "@/pages/recordsets/drafts/Create";
 import RecordsetDraftById from "@/pages/recordsets/drafts/Detail";
@@ -140,7 +138,6 @@ export default function App() {
           <Route index element={<DatasetsList />} />
           <Route path="create" element={<DatasetCreate />} />
           <Route path=":dataset_id" element={<DatasetById />} />
-          <Route path=":dataset_id/edit" element={<DatasetEdit />} />
           <Route path=":dataset_id/cycle" element={<CycleLayout />}>
             <Route path="setup" element={<SetupStage />} />
             <Route path="assemble" element={<AssembleStage />} />
@@ -160,7 +157,6 @@ export default function App() {
           <Route index element={<RecordsetsList />} />
           <Route path="create" element={<RecordsetCreate />} />
           <Route path=":recordset_id" element={<RecordsetById />} />
-          <Route path=":recordset_id/edit" element={<RecordsetEdit />} />
           <Route path="releases/:release_id" element={<RecordsetReleaseById />} />
           <Route path="drafts/create" element={<RecordsetDraftCreate />} />
           <Route path="drafts/:draft_id" element={<RecordsetDraftById />} />

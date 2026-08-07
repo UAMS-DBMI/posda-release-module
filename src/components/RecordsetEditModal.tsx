@@ -8,6 +8,7 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import {
   recordsetEditFormFields,
   recordsetToFormValues,
+  useDatasetOptions,
   useRecordset,
   useRecordsetLookups,
   useSaveRecordset,
@@ -22,6 +23,7 @@ type RecordsetEditModalProps = {
 };
 
 const EMPTY: RecordsetEditFormValues = {
+  dataset_id: "",
   recordset_doi: "",
   license_id: "",
   recordset_name: "",
@@ -29,10 +31,10 @@ const EMPTY: RecordsetEditFormValues = {
   active: true,
 };
 
-/** Quick-edit the recordset's own record without leaving the page it was
- *  opened from. No dataset selector -- fixed by context, unlike the full
- *  `recordsets/Edit.tsx` page, which allows reassigning it. Shares field
- *  config/validation/payload with that page via `lib/recordsetForm.ts`. */
+/** Quick-edit the recordset's own record, including reassigning its dataset,
+ *  without leaving the page it was opened from. Shares field config,
+ *  validation, and payload with the full `recordsets/Edit.tsx` page via
+ *  `lib/recordsetForm.ts`. */
 export default function RecordsetEditModal({
   open,
   onClose,
@@ -43,7 +45,8 @@ export default function RecordsetEditModal({
     open ? recordsetId : undefined,
   );
   const { recordsetTypes, licenses, isLoading: isLoadingLookups } = useRecordsetLookups();
-  const save = useSaveRecordset(recordsetId, recordset?.dataset_id);
+  const { datasets, isLoading: isLoadingDatasets } = useDatasetOptions(open);
+  const save = useSaveRecordset(recordsetId);
 
   const [values, setValues] = useState<RecordsetEditFormValues>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -67,7 +70,7 @@ export default function RecordsetEditModal({
     }
   }
 
-  const isLoading = isLoadingRecordset || isLoadingLookups;
+  const isLoading = isLoadingRecordset || isLoadingLookups || isLoadingDatasets;
 
   return (
     <Modal
@@ -95,7 +98,7 @@ export default function RecordsetEditModal({
             setValues(next);
             setErrors({});
           }}
-          fields={recordsetEditFormFields({ recordsetTypes, licenses })}
+          fields={recordsetEditFormFields({ recordsetTypes, licenses, datasets })}
           className="mt-4 grid grid-cols-2 gap-3"
           errors={errors}
         />

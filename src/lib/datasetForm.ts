@@ -14,6 +14,8 @@ export type DatasetType = { dataset_type_id: number; dataset_type_name: string }
 export type DatasetRecord = {
   dataset_id: number;
   dataset_type_id: number;
+  /** Joined lookup label; present on reads, not needed for the edit form. */
+  dataset_type_name?: string;
   dataset_doi: string;
   dataset_name: string;
   active: boolean;

@@ -12,6 +12,75 @@ behavioral guidelines, and links to the other notes files.
 > **Status: DISCUSSION ONLY — nothing below is approved for implementation yet.**
 >
 > **Sequencing (top to bottom):**
+
+### 🧹 Pre-prod consistency cleanup — port cycle modals to non-cycle pages
+
+Goal: the standalone dataset/recordset/draft pages should use the same modals the
+cycle stages already use, and the now-redundant page routes get removed. All
+modals below **already exist** (built for Setup/Assemble/Verify). Work one item
+at a time; each = wire the modal in, repoint inbound links, delete the page +
+route + unused imports. Full analysis in the 2026-08-06 discussion.
+
+- [x] **1. `datasets/Detail` → `DatasetEditModal`.** *(done 2026-08-06)* Replaced
+      the "Edit Dataset" link with a button opening `DatasetEditModal`; removed
+      page **`datasets/:id/edit`** (`Edit.tsx`) + its route. Along the way,
+      switched `Detail.tsx`'s dataset fetch from a hand-rolled `useEffect` to the
+      shared `useDataset` react-query hook (`lib/datasetForm.ts`) — needed so the
+      page reflects a save made through the modal (the modal's `useSaveDataset`
+      already invalidates `["dataset", id]`); recordsets/releases fetching
+      un-nested from the dataset load and now runs independently, keyed only on
+      `datasetId`. `DatasetRecord` gained an optional `dataset_type_name` field
+      (present on API reads, just wasn't declared since the edit form doesn't
+      need it). Build clean.
+- [x] **2. `recordsets/Detail` → `RecordsetEditModal`.** *(done 2026-08-06)*
+      **Gap found and closed first:** `RecordsetEditModal` deliberately had no
+      dataset selector (fixed by context), unlike `Edit.tsx` which allowed
+      reassigning a recordset's dataset — removing the page would have silently
+      dropped that capability. User chose to add it to the modal instead.
+      `lib/recordsetForm.ts`: `RecordsetEditFormValues` gained `dataset_id`;
+      `recordsetEditFormFields` takes a required `datasets` list and prepends a
+      Dataset select; `recordsetEditPayload`/`useSaveRecordset` simplified to
+      read `dataset_id` from `values` instead of a separate param.
+      `RecordsetEditModal` now calls `useDatasetOptions`. Replaced the "Edit
+      Recordset" link on `Detail.tsx` with a button opening the modal; removed
+      page **`recordsets/:id/edit`** (`Edit.tsx`) + its route. Same as item 1,
+      switched `Detail.tsx`'s recordset fetch to the shared `useRecordset`
+      hook so the page reflects modal saves; releases/drafts fetch decoupled
+      from it. `RecordsetRecord` gained optional `dataset_name`/
+      `license_label`/`recordset_type_name` (present on reads). Build clean.
+- [ ] **3. `recordsets/Detail` → `CreateDraftModal`.** Replace "New Draft" link
+      (`Detail:481`); remove page **`recordsets/drafts/create`**. ⚠ also repoint
+      the *other* inbound link in **`CurrentCycleCard:143`**. Pass
+      `recordset_id` as a prop.
+- [ ] **4. `recordsets/drafts/Detail` → `ManageFilesModal`.** Replace "Edit Files"
+      link (`Detail:333`); remove page **`recordsets/drafts/:id/files`**
+      (`Files.tsx`, already functionally superseded). Confirm `Files.tsx`'s own
+      `files/add` paths are covered by `DraftAddFiles`/`DraftSeriesReconcile`.
+- [ ] **5. `recordsets/drafts/Detail` → `ManageFilesModal` (Details tab).**
+      Replace "Edit" link (`Detail:244`); remove page
+      **`recordsets/drafts/:id/edit`**. Confirm no field beyond name/notes/discard.
+- [ ] **6. (optional) `recordsets/List` → `CreateRecordsetModal`.** Replace "New
+      Recordset" (`List:269` + `datasets/Detail:429`); remove page
+      **`recordsets/create`**. Lower value (list→page create is fine).
+- [ ] **7. (optional) `datasets/Detail` "Add Recordset" → `CreateRecordsetModal`**
+      in place (instead of navigating to `/recordsets/create`).
+- [ ] **8. (optional) `recordsets/drafts/Detail` Assemble parity** — inline
+      `DraftSummary` + a Mark Ready/Reopen action.
+- [ ] **9. (optional) `QcReviewsCard` → open `QcReviewManageModal`** in place;
+      keep `ReviewDetail` as the deep-link/audit page.
+
+**Explicitly out of scope for this pass:**
+- **`datasets/create`** — no create modal exists (`DatasetEditModal` is edit-only,
+  no `CreateDatasetModal`). Needs new work; leave as a page.
+- **Release-level pages** (`datasets/releases/create` · `releases/:id/edit` ·
+  `releases/:id/transfers/create`) — belong to Bundle (step 5) / Transfer
+  (step 6); leave until those land.
+
+**Already consistent (no work):** `RecordsetDestinationModal`, `WpLinkModal`,
+`QcReviewModal`, and the shared `Qc*` review components are already used by both
+the cycle and the non-cycle pages.
+
+> **Sequencing (top to bottom):**
 > 0. **QC Review enhancements — DATA MODEL FIRST** (see ⭐ below) — the current
 >    priority; the model must be finalized before anything else proceeds.
 > 1. Interface improvements to support the external visualization-tool team.

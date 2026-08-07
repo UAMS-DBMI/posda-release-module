@@ -3,37 +3,19 @@ import { useNavigate, useParams } from "react-router-dom";
 import DynamicTable from "@/components/DynamicTable";
 import LatestReleaseCard from "@/components/LatestReleaseCard";
 import WpLinkModal from "@/components/WpLinkModal";
+import DatasetEditModal from "@/components/DatasetEditModal";
 import CollapsibleSection from "@/components/ui/CollapsibleSection";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
 import type { DatasetReleaseStatus } from "@/lib/useCycle";
 import { useFavorites } from "@/lib/useFavorites";
 import { useWpMap, wpTypeOptionForDataset } from "@/lib/wpObjectMap";
+import { useDataset } from "@/lib/datasetForm";
 import FavoriteStar from "@/components/FavoriteStar";
 import { LoadingState } from "@/components/ui/Spinner";
-
-type Dataset = {
-  dataset_id: number;
-  dataset_type_id: number;
-  dataset_type_name: string;
-  dataset_doi: string;
-  dataset_name: string;
-  active: boolean;
-  when_created: string;
-  when_updated: string;
-  who_created: number;
-  who_updated: number;
-};
-
-type DatasetResponse = {
-  dataset?: Dataset;
-  data?: Dataset;
-  timestamp: string;
-};
 
 type DatasetRelease = {
   dataset_release_id: number;
@@ -157,9 +139,12 @@ export default function DatasetDetail() {
   const userMap = useUsers();
   const { favoriteKeys, toggle: toggleFavorite } = useFavorites();
   const { dataset_id: datasetId } = useParams<{ dataset_id: string }>();
-  const [data, setData] = useState<DatasetResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: dataset,
+    isLoading,
+    isError,
+    error: datasetError,
+  } = useDataset(datasetId);
   const [recordsetsPage, setRecordsetsPage] = useState(1);
   const [recordsetsItemsPerPage, setRecordsetsItemsPerPage] = useState(5);
   const [releasesPage, setReleasesPage] = useState(1);
@@ -174,12 +159,13 @@ export default function DatasetDetail() {
   const [recordsetsError, setRecordsetsError] = useState<string | null>(null);
 
   const [showWpModal, setShowWpModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
+  // Recordsets and releases only need the id -- independent of the dataset
+  // record itself, which now comes from the shared `useDataset` query (kept
+  // in sync with `DatasetEditModal`'s save via its cache invalidation).
   useEffect(() => {
     if (!datasetId) {
-      setError("Could not load dataset id.");
-      setData(null);
-      setIsLoading(false);
       setReleasesData(null);
       setIsLoadingReleases(false);
       setRecordsetsData(null);
@@ -189,74 +175,54 @@ export default function DatasetDetail() {
 
     let isMounted = true;
 
-    async function loadDataset() {
-      setIsLoading(true);
-      setError(null);
+    async function loadRecordsetsAndReleases() {
       setIsLoadingReleases(true);
       setReleasesError(null);
       setIsLoadingRecordsets(true);
       setRecordsetsError(null);
 
       try {
-        const response = await fetch(`/papi/v1/distribution/datasets/${datasetId}`, {
-          cache: "no-store",
-        });
+        const recordsetsQuery = new URLSearchParams({
+          dataset_id: datasetId!,
+          page: String(recordsetsPage),
+          limit: String(recordsetsItemsPerPage),
+        }).toString();
+        const recordsetsResponse = await fetch(
+          `/papi/v1/distribution/recordsets?${recordsetsQuery}`,
+          {
+            cache: "no-store",
+          },
+        );
 
-        if (!response.ok) {
-          const fallbackMessage = `Could not load dataset ${datasetId}.`;
-          const json = (await response.json()) as unknown;
-          throw new Error(extractApiError(json, fallbackMessage));
+        if (!recordsetsResponse.ok) {
+          throw new Error(`Could not load recordsets for dataset ${datasetId}.`);
         }
 
-        const json = (await response.json()) as DatasetResponse;
+        const recordsetsJson = (await recordsetsResponse.json()) as unknown;
 
         if (!isMounted) {
           return;
         }
 
-        setData({ ...json, dataset: json.dataset ?? json.data });
-
-        try {
-          const recordsetsQuery = new URLSearchParams({
-            dataset_id: datasetId!,
-            page: String(recordsetsPage),
-            limit: String(recordsetsItemsPerPage),
-          }).toString();
-          const recordsetsResponse = await fetch(
-            `/papi/v1/distribution/recordsets?${recordsetsQuery}`,
-            {
-              cache: "no-store",
-            },
-          );
-
-          if (!recordsetsResponse.ok) {
-            throw new Error(`Could not load recordsets for dataset ${datasetId}.`);
-          }
-
-          const recordsetsJson = (await recordsetsResponse.json()) as unknown;
-
-          if (!isMounted) {
-            return;
-          }
-
-          setRecordsetsData(normalizeDatasetRecordsetsResponse(recordsetsJson));
-        } catch (caughtError) {
-          if (!isMounted) {
-            return;
-          }
-
-          setRecordsetsData(null);
-          if (caughtError instanceof Error) {
-            setRecordsetsError(caughtError.message);
-          } else {
-            setRecordsetsError(`Could not load recordsets for dataset ${datasetId}.`);
-          }
-        } finally {
-          if (isMounted) {
-            setIsLoadingRecordsets(false);
-          }
+        setRecordsetsData(normalizeDatasetRecordsetsResponse(recordsetsJson));
+      } catch (caughtError) {
+        if (!isMounted) {
+          return;
         }
 
+        setRecordsetsData(null);
+        setRecordsetsError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : `Could not load recordsets for dataset ${datasetId}.`,
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingRecordsets(false);
+        }
+      }
+
+      try {
         const releasesQuery = new URLSearchParams({
           page: String(releasesPage),
           limit: String(releasesItemsPerPage),
@@ -284,39 +250,20 @@ export default function DatasetDetail() {
           return;
         }
 
-        if (
-          caughtError instanceof Error &&
-          caughtError.message.includes("releases")
-        ) {
-          setReleasesData(null);
-          setReleasesError(caughtError.message);
-        } else if (
-          caughtError instanceof Error &&
-          caughtError.message.includes("recordsets")
-        ) {
-          setRecordsetsData(null);
-          setRecordsetsError(caughtError.message);
-        } else {
-          if (caughtError instanceof Error) {
-            setError(caughtError.message);
-          } else {
-            setError(`Could not load dataset ${datasetId}.`);
-          }
-
-          setData(null);
-          setReleasesData(null);
-          setRecordsetsData(null);
-        }
+        setReleasesData(null);
+        setReleasesError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : `Could not load releases for dataset ${datasetId}.`,
+        );
       } finally {
         if (isMounted) {
-          setIsLoading(false);
           setIsLoadingReleases(false);
-          setIsLoadingRecordsets(false);
         }
       }
     }
 
-    void loadDataset();
+    void loadRecordsetsAndReleases();
 
     return () => {
       isMounted = false;
@@ -333,8 +280,6 @@ export default function DatasetDetail() {
     "dataset",
     datasetId ? Number(datasetId) : undefined,
   );
-
-  const dataset = data?.dataset ?? data?.data ?? null;
 
   // "Latest" = highest release_number that isn't retracted. Must match the
   // server-side NOT_RETRACTED rule in distribution.py.
@@ -391,12 +336,13 @@ export default function DatasetDetail() {
             >
               Release Cycle
             </LinkButton>
-            <LinkButton
+            <Button
               variant="ghost"
-              href={datasetId ? `/datasets/${datasetId}/edit` : "/datasets"}
+              onClick={() => setShowEditModal(true)}
+              disabled={!datasetId}
             >
               Edit Dataset
-            </LinkButton>
+            </Button>
           </>
         }
       />
@@ -407,9 +353,13 @@ export default function DatasetDetail() {
         </SectionCard>
       )}
 
-      {!isLoading && error && (
+      {!isLoading && isError && (
         <SectionCard className="mt-4">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {datasetError instanceof Error
+              ? datasetError.message
+              : `Could not load dataset ${datasetId}.`}
+          </p>
         </SectionCard>
       )}
 
@@ -647,6 +597,11 @@ export default function DatasetDetail() {
         posdaObjectType="dataset"
         posdaObjectId={datasetId ? Number(datasetId) : undefined}
         typeOptions={[wpTypeOptionForDataset(dataset?.dataset_type_name ?? "")]}
+      />
+      <DatasetEditModal
+        open={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        datasetId={datasetId}
       />
     </PageShell>
   );

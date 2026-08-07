@@ -3,15 +3,15 @@ import { useNavigate, useParams } from "react-router-dom";
 import DynamicTable from "@/components/DynamicTable";
 import CurrentCycleCard from "@/components/CurrentCycleCard";
 import RecordsetDestinationModal from "@/components/RecordsetDestinationModal";
+import RecordsetEditModal from "@/components/RecordsetEditModal";
 import WpLinkModal from "@/components/WpLinkModal";
 import CollapsibleSection from "@/components/ui/CollapsibleSection";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
-import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
 import { useFavorites } from "@/lib/useFavorites";
-import { useDestinationLookups } from "@/lib/recordsetForm";
+import { useDestinationLookups, useRecordset } from "@/lib/recordsetForm";
 import {
   useRecordsetDestinations,
   type RecordsetDestination,
@@ -19,29 +19,6 @@ import {
 import { useWpMap } from "@/lib/wpObjectMap";
 import FavoriteStar from "@/components/FavoriteStar";
 import { LoadingState } from "@/components/ui/Spinner";
-
-type Recordset = {
-  recordset_id: number;
-  recordset_doi: string;
-  dataset_id: number;
-  dataset_name: string;
-  license_id: number;
-  license_label: string;
-  recordset_type_id: number;
-  recordset_type_name: string;
-  recordset_name: string;
-  active: boolean;
-  when_created: string;
-  who_created: number;
-  when_updated: string;
-  who_updated: number;
-};
-
-type RecordsetResponse = {
-  recordset?: Recordset;
-  data?: Recordset;
-  timestamp: string;
-};
 
 type RecordsetRelease = {
   recordset_release_id: number;
@@ -149,9 +126,12 @@ export default function RecordsetDetail() {
   const userMap = useUsers();
   const { favoriteKeys, toggle: toggleFavorite } = useFavorites();
   const { recordset_id: recordsetId } = useParams<{ recordset_id: string }>();
-  const [data, setData] = useState<RecordsetResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: recordset,
+    isLoading,
+    isError,
+    error: recordsetError,
+  } = useRecordset(recordsetId);
   const [draftsPage, setDraftsPage] = useState(1);
   const [draftsItemsPerPage, setDraftsItemsPerPage] = useState(4);
   const [releasesPage, setReleasesPage] = useState(1);
@@ -174,12 +154,13 @@ export default function RecordsetDetail() {
   );
 
   const [showWpModal, setShowWpModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
+  // Releases and drafts only need the id -- independent of the recordset
+  // record itself, which comes from the shared `useRecordset` query (kept in
+  // sync with `RecordsetEditModal`'s save via its cache invalidation).
   useEffect(() => {
     if (!recordsetId) {
-      setError("Could not load recordset id.");
-      setData(null);
-      setIsLoading(false);
       setReleasesData(null);
       setDraftsData(null);
       setIsLoadingReleases(false);
@@ -189,33 +170,13 @@ export default function RecordsetDetail() {
 
     let isMounted = true;
 
-    async function loadRecordset() {
-      setIsLoading(true);
-      setError(null);
+    async function loadReleasesAndDrafts() {
       setIsLoadingReleases(true);
       setReleasesError(null);
       setIsLoadingDrafts(true);
       setDraftsError(null);
 
       try {
-        const response = await fetch(`/papi/v1/distribution/recordsets/${recordsetId}`, {
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          const fallbackMessage = `Could not load recordset ${recordsetId}.`;
-          const json = (await response.json()) as unknown;
-          throw new Error(extractApiError(json, fallbackMessage));
-        }
-
-        const json = (await response.json()) as RecordsetResponse;
-
-        if (!isMounted) {
-          return;
-        }
-
-        setData(json);
-
         const releasesQuery = new URLSearchParams({
           page: String(releasesPage),
           limit: String(releasesItemsPerPage),
@@ -272,33 +233,23 @@ export default function RecordsetDetail() {
         ) {
           setReleasesData(null);
           setReleasesError(caughtError.message);
-        } else if (
-          caughtError instanceof Error &&
-          caughtError.message.includes("drafts")
-        ) {
-          setDraftsData(null);
-          setDraftsError(caughtError.message);
         } else {
-          if (caughtError instanceof Error) {
-            setError(caughtError.message);
-          } else {
-            setError(`Could not load recordset ${recordsetId}.`);
-          }
-
-          setData(null);
-          setReleasesData(null);
           setDraftsData(null);
+          setDraftsError(
+            caughtError instanceof Error
+              ? caughtError.message
+              : `Could not load drafts for recordset ${recordsetId}.`,
+          );
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
           setIsLoadingReleases(false);
           setIsLoadingDrafts(false);
         }
       }
     }
 
-    void loadRecordset();
+    void loadReleasesAndDrafts();
 
     return () => {
       isMounted = false;
@@ -343,8 +294,6 @@ export default function RecordsetDetail() {
   const availableDestinations = allDestinations.filter(
     (d) => !configuredDestIds.has(d.destination_id),
   );
-
-  const recordset = data?.recordset ?? data?.data ?? null;
 
   const openDraft =
     draftsData?.drafts.find(
@@ -393,13 +342,13 @@ export default function RecordsetDetail() {
                 }
               }}
             />
-            <LinkButton
-              href={
-                recordsetId ? `/recordsets/${recordsetId}/edit` : "/recordsets"
-              }
+            <Button
+              variant="ghost"
+              onClick={() => setShowEditModal(true)}
+              disabled={!recordsetId}
             >
               Edit Recordset
-            </LinkButton>
+            </Button>
           </>
         }
       />
@@ -410,9 +359,13 @@ export default function RecordsetDetail() {
         </SectionCard>
       )}
 
-      {!isLoading && error && (
+      {!isLoading && isError && (
         <SectionCard className="mt-4">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {recordsetError instanceof Error
+              ? recordsetError.message
+              : `Could not load recordset ${recordsetId}.`}
+          </p>
         </SectionCard>
       )}
 
@@ -680,6 +633,12 @@ export default function RecordsetDetail() {
         typeOptions={[
           { value: "download", label: "Download", searchEndpoint: "manager/downloads" },
         ]}
+      />
+
+      <RecordsetEditModal
+        open={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        recordsetId={recordsetId}
       />
     </PageShell>
   );

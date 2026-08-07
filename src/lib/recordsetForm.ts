@@ -267,14 +267,18 @@ export function recordsetCreatePayload(values: RecordsetFormValues) {
  * Edit form -- fields, validation, and payload -- shared by the full page
  * (`pages/recordsets/Edit.tsx`) and the in-place modal
  * (`components/RecordsetEditModal.tsx`). Kept separate from the create form
- * above: the edit modal has no dataset selector (fixed by context), so its
- * field layout and value shape differ from create's.
+ * above because the field layouts differ. Includes a dataset selector so a
+ * recordset can be reassigned from either surface.
  */
 
 export type RecordsetRecord = {
   recordset_id: number;
   recordset_doi: string;
   dataset_id: number;
+  /** Joined lookup labels; present on reads, not needed for the edit form. */
+  dataset_name?: string;
+  license_label?: string;
+  recordset_type_name?: string;
   license_id: number;
   recordset_name: string;
   recordset_type_id: number;
@@ -286,6 +290,7 @@ export type RecordsetRecord = {
 };
 
 export type RecordsetEditFormValues = {
+  dataset_id: string;
   recordset_doi: string;
   license_id: string;
   recordset_name: string;
@@ -309,6 +314,7 @@ export function useRecordset(recordsetId: string | number | undefined) {
 /** The API represents "no DOI yet" as the literal string "-". */
 export function recordsetToFormValues(recordset: RecordsetRecord): RecordsetEditFormValues {
   return {
+    dataset_id: String(recordset.dataset_id),
     recordset_doi:
       recordset.recordset_doi && recordset.recordset_doi !== "-" ? recordset.recordset_doi : "",
     license_id: String(recordset.license_id),
@@ -318,16 +324,33 @@ export function recordsetToFormValues(recordset: RecordsetRecord): RecordsetEdit
   };
 }
 
-/** Compact 2-column layout for the edit modal: Name, DOI, and Type each span
- *  both columns on their own row; License + Active share the 4th row. */
+/** Compact 2-column layout for the edit modal: Dataset, Name, DOI, and Type
+ *  each span both columns on their own row; License + Active share the last. */
 export function recordsetEditFormFields({
   recordsetTypes,
   licenses,
+  datasets,
 }: {
   recordsetTypes: RecordsetType[];
   licenses: License[];
+  datasets: Dataset[];
 }): Array<DynamicFormField<RecordsetEditFormValues>> {
   return [
+    {
+      key: "dataset_id",
+      label: "Dataset",
+      type: "select",
+      required: true,
+      className: "col-span-2 block",
+      options: [
+        PLACEHOLDER,
+        ...datasets.map((d) => ({
+          value: String(d.dataset_id),
+          label: `${d.dataset_id} - ${d.dataset_name}`,
+        })),
+      ],
+      controlClassName: "mt-1 select",
+    },
     {
       key: "recordset_name",
       label: "Name",
@@ -384,15 +407,16 @@ export function validateRecordsetEditForm(
   values: RecordsetEditFormValues,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
+  if (!values.dataset_id) errors.dataset_id = "Dataset is required.";
   if (!values.recordset_name.trim()) errors.recordset_name = "Name is required.";
   if (!values.recordset_type_id) errors.recordset_type_id = "Type is required.";
   if (!values.license_id) errors.license_id = "License is required.";
   return errors;
 }
 
-export function recordsetEditPayload(values: RecordsetEditFormValues, datasetId: number) {
+export function recordsetEditPayload(values: RecordsetEditFormValues) {
   return {
-    dataset_id: datasetId,
+    dataset_id: Number(values.dataset_id),
     recordset_name: values.recordset_name.trim(),
     recordset_type_id: Number(values.recordset_type_id),
     license_id: Number(values.license_id),
@@ -401,17 +425,13 @@ export function recordsetEditPayload(values: RecordsetEditFormValues, datasetId:
   };
 }
 
-export function useSaveRecordset(
-  recordsetId: string | number | undefined,
-  datasetId: number | undefined,
-) {
+export function useSaveRecordset(recordsetId: string | number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (values: RecordsetEditFormValues) => {
-      if (datasetId == null) throw new Error("Missing dataset id.");
       const json = await apiFetch<{ recordset?: RecordsetRecord; data?: RecordsetRecord }>(
         `/papi/v1/distribution/recordsets/${recordsetId}`,
-        { method: "PUT", body: JSON.stringify(recordsetEditPayload(values, datasetId)) },
+        { method: "PUT", body: JSON.stringify(recordsetEditPayload(values)) },
       );
       return json.recordset ?? json.data ?? null;
     },
