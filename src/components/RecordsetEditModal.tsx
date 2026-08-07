@@ -20,6 +20,9 @@ type RecordsetEditModalProps = {
   open: boolean;
   onClose: () => void;
   recordsetId: string | number | undefined;
+  /** For hosts whose list isn't react-query, so the save's cache
+   *  invalidation can't refresh it. */
+  onSaved?: () => void;
 };
 
 const EMPTY: RecordsetEditFormValues = {
@@ -39,6 +42,7 @@ export default function RecordsetEditModal({
   open,
   onClose,
   recordsetId,
+  onSaved,
 }: RecordsetEditModalProps) {
   const { addToast } = useToast();
   const { data: recordset, isLoading: isLoadingRecordset } = useRecordset(
@@ -64,6 +68,7 @@ export default function RecordsetEditModal({
     try {
       await save.mutateAsync(values);
       toastSuccess(addToast, "Recordset saved.");
+      onSaved?.();
       onClose();
     } catch (e) {
       toastError(addToast, e instanceof Error ? e.message : "Could not save recordset.");

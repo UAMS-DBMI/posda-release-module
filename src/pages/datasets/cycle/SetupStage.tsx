@@ -9,11 +9,11 @@ import DynamicTable from "@/components/DynamicTable";
 import { Button, ExternalLinkButton } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
-  useWpMap,
-  useWpObject,
-  wpTypeOptionForDataset,
-  type WpObjectLive,
-} from "@/lib/wpObjectMap";
+  WpBadge,
+  WpBadgeSkeleton,
+  wpBadgeState,
+} from "@/components/WpLinkPill";
+import { useWpMap, useWpObject, wpTypeOptionForDataset } from "@/lib/wpObjectMap";
 import { useDeleteRecordsetDestination } from "@/lib/recordsetDestinations";
 import { EditIcon, ExternalLinkIcon, LinkIcon } from "@/components/icons";
 import classNames from "@/lib/classNames";
@@ -21,32 +21,6 @@ import { useToast } from "@/components/Toast";
 import { toastError } from "@/components/toastHelpers";
 import { useCycleContext } from "./CycleLayout";
 import type { CycleRecordsetDestination } from "@/lib/useCycle";
-
-/** Label/variant for a WordPress link pill. Checks `status === "trash"`
- *  rather than the slug -- WP appends "__trashed" to the slug on trash, so
- *  matching that string is brittle compared to reading the real status. */
-function wpBadgeState(
-  linked: boolean,
-  isError: boolean,
-  data: WpObjectLive | undefined,
-): { label: string; variant: "success" | "danger" | "warning" | "neutral" } {
-  if (!linked) return { label: "Not Linked", variant: "warning" };
-  if (isError) return { label: "Broken Link", variant: "danger" };
-  if (data?.status === "trash") return { label: "Trashed", variant: "warning" };
-  return { label: data?.slug ?? "Linked", variant: "success" };
-}
-
-/** Placeholder for the brief window between "linked" and the live slug
- *  arriving -- avoids showing "Linked" and then visibly swapping to the
- *  slug a moment later. */
-function WpBadgeSkeleton() {
-  return (
-    <span
-      className="inline-block h-5 w-20 animate-pulse rounded-full"
-      style={{ background: "var(--border-strong)" }}
-    />
-  );
-}
 
 /** Stage 0 — ready the dataset for cycles. Step 2 adds relations; for now it
  *  lists recordsets, lets you create one, and manage each one's destinations
@@ -361,7 +335,11 @@ export default function SetupStage() {
               label: "WordPress",
               render: (_v, row) => (
                 <div className="flex items-center gap-2">
-                  <RecordsetWpBadge recordsetId={row.recordset_id} wpLinked={row.wp_linked} />
+                  <WpBadge
+                    posdaObjectType="recordset"
+                    posdaObjectId={row.recordset_id}
+                    linked={row.wp_linked}
+                  />
                   <Button
                     size="sm"
                     variant="ghost"
@@ -449,24 +427,3 @@ export default function SetupStage() {
   );
 }
 
-/** One row's WordPress pill -- its own component so each row's live slug
- *  lookup (by the immutable wp_object_id, never cached in wp_object_map)
- *  is an independent query, not a hook called from inside a `.map()`. */
-function RecordsetWpBadge({
-  recordsetId,
-  wpLinked,
-}: {
-  recordsetId: number;
-  wpLinked: boolean;
-}) {
-  const { data, isLoading, isError } = useWpObject("recordset", recordsetId, wpLinked);
-  if (wpLinked && isLoading) return <WpBadgeSkeleton />;
-  const badge = wpBadgeState(wpLinked, isError, data);
-  return (
-    <StatusBadge
-      status={wpLinked ? "linked" : "not_linked"}
-      label={badge.label}
-      variant={badge.variant}
-    />
-  );
-}

@@ -584,6 +584,25 @@ Recorded so they aren't rediscovered late.
   other. `Start QC`/`Add Review` picks non-DICOM mode when the draft is
   non-DICOM-only. **Residual** (TECH_DEBT #13): mixed drafts and Clone-on-non_dicom.
   See memory `mirabelle-dicom-only`.
+- **Should Setup be a cycle stage at all? — considered 2026-08-06, deferred.**
+  Setup manages dataset *configuration* (which recordsets exist, their
+  destinations, the WordPress links) — state that persists across every release,
+  unlike the five stages after it, which each operate on one release. Moving it
+  onto `datasets/Detail` would make a cycle genuinely start at **Assemble**, and
+  would also delete the duplicate recordset table (that page and Setup render
+  the same objects two ways) plus Setup's one-row dataset table, which just
+  repeats the detail page's header and WP pill. **Not done because** the
+  readiness checks in `stageMessage`/`stageSummaries` — no recordsets, dataset
+  not WP-linked, missing destinations, unlinked recordset downloads, orphaned
+  downloads — are real release preconditions that currently surface *as* the
+  Setup tab; they'd have to be re-homed (most naturally a blocking prerequisites
+  banner in `CycleNextAction` that links to the dataset page) before the tab can
+  go, and a curator mid-cycle would then leave the wizard to fix them. Mechanical
+  fallout if revisited: `STAGE_ORDER` / `STAGE_LABELS` / `STAGE_BLURBS` /
+  `ACTION_LABELS` setup entries, the `setup` route, `LEGACY_STAGE.setup`,
+  `firstUnfinishedStage`'s `?? "setup"` fallback, and a redirect from
+  `/datasets/:id/cycle/setup` → `/datasets/:id`. Revisit once Bundle and
+  Transfer are done and it's clear how often Setup is touched mid-cycle.
 - **One draft dataset release at a time.** Bundle can cut a release while another
   is still `draft`, producing two half-assembled releases and an ambiguous
   "latest". The equivalent rule for drafts (one open per recordset) is now

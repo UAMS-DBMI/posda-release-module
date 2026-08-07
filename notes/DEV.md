@@ -48,10 +48,17 @@ route + unused imports. Full analysis in the 2026-08-06 discussion.
       hook so the page reflects modal saves; releases/drafts fetch decoupled
       from it. `RecordsetRecord` gained optional `dataset_name`/
       `license_label`/`recordset_type_name` (present on reads). Build clean.
-- [ ] **3. `recordsets/Detail` → `CreateDraftModal`.** Replace "New Draft" link
-      (`Detail:481`); remove page **`recordsets/drafts/create`**. ⚠ also repoint
-      the *other* inbound link in **`CurrentCycleCard:143`**. Pass
-      `recordset_id` as a prop.
+- [ ] **3. `recordsets/Detail` → `CreateDraftModal`.** Replace the "New Draft"
+      link in the Drafts section header; remove page
+      **`recordsets/drafts/create`**. Pass `recordset_id` as a prop. ~~⚠ also
+      repoint `CurrentCycleCard:143`~~ — moot, that card is gone (see the
+      recordset-detail rework below), so this page's header link is the only
+      inbound one left. **Open question, unanswered:** after the modal creates a
+      draft, does it (A) navigate to `/recordsets/drafts/{id}`, matching what the
+      removed page did, or (B) stay put and refresh the Drafts table? Either way
+      the modal needs a new `onCreated` — this page's drafts list is a
+      hand-rolled `useEffect`, so the modal's `["dataset-cycle"]` invalidation
+      can't reach it.
 - [ ] **4. `recordsets/drafts/Detail` → `ManageFilesModal`.** Replace "Edit Files"
       link (`Detail:333`); remove page **`recordsets/drafts/:id/files`**
       (`Files.tsx`, already functionally superseded). Confirm `Files.tsx`'s own
@@ -62,8 +69,14 @@ route + unused imports. Full analysis in the 2026-08-06 discussion.
 - [ ] **6. (optional) `recordsets/List` → `CreateRecordsetModal`.** Replace "New
       Recordset" (`List:269` + `datasets/Detail:429`); remove page
       **`recordsets/create`**. Lower value (list→page create is fine).
-- [ ] **7. (optional) `datasets/Detail` "Add Recordset" → `CreateRecordsetModal`**
-      in place (instead of navigating to `/recordsets/create`).
+- [x] **7. `datasets/Detail` "New Recordset" → `CreateRecordsetModal`.**
+      *(done 2026-08-06)* Opens in place instead of navigating to
+      `/recordsets/create`; the page (and item 6) still stand. Because the
+      page's recordsets list is a hand-rolled `useEffect` fetch, not
+      react-query, the modal's `["dataset-cycle"]` invalidation can't reach it —
+      the page passes `onCreated` to bump a local `refreshKey` that sits in the
+      effect's deps. `RecordsetEditModal` gained the same escape hatch as an
+      optional `onSaved`. See the dataset-detail rework below.
 - [ ] **8. (optional) `recordsets/drafts/Detail` Assemble parity** — inline
       `DraftSummary` + a Mark Ready/Reopen action.
 - [ ] **9. (optional) `QcReviewsCard` → open `QcReviewManageModal`** in place;
@@ -79,6 +92,90 @@ route + unused imports. Full analysis in the 2026-08-06 discussion.
 **Already consistent (no work):** `RecordsetDestinationModal`, `WpLinkModal`,
 `QcReviewModal`, and the shared `Qc*` review components are already used by both
 the cycle and the non-cycle pages.
+
+### 🧹 `datasets/Detail` rework — done 2026-08-06
+
+Ran alongside the checklist above, driven by "the page carries too much
+furniture for what it shows". Net effect: header + one panel with two tables.
+
+- **`LatestReleaseCard` deleted** (component + its only usage). It duplicated
+  the header (name/type), the Releases table (version/date/status), and the
+  cycle's Transfer stage (transfer chips + View Transfers). Its
+  latest-non-retracted `reduce` went with it — which also **removes one of the
+  three "latest release" definitions** flagged as tech-debt item 6.
+- **"Record Details" section deleted** — dataset id, created, updated moved
+  into the header subtitle as `#id · doi · type · updated <date> by <user>`.
+  Created-by/created-date are deliberately **not** shown (asked for and
+  declined); date only, no time-of-day.
+- **WordPress section → `WpLinkPill`** in the header (new
+  `components/WpLinkPill.tsx`; same treatment applied to
+  `recordsets/Detail.tsx`). The pill owns its own `WpLinkModal`, so both pages
+  dropped their `useWpMap` call, `showWpModal` state, and modal instance. It
+  shows the **live slug** via `useWpObject` (Broken Link / Trashed states),
+  which the old sections couldn't. Dropped in the trade: the synced timestamp
+  and the explicit WP object type/ID.
+  - `wpBadgeState` / `WpBadgeSkeleton` / the per-row badge moved out of
+    `SetupStage.tsx` into that file (now exported as `WpBadge`); Setup imports
+    them, so there's one copy.
+  - `PageDetailHeader` gained an optional **`subActions`** slot: its body is now
+    a two-row `grid-cols-[1fr_auto]`, so second-row actions land on the
+    subtitle's line instead of stacking below the taller button row. Additive —
+    pages passing only `actions` are unchanged. Note `items-center`: a wrapping
+    subtitle will center the subActions against the whole block.
+- **Recordsets table** — ID column gone; Name is now a ✏ (opens
+  `RecordsetEditModal`) plus a `target="_blank"` link, mirroring Setup's cell.
+  Unlike Setup, this table has `onRowClick`, which `DynamicTable` puts on the
+  `<tr>`, so the cell **stops propagation** — otherwise the pencil/link would
+  also navigate the current tab. Row-click-elsewhere still navigates in-tab.
+- **Both tables unpaginated** — `hideSummary`, no pager, fetches switched to
+  `limit=1000` (see tech-debt item 15).
+- **One panel** — everything below the page header is a single `SectionCard`
+  (like `CycleLayout`), with the two `CardHeader`s acting as in-card dividers
+  instead of each table sitting in its own card.
+
+### 🧹 `recordsets/Detail` rework — done 2026-08-06
+
+Same treatment as the dataset page above, so the two detail pages read alike.
+
+- **WordPress collapsible → `WpLinkPill`** in the header (shared with the dataset
+  page; see above for what that pill gains and drops).
+- **"Record Details" collapsible deleted** — `#id` moved into the header
+  subtitle, which now reads `#id · doi · dataset · type · license · updated
+  <date>`. ⚠ **Deliberately different from the dataset page**, which shows
+  `updated <date> by <user>`: here "only the updated date" was asked for, so
+  there's no `by <user>`. Pick one if the inconsistency ever grates.
+  `useUsers`/`userMap` went with the card — nothing else on the page used it.
+- **`CurrentCycleCard` deleted** (component + its only usage). It duplicated the
+  cycle page's own strip, and took its `["draft-diff", …]` query and `useQcReviews`
+  call with it. `openDraft` is still computed — the Drafts header uses it to
+  decide whether to offer **New Draft**.
+- **Sections reordered and un-collapsed** — now **Destinations → Drafts →
+  Releases** (was Releases → Draft History → Destinations), each a plain
+  `CardHeader` + body instead of a `CollapsibleSection`. The old `summary`
+  counts survive as a muted `(N)` beside the title; the section action buttons
+  moved into the header row unchanged.
+- **One panel** — everything below the page header is a single `SectionCard`,
+  as on the dataset page.
+- **Not done here, unlike the dataset page:** all three tables keep their pagers
+  and per-page pickers, and the tables have no ✏ / new-tab name cell.
+
+**Left-behind components** (not deleted, flagged instead — tech-debt 16):
+`CollapsibleSection` now has **zero** call sites app-wide; `CycleStrip` has no
+render sites but `ui/Tabs.tsx` still imports its `CycleStageState` type.
+
+**Considered and deferred, don't re-litigate from scratch:** giving this page
+Setup's full recordset table (destinations chips, WP column) via a shared
+`RecordsetSetupTable` — and, going further, **moving the whole Setup stage onto
+this page** so a cycle starts at Assemble. Setup is dataset *configuration*
+that outlives any one release, so it sits oddly in a per-release wizard, and
+moving it would delete the duplicate-table problem outright. Not done: the
+readiness checks in `stageMessage`/`stageSummaries` (no recordsets, dataset not
+WP-linked, missing destinations, unlinked downloads, orphaned downloads) are
+real release preconditions that currently surface *as* the Setup tab, and they'd
+have to be re-homed as a prerequisites banner first; and a curator mid-cycle
+would leave the wizard to fix them. Revisit once Bundle/Transfer are finished
+and it's clear how often Setup is touched mid-cycle. Full reasoning in the
+2026-08-06 discussion.
 
 > **Sequencing (top to bottom):**
 > 0. **QC Review enhancements — DATA MODEL FIRST** (see ⭐ below) — the current

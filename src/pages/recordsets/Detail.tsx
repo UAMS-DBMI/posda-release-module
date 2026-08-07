@@ -1,22 +1,18 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DynamicTable from "@/components/DynamicTable";
-import CurrentCycleCard from "@/components/CurrentCycleCard";
 import RecordsetDestinationModal from "@/components/RecordsetDestinationModal";
 import RecordsetEditModal from "@/components/RecordsetEditModal";
-import WpLinkModal from "@/components/WpLinkModal";
-import CollapsibleSection from "@/components/ui/CollapsibleSection";
+import WpLinkPill from "@/components/WpLinkPill";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
-import { useUsers } from "@/lib/useUsers";
 import { useFavorites } from "@/lib/useFavorites";
 import { useDestinationLookups, useRecordset } from "@/lib/recordsetForm";
 import {
   useRecordsetDestinations,
   type RecordsetDestination,
 } from "@/lib/recordsetDestinations";
-import { useWpMap } from "@/lib/wpObjectMap";
 import FavoriteStar from "@/components/FavoriteStar";
 import { LoadingState } from "@/components/ui/Spinner";
 
@@ -123,7 +119,6 @@ function normalizeRecordsetDraftsResponse(
 
 export default function RecordsetDetail() {
   const navigate = useNavigate();
-  const userMap = useUsers();
   const { favoriteKeys, toggle: toggleFavorite } = useFavorites();
   const { recordset_id: recordsetId } = useParams<{ recordset_id: string }>();
   const {
@@ -153,7 +148,6 @@ export default function RecordsetDetail() {
     null,
   );
 
-  const [showWpModal, setShowWpModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
   // Releases and drafts only need the id -- independent of the recordset
@@ -276,10 +270,6 @@ export default function RecordsetDetail() {
     setShowDestModal(false);
   }
 
-  const { data: wpMap, isLoading: isLoadingWpMap } = useWpMap(
-    "recordset",
-    recordsetId ? Number(recordsetId) : undefined,
-  );
 
   const {
     data: destinations = [],
@@ -299,10 +289,10 @@ export default function RecordsetDetail() {
     draftsData?.drafts.find(
       (d) => d.draft_status !== "published" && d.draft_status !== "deleted",
     ) ?? null;
-  const latestRelease = releasesData?.releases[0] ?? null;
 
   const metadataStrip = recordset
     ? [
+        `#${recordset.recordset_id}`,
         recordset.recordset_doi,
         recordset.dataset_name,
         recordset.recordset_type_name,
@@ -351,6 +341,19 @@ export default function RecordsetDetail() {
             </Button>
           </>
         }
+        subActions={
+          <WpLinkPill
+            posdaObjectType="recordset"
+            posdaObjectId={recordsetId ? Number(recordsetId) : undefined}
+            typeOptions={[
+              {
+                value: "download",
+                label: "Download",
+                searchEndpoint: "manager/downloads",
+              },
+            ]}
+          />
+        }
       />
 
       {isLoading && (
@@ -370,18 +373,118 @@ export default function RecordsetDetail() {
       )}
 
       {!isLoading && recordset && recordsetId && (
-        <>
-          <CurrentCycleCard
-            recordsetId={recordsetId}
-            isLoading={isLoadingDrafts || isLoadingReleases}
-            openDraft={openDraft}
-            latestRelease={latestRelease}
-          />
+        <SectionCard className="mt-4">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle>Destinations</CardTitle>
+              <span className="text-xs" style={{ color: "var(--muted)" }}>
+                ({destinations.length})
+              </span>
+            </div>
+            <Button
+              size="sm"
+              onClick={openAddDestModal}
+              disabled={availableDestinations.length === 0}
+            >
+              New Destination
+            </Button>
+          </CardHeader>
+          <div>
+            {isLoadingDestinations && (
+              <p className="text-sm">Loading destinations...</p>
+            )}
+            {!isLoadingDestinations && destinationsError && (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {destinationsError}
+              </p>
+            )}
+            {!isLoadingDestinations && !destinationsError && (
+              <DynamicTable
+                rows={destinations}
+                pagination={{
+                  defaultItemsPerPage: 4,
+                  totalItems: destinations.length,
+                  page: destinationsPage,
+                  pageSize: destinationsItemsPerPage,
+                  onPageChange: setDestinationsPage,
+                  onPageSizeChange: (n) => {
+                    setDestinationsItemsPerPage(n);
+                    setDestinationsPage(1);
+                  },
+                }}
+                columns={[
+                  { key: "destination_name", label: "Destination" },
+                  { key: "destination_abbr", label: "Abbr" },
+                  { key: "default_display", label: "Default Display" },
+                ]}
+                formatters={{
+                  default_display: (value) => (value ? "Yes" : "No"),
+                }}
+                onRowClick={(row) => openEditDestModal(row)}
+                getRowKey={(row) => row.destination_id}
+              />
+            )}
+          </div>
 
-          <CardHeader className="mt-6 mb-0">
+          <CardHeader className="mt-6">
+            <div className="flex items-center gap-2">
+              <CardTitle>Drafts</CardTitle>
+              {draftsData && (
+                <span className="text-xs" style={{ color: "var(--muted)" }}>
+                  ({draftsData.total})
+                </span>
+              )}
+            </div>
+            {!openDraft && (
+              <LinkButton
+                href={`/recordsets/drafts/create?recordset_id=${recordsetId}`}
+                size="sm"
+              >
+                New Draft
+              </LinkButton>
+            )}
+          </CardHeader>
+          <div>
+            {isLoadingDrafts && <p className="text-sm">Loading drafts...</p>}
+            {!isLoadingDrafts && draftsError && (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {draftsError}
+              </p>
+            )}
+            {!isLoadingDrafts && !draftsError && draftsData && (
+              <DynamicTable
+                rows={draftsData.drafts}
+                pagination={{
+                  defaultItemsPerPage: 4,
+                  totalItems: draftsData.total,
+                  page: draftsPage,
+                  pageSize: draftsItemsPerPage,
+                  onPageChange: setDraftsPage,
+                  onPageSizeChange: (nextItemsPerPage) => {
+                    setDraftsItemsPerPage(nextItemsPerPage);
+                    setDraftsPage(1);
+                  },
+                }}
+                columns={[
+                  { key: "recordset_draft_id", label: "ID" },
+                  { key: "draft_name", label: "Name" },
+                  { key: "draft_status", label: "Status" },
+                  { key: "draft_notes", label: "Notes" },
+                  { key: "file_count", label: "File Count" },
+                  { key: "cloned_from_release_id", label: "Cloned Release ID" },
+                ]}
+                onRowClick={(row) =>
+                  navigate(`/recordsets/drafts/${row.recordset_draft_id}`)
+                }
+                getRowKey={(row) => row.recordset_draft_id}
+              />
+            )}
+          </div>
+
+          <CardHeader className="mt-6">
             <CardTitle>Releases</CardTitle>
           </CardHeader>
-          <SectionCard className="mt-1">
+          <div>
             {isLoadingReleases && (
               <p className="text-sm">Loading releases...</p>
             )}
@@ -423,199 +526,8 @@ export default function RecordsetDetail() {
                 getRowKey={(row) => row.recordset_release_id}
               />
             )}
-          </SectionCard>
-
-          <CollapsibleSection
-            title="Draft History"
-            summary={draftsData ? `(${draftsData.total})` : undefined}
-            actions={
-              !openDraft ? (
-                <LinkButton
-                  href={`/recordsets/drafts/create?recordset_id=${recordsetId}`}
-                  size="sm"
-                >
-                  New Draft
-                </LinkButton>
-              ) : undefined
-            }
-          >
-            {isLoadingDrafts && <p className="text-sm">Loading drafts...</p>}
-            {!isLoadingDrafts && draftsError && (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {draftsError}
-              </p>
-            )}
-            {!isLoadingDrafts && !draftsError && draftsData && (
-              <DynamicTable
-                rows={draftsData.drafts}
-                pagination={{
-                  defaultItemsPerPage: 4,
-                  totalItems: draftsData.total,
-                  page: draftsPage,
-                  pageSize: draftsItemsPerPage,
-                  onPageChange: setDraftsPage,
-                  onPageSizeChange: (nextItemsPerPage) => {
-                    setDraftsItemsPerPage(nextItemsPerPage);
-                    setDraftsPage(1);
-                  },
-                }}
-                columns={[
-                  { key: "recordset_draft_id", label: "ID" },
-                  { key: "draft_name", label: "Name" },
-                  { key: "draft_status", label: "Status" },
-                  { key: "draft_notes", label: "Notes" },
-                  { key: "file_count", label: "File Count" },
-                  { key: "cloned_from_release_id", label: "Cloned Release ID" },
-                ]}
-                onRowClick={(row) =>
-                  navigate(`/recordsets/drafts/${row.recordset_draft_id}`)
-                }
-                getRowKey={(row) => row.recordset_draft_id}
-              />
-            )}
-          </CollapsibleSection>
-
-          <CollapsibleSection
-            title="Destinations"
-            summary={`(${destinations.length})`}
-            actions={
-              <Button
-                size="sm"
-                onClick={openAddDestModal}
-                disabled={availableDestinations.length === 0}
-              >
-                New Destination
-              </Button>
-            }
-          >
-            {isLoadingDestinations && (
-              <p className="text-sm">Loading destinations...</p>
-            )}
-            {!isLoadingDestinations && destinationsError && (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {destinationsError}
-              </p>
-            )}
-            {!isLoadingDestinations && !destinationsError && (
-              <DynamicTable
-                rows={destinations}
-                pagination={{
-                  defaultItemsPerPage: 4,
-                  totalItems: destinations.length,
-                  page: destinationsPage,
-                  pageSize: destinationsItemsPerPage,
-                  onPageChange: setDestinationsPage,
-                  onPageSizeChange: (n) => {
-                    setDestinationsItemsPerPage(n);
-                    setDestinationsPage(1);
-                  },
-                }}
-                columns={[
-                  { key: "destination_name", label: "Destination" },
-                  { key: "destination_abbr", label: "Abbr" },
-                  { key: "default_display", label: "Default Display" },
-                ]}
-                formatters={{
-                  default_display: (value) => (value ? "Yes" : "No"),
-                }}
-                onRowClick={(row) => openEditDestModal(row)}
-                getRowKey={(row) => row.destination_id}
-              />
-            )}
-          </CollapsibleSection>
-
-          <CollapsibleSection
-            title="WordPress Object"
-            summary={
-              isLoadingWpMap ? undefined : wpMap ? "mapped ✓" : "not linked"
-            }
-            actions={
-              <Button size="sm" onClick={() => setShowWpModal(true)}>
-                {wpMap ? "Change Link" : "Link to WordPress"}
-              </Button>
-            }
-          >
-            {isLoadingWpMap && <LoadingState />}
-            {!isLoadingWpMap && wpMap === null && (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                No WordPress object linked.
-              </p>
-            )}
-            {!isLoadingWpMap && wpMap && (
-              <div className="space-y-1 text-sm">
-                <p>
-                  <span className="font-medium capitalize">
-                    {wpMap.wp_object_type}
-                  </span>{" "}
-                  <span style={{ color: "var(--muted)" }}>
-                    ID {wpMap.wp_object_id}
-                  </span>
-                </p>
-                <div className="flex gap-4 text-xs">
-                  {wpMap.wp_view_url && (
-                    <a
-                      href={wpMap.wp_view_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      View on site ↗
-                    </a>
-                  )}
-                  {wpMap.wp_edit_url && (
-                    <a
-                      href={wpMap.wp_edit_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      Edit in WordPress ↗
-                    </a>
-                  )}
-                </div>
-                {wpMap.when_synced && (
-                  <p className="text-xs" style={{ color: "var(--muted)" }}>
-                    Synced: {new Date(wpMap.when_synced).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            )}
-          </CollapsibleSection>
-
-          <CollapsibleSection title="Record Details">
-            <div className="space-y-1 text-sm" style={{ color: "var(--muted)" }}>
-              <p>
-                <span
-                  className="font-medium"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  Recordset ID:
-                </span>{" "}
-                {recordset.recordset_id}
-              </p>
-              <p>
-                <span
-                  className="font-medium"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  Created:
-                </span>{" "}
-                {new Date(recordset.when_created).toLocaleString()} by{" "}
-                {userMap.get(recordset.who_created) ?? "—"}
-              </p>
-              <p>
-                <span
-                  className="font-medium"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  Updated:
-                </span>{" "}
-                {new Date(recordset.when_updated).toLocaleString()} by{" "}
-                {userMap.get(recordset.who_updated) ?? "—"}
-              </p>
-            </div>
-          </CollapsibleSection>
-        </>
+          </div>
+        </SectionCard>
       )}
 
       <RecordsetDestinationModal
@@ -623,16 +535,6 @@ export default function RecordsetDetail() {
         onClose={closeDestModal}
         recordsetId={recordsetId}
         editingDestinationId={editingDestinationId}
-      />
-
-      <WpLinkModal
-        open={showWpModal}
-        onClose={() => setShowWpModal(false)}
-        posdaObjectType="recordset"
-        posdaObjectId={recordsetId ? Number(recordsetId) : undefined}
-        typeOptions={[
-          { value: "download", label: "Download", searchEndpoint: "manager/downloads" },
-        ]}
       />
 
       <RecordsetEditModal

@@ -1,10 +1,11 @@
 ﻿import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import DynamicTable from "@/components/DynamicTable";
-import LatestReleaseCard from "@/components/LatestReleaseCard";
-import WpLinkModal from "@/components/WpLinkModal";
+import CreateRecordsetModal from "@/components/CreateRecordsetModal";
+import RecordsetEditModal from "@/components/RecordsetEditModal";
+import { EditIcon } from "@/components/icons";
+import WpLinkPill from "@/components/WpLinkPill";
 import DatasetEditModal from "@/components/DatasetEditModal";
-import CollapsibleSection from "@/components/ui/CollapsibleSection";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
@@ -12,7 +13,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useUsers } from "@/lib/useUsers";
 import type { DatasetReleaseStatus } from "@/lib/useCycle";
 import { useFavorites } from "@/lib/useFavorites";
-import { useWpMap, wpTypeOptionForDataset } from "@/lib/wpObjectMap";
+import { wpTypeOptionForDataset } from "@/lib/wpObjectMap";
 import { useDataset } from "@/lib/datasetForm";
 import FavoriteStar from "@/components/FavoriteStar";
 import { LoadingState } from "@/components/ui/Spinner";
@@ -145,10 +146,6 @@ export default function DatasetDetail() {
     isError,
     error: datasetError,
   } = useDataset(datasetId);
-  const [recordsetsPage, setRecordsetsPage] = useState(1);
-  const [recordsetsItemsPerPage, setRecordsetsItemsPerPage] = useState(5);
-  const [releasesPage, setReleasesPage] = useState(1);
-  const [releasesItemsPerPage, setReleasesItemsPerPage] = useState(4);
   const [releasesData, setReleasesData] =
     useState<DatasetReleasesResponse | null>(null);
   const [isLoadingReleases, setIsLoadingReleases] = useState(false);
@@ -158,8 +155,10 @@ export default function DatasetDetail() {
   const [isLoadingRecordsets, setIsLoadingRecordsets] = useState(false);
   const [recordsetsError, setRecordsetsError] = useState<string | null>(null);
 
-  const [showWpModal, setShowWpModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateRecordset, setShowCreateRecordset] = useState(false);
+  const [editRecordsetId, setEditRecordsetId] = useState<number | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Recordsets and releases only need the id -- independent of the dataset
   // record itself, which now comes from the shared `useDataset` query (kept
@@ -182,10 +181,10 @@ export default function DatasetDetail() {
       setRecordsetsError(null);
 
       try {
+        // Unpaginated: the table lists every recordset in the dataset.
         const recordsetsQuery = new URLSearchParams({
           dataset_id: datasetId!,
-          page: String(recordsetsPage),
-          limit: String(recordsetsItemsPerPage),
+          limit: "1000",
         }).toString();
         const recordsetsResponse = await fetch(
           `/papi/v1/distribution/recordsets?${recordsetsQuery}`,
@@ -223,9 +222,9 @@ export default function DatasetDetail() {
       }
 
       try {
+        // Unpaginated, like the recordsets table above.
         const releasesQuery = new URLSearchParams({
-          page: String(releasesPage),
-          limit: String(releasesItemsPerPage),
+          limit: "1000",
         }).toString();
         const releasesResponse = await fetch(
           `/papi/v1/distribution/datasets/${datasetId}/releases?${releasesQuery}`,
@@ -270,33 +269,19 @@ export default function DatasetDetail() {
     };
   }, [
     datasetId,
-    recordsetsPage,
-    recordsetsItemsPerPage,
-    releasesPage,
-    releasesItemsPerPage,
+    // Bumped after a modal create -- this list isn't react-query, so the
+    // modal's cache invalidation can't refresh it.
+    refreshKey,
   ]);
-
-  const { data: wpMap, isLoading: isLoadingWpMap } = useWpMap(
-    "dataset",
-    datasetId ? Number(datasetId) : undefined,
-  );
-
-  // "Latest" = highest release_number that isn't retracted. Must match the
-  // server-side NOT_RETRACTED rule in distribution.py.
-  const latestRelease =
-    releasesData?.releases
-      .filter((r) => r.release_status !== "retracted")
-      .reduce<DatasetRelease | null>(
-        (latest, r) =>
-          latest == null || r.release_number > latest.release_number ? r : latest,
-        null,
-      ) ?? null;
 
   const metadataStrip = dataset
     ? [
+        `#${dataset.dataset_id}`,
         dataset.dataset_doi,
         dataset.dataset_type_name,
-        `updated ${new Date(dataset.when_updated).toLocaleDateString()}`,
+        `updated ${new Date(dataset.when_updated).toLocaleDateString()} by ${
+          userMap.get(dataset.who_updated) ?? "—"
+        }`,
       ]
         .filter(Boolean)
         .join(" · ")
@@ -345,6 +330,15 @@ export default function DatasetDetail() {
             </Button>
           </>
         }
+        subActions={
+          <WpLinkPill
+            posdaObjectType="dataset"
+            posdaObjectId={datasetId ? Number(datasetId) : undefined}
+            typeOptions={[
+              wpTypeOptionForDataset(dataset?.dataset_type_name ?? ""),
+            ]}
+          />
+        }
       />
 
       {isLoading && (
@@ -364,27 +358,14 @@ export default function DatasetDetail() {
       )}
 
       {!isLoading && dataset && datasetId && (
-        <>
-          <LatestReleaseCard
-            datasetId={datasetId}
-            isLoading={isLoadingReleases}
-            release={latestRelease}
-          />
-
-          <CardHeader className="mt-6 mb-0">
+        <SectionCard className="mt-4">
+          <CardHeader>
             <CardTitle>Recordsets</CardTitle>
-            <LinkButton
-              href={
-                datasetId
-                  ? `/recordsets/create?dataset_id=${datasetId}`
-                  : "/recordsets/create"
-              }
-              size="sm"
-            >
+            <Button size="sm" onClick={() => setShowCreateRecordset(true)}>
               New Recordset
-            </LinkButton>
+            </Button>
           </CardHeader>
-          <SectionCard className="mt-1">
+          <div>
             {isLoadingRecordsets && (
               <p className="text-sm">Loading recordsets...</p>
             )}
@@ -404,20 +385,42 @@ export default function DatasetDetail() {
                 ) : (
                   <DynamicTable
                     rows={recordsetsData.recordsets}
-                    pagination={{
-                      defaultItemsPerPage: 5,
-                      totalItems: recordsetsData.total,
-                      page: recordsetsPage,
-                      pageSize: recordsetsItemsPerPage,
-                      onPageChange: setRecordsetsPage,
-                      onPageSizeChange: (nextItemsPerPage) => {
-                        setRecordsetsItemsPerPage(nextItemsPerPage);
-                        setRecordsetsPage(1);
-                      },
-                    }}
+                    hideSummary
                     columns={[
-                      { key: "recordset_id", label: "ID" },
-                      { key: "recordset_name", label: "Name" },
+                      {
+                        key: "recordset_name",
+                        label: "Name",
+                        render: (_v, row) => (
+                          // Row click navigates in-tab, so both controls here
+                          // stop propagation to keep their own behavior.
+                          <div
+                            className="flex items-center gap-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="px-2"
+                              aria-label="Edit Recordset"
+                              title="Edit Recordset"
+                              onClick={() =>
+                                setEditRecordsetId(row.recordset_id)
+                              }
+                            >
+                              <EditIcon />
+                            </Button>
+                            <Link
+                              to={`/recordsets/${row.recordset_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:text-accent"
+                              style={{ color: "var(--accent)" }}
+                            >
+                              {row.recordset_name}
+                            </Link>
+                          </div>
+                        ),
+                      },
                       { key: "recordset_type_name", label: "Type" },
                       { key: "license_label", label: "License" },
                       { key: "recordset_doi", label: "DOI" },
@@ -435,9 +438,9 @@ export default function DatasetDetail() {
                 )}
               </>
             )}
-          </SectionCard>
+          </div>
 
-          <CardHeader className="mt-6 mb-0">
+          <CardHeader className="mt-6">
             <CardTitle>Releases</CardTitle>
             <LinkButton
               href={
@@ -450,7 +453,7 @@ export default function DatasetDetail() {
               New Release
             </LinkButton>
           </CardHeader>
-          <SectionCard className="mt-1">
+          <div>
             {isLoadingReleases && (
               <p className="text-sm">Loading releases...</p>
             )}
@@ -464,17 +467,7 @@ export default function DatasetDetail() {
             {!isLoadingReleases && !releasesError && releasesData && (
               <DynamicTable
                 rows={releasesData.releases}
-                pagination={{
-                  defaultItemsPerPage: 4,
-                  totalItems: releasesData.total,
-                  page: releasesPage,
-                  pageSize: releasesItemsPerPage,
-                  onPageChange: setReleasesPage,
-                  onPageSizeChange: (nextItemsPerPage) => {
-                    setReleasesItemsPerPage(nextItemsPerPage);
-                    setReleasesPage(1);
-                  },
-                }}
+                hideSummary
                 columns={[
                   { key: "dataset_release_id", label: "ID" },
                   { key: "release_number", label: "Version" },
@@ -496,107 +489,20 @@ export default function DatasetDetail() {
                 getRowKey={(row) => row.dataset_release_id}
               />
             )}
-          </SectionCard>
-
-          <CollapsibleSection
-            title="WordPress Object"
-            summary={
-              isLoadingWpMap ? undefined : wpMap ? "mapped ✓" : "not linked"
-            }
-            actions={
-              <Button size="sm" onClick={() => setShowWpModal(true)}>
-                {wpMap ? "Change Link" : "Link to WordPress"}
-              </Button>
-            }
-          >
-            {isLoadingWpMap && <LoadingState />}
-            {!isLoadingWpMap && wpMap === null && (
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                No WordPress object linked.
-              </p>
-            )}
-            {!isLoadingWpMap && wpMap && (
-              <div className="space-y-1 text-sm">
-                <p>
-                  <span className="font-medium capitalize">
-                    {wpMap.wp_object_type.replace("_", " ")}
-                  </span>{" "}
-                  <span style={{ color: "var(--muted)" }}>
-                    ID {wpMap.wp_object_id}
-                  </span>
-                </p>
-                <div className="flex gap-4 text-xs">
-                  {wpMap.wp_view_url && (
-                    <a
-                      href={wpMap.wp_view_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      View on site ↗
-                    </a>
-                  )}
-                  {wpMap.wp_edit_url && (
-                    <a
-                      href={wpMap.wp_edit_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      Edit in WordPress ↗
-                    </a>
-                  )}
-                </div>
-                {wpMap.when_synced && (
-                  <p className="text-xs" style={{ color: "var(--muted)" }}>
-                    Synced: {new Date(wpMap.when_synced).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            )}
-          </CollapsibleSection>
-
-          <CollapsibleSection title="Record Details">
-            <div className="space-y-1 text-sm" style={{ color: "var(--muted)" }}>
-              <p>
-                <span
-                  className="font-medium"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  Dataset ID:
-                </span>{" "}
-                {dataset.dataset_id}
-              </p>
-              <p>
-                <span
-                  className="font-medium"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  Created:
-                </span>{" "}
-                {new Date(dataset.when_created).toLocaleString()} by{" "}
-                {userMap.get(dataset.who_created) ?? "—"}
-              </p>
-              <p>
-                <span
-                  className="font-medium"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  Updated:
-                </span>{" "}
-                {new Date(dataset.when_updated).toLocaleString()} by{" "}
-                {userMap.get(dataset.who_updated) ?? "—"}
-              </p>
-            </div>
-          </CollapsibleSection>
-        </>
+          </div>
+        </SectionCard>
       )}
-      <WpLinkModal
-        open={showWpModal}
-        onClose={() => setShowWpModal(false)}
-        posdaObjectType="dataset"
-        posdaObjectId={datasetId ? Number(datasetId) : undefined}
-        typeOptions={[wpTypeOptionForDataset(dataset?.dataset_type_name ?? "")]}
+      <RecordsetEditModal
+        open={editRecordsetId !== null}
+        onClose={() => setEditRecordsetId(null)}
+        recordsetId={editRecordsetId ?? undefined}
+        onSaved={() => setRefreshKey((n) => n + 1)}
+      />
+      <CreateRecordsetModal
+        open={showCreateRecordset}
+        onClose={() => setShowCreateRecordset(false)}
+        datasetId={datasetId}
+        onCreated={() => setRefreshKey((n) => n + 1)}
       />
       <DatasetEditModal
         open={showEditModal}
