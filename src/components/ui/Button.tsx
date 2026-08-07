@@ -4,7 +4,7 @@ import classNames from "@/lib/classNames";
 import { Spinner } from "@/components/ui/Spinner";
 
 type ButtonVariant = "primary" | "ghost";
-type ButtonSize = "sm" | "md" | "lg";
+type ButtonSize = "xs" | "sm" | "md" | "lg";
 
 type ButtonBaseProps = {
   variant?: ButtonVariant;
@@ -35,6 +35,7 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
+  xs: "btn-xs",
   sm: "btn-sm",
   md: "btn-md",
   lg: "btn-lg",

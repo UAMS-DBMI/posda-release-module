@@ -8,7 +8,7 @@ import { apiFetch, type ItemEnvelope, type ListEnvelope } from "@/lib/apiFetch";
 
 const BASE = "/papi/v1/distribution";
 
-export type QcReviewType = "full" | "partial";
+export type QcReviewType = "full" | "partial" | "non_dicom";
 export type QcReviewStatus = "open" | "complete" | "cancelled" | "stale";
 
 /** Raw qc_review row (as returned by the detail endpoint). */
@@ -27,13 +27,20 @@ export type QcReviewRow = {
   who_updated: number | null;
 };
 
-/** List row = qc_review row + per-review series counts joined by the list endpoint. */
+/** List row = qc_review row + per-review series counts and assignment rollup
+ *  joined by the list endpoint. */
 export type QcReview = QcReviewRow & {
   series_total: number;
   series_pending: number;
   series_approved: number;
   series_rejected: number;
   series_flagged: number;
+  /** Total assignment slices (1 unless the review was split). */
+  assignment_count: number;
+  /** Slices still in the pickup pool (assigned_to null). */
+  unclaimed_count: number;
+  /** Distinct user ids the review's slices are assigned to. */
+  assignee_ids: number[];
 };
 
 export type QcAssignment = {
@@ -74,6 +81,9 @@ export type CreateQcReviewBody = {
   sample_percentage?: number | null;
   sample_seed?: number | null;
   review_notes?: string | null;
+  /** Claim the initial slice for the caller (first review on a draft); omit /
+   *  false leaves it unclaimed in the pickup pool. */
+  assign_to_caller?: boolean;
 };
 
 export type CloneQcReviewBody = {
@@ -118,6 +128,9 @@ export function useCreateQcReview(draftId: string | undefined) {
           queryKey: qcKeys.reviewsForDraft(draftId),
         });
       }
+      // A new review creates its initial assignment; refresh the slice queue
+      // (the Verify expand's inline assignments) too.
+      void queryClient.invalidateQueries({ queryKey: ["qc-assignments"] });
     },
   });
 }
@@ -220,6 +233,34 @@ export function useClaimAssignment(reviewId: string | undefined) {
   });
 }
 
+/** Approve every unit in a slice (the non-DICOM Mark-Approved action): the
+ *  reviewer confirms the slice's files. Completes the slice like any other. */
+export function useApproveAssignmentUnits(reviewId: string | undefined) {
+  const invalidate = useReviewInvalidation(reviewId);
+  return useMutation({
+    mutationFn: (assignmentId: number) =>
+      apiFetch<ItemEnvelope<{ assignment_id: number; approved: number }>>(
+        `${BASE}/qc/assignments/${assignmentId}/approve-units`,
+        { method: "POST" },
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** TEST HELPER: approve all of a slice's series and complete the slice (does not
+ *  touch review status). Used to stand up QC state for Bundle-stage testing. */
+export function useCompleteAssignmentForTesting(reviewId: string | undefined) {
+  const invalidate = useReviewInvalidation(reviewId);
+  return useMutation({
+    mutationFn: (assignmentId: number) =>
+      apiFetch<ItemEnvelope<{ assignment_id: number }>>(
+        `${BASE}/qc/assignments/${assignmentId}/complete-for-testing`,
+        { method: "POST" },
+      ),
+    onSuccess: invalidate,
+  });
+}
+
 /** Release a slice back to the pickup pool. */
 export function useReleaseAssignment(reviewId: string | undefined) {
   const invalidate = useReviewInvalidation(reviewId);
@@ -274,11 +315,13 @@ export type UserFlag = {
   who_resolved: number | null;
 };
 
-/** Assignment queue: pickup pool (unassigned + needs_qc) or a user's queue. */
+/** Assignment queue: pickup pool (unassigned + needs_qc), a user's queue, or a
+ *  draft's slices. Cancelled reviews' slices are excluded server-side. */
 export function useAssignmentQueue(params: {
   unassigned?: boolean;
   assignedTo?: number;
   status?: string;
+  recordsetDraftId?: number;
   page?: number;
   limit?: number;
   enabled?: boolean;
@@ -287,6 +330,8 @@ export function useAssignmentQueue(params: {
   if (params.unassigned) search.set("unassigned", "true");
   if (params.assignedTo != null) search.set("assigned_to", String(params.assignedTo));
   if (params.status) search.set("status", params.status);
+  if (params.recordsetDraftId != null)
+    search.set("recordset_draft_id", String(params.recordsetDraftId));
   if (params.page != null) search.set("page", String(params.page));
   if (params.limit != null) search.set("limit", String(params.limit));
   const qs = search.toString();

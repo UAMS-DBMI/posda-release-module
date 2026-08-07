@@ -1,17 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  useCreateQcReview,
-  useQcReviews,
-  type QcReviewType,
-} from "@/lib/useQc";
+import { useQcReviews } from "@/lib/useQc";
 import DynamicTable from "@/components/DynamicTable";
+import QcReviewModal from "@/components/QcReviewModal";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
-import Modal from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { useToast } from "@/components/Toast";
-import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { LoadingState } from "@/components/ui/Spinner";
 
 export default function QcReviewsCard({
@@ -20,47 +14,9 @@ export default function QcReviewsCard({
   draftId: string | undefined;
 }) {
   const navigate = useNavigate();
-  const { addToast } = useToast();
   const reviews = useQcReviews(draftId);
-  const create = useCreateQcReview(draftId);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [reviewType, setReviewType] = useState<QcReviewType>("partial");
-  const [percentage, setPercentage] = useState("20");
-  const [notes, setNotes] = useState("");
-
-  function resetForm() {
-    setReviewType("partial");
-    setPercentage("20");
-    setNotes("");
-  }
-
-  function closeCreate() {
-    setShowCreate(false);
-    resetForm();
-  }
-
-  const pctNum = Number(percentage);
-  const pctValid =
-    reviewType === "full" ||
-    (Number.isFinite(pctNum) && pctNum > 0 && pctNum <= 100);
-
-  async function handleSubmit() {
-    try {
-      await create.mutateAsync({
-        review_type: reviewType,
-        sample_percentage: reviewType === "partial" ? pctNum : null,
-        review_notes: notes.trim() || null,
-      });
-      toastSuccess(addToast, "QC review created.");
-      closeCreate();
-    } catch (e) {
-      toastError(
-        addToast,
-        e instanceof Error ? e.message : "Could not create QC review.",
-      );
-    }
-  }
 
   return (
     <>
@@ -116,82 +72,12 @@ export default function QcReviewsCard({
         )}
       </SectionCard>
 
-      <Modal
+      <QcReviewModal
         open={showCreate}
-        onClose={closeCreate}
-        title="New QC Review"
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              onClick={closeCreate}
-              disabled={create.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleSubmit()}
-              disabled={!pctValid}
-              loading={create.isPending}
-            >
-              Create Review
-            </Button>
-          </>
-        }
-      >
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          A partial review samples the chosen percentage of series per modality; a
-          full review includes every series.
-        </p>
-
-        <div className="mt-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium">Type</label>
-            <select
-              value={reviewType}
-              onChange={(e) => setReviewType(e.target.value as QcReviewType)}
-              className="select mt-1 w-full"
-            >
-              <option value="partial">Partial (sampled)</option>
-              <option value="full">Full (all series)</option>
-            </select>
-          </div>
-
-          {reviewType === "partial" && (
-            <div>
-              <label className="block text-sm font-medium">
-                Sample percentage (per modality)
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={percentage}
-                onChange={(e) => setPercentage(e.target.value)}
-                className="input mt-1 w-full"
-              />
-              {!pctValid && (
-                <p className="mt-1 text-xs text-red-600">
-                  Enter a percentage between 1 and 100.
-                </p>
-              )}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium">
-              Notes{" "}
-              <span className="font-normal text-neutral-500">(optional)</span>
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              className="textarea mt-1 w-full"
-            />
-          </div>
-        </div>
-      </Modal>
+        onClose={() => setShowCreate(false)}
+        draftId={draftId}
+        defaultType="partial"
+      />
     </>
   );
 }

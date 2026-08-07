@@ -260,8 +260,12 @@ of 1 ⇒ merge to a single slice; ≥2 ⇒ split; re-run ⇒ rebalance.
   (display only — allocation is computed from exact fractions, not the rounded %).
 - **Distribution, per modality independently:**
   - order that modality's series by `series_instance_uid` (stable/reproducible)
-  - even split via **largest-remainder**; **rotate** the leftover recipient across
-    modalities (start at `modality_index mod N`) so no reviewer hoards remainders
+  - each slice gets `count // N` of the modality; the `count % N` leftovers are
+    handed out by a **running round-robin pointer that persists across
+    modalities** (updated 2026-08-06 — was keyed to `modality_index mod N`,
+    which could skew totals, e.g. 5/3 for 8 series across many single-series
+    modalities). The pointer advances only when a modality actually has a
+    leftover, so **slice totals stay balanced to within 1** across the review.
   - assign **contiguous** UID-ordered chunks (decided; not interleaved)
 - **Preserves `qc_status`** — split only moves `assignment_id`, never decisions.
 - **Guard (decided):** refuse if any existing slice is `in_progress`/`complete`

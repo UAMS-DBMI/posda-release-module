@@ -174,7 +174,7 @@ after a save.
 |---|---|---|
 | `lib/recordsetForm.ts` | `recordsets/Create.tsx`, `CreateRecordsetModal` (Setup + Assemble) | ✅ done |
 | `components/ActivitySourcePicker.tsx` | Assemble source modal, draft `Files.tsx` | ⚠ built; `Files.tsx` not yet migrated |
-| `lib/qcReviewForm.ts` | `QcReviewsCard.tsx`, Verify modal | ☐ |
+| ~~`lib/qcReviewForm.ts`~~ → `components/QcReviewModal.tsx` (shared modal, not a pure lib — see step 4; gained a `nonDicom` mode 2026-08-06) | `QcReviewsCard.tsx`, Verify | ✅ done |
 | `lib/publishForm.ts` | `drafts/Detail.tsx`, Bundle modal | ☐ |
 | `lib/datasetReleaseForm.ts` | `releases/Create.tsx`, `releases/Edit.tsx`, Bundle modal | ☐ |
 | `lib/transferForm.ts` | `releases/transfers/Create.tsx`, Transfer stage modal | ☐ |
@@ -196,8 +196,8 @@ One transaction each, reusing `item_response` / `api_error` / `logged_in_user`.
 
 ```
 POST /datasets/{id}/cycle/drafts      [{recordset_id, activity_timepoint_id}]   ✂ retired 2026-08-04
-POST /datasets/{id}/cycle/qc-reviews  [{recordset_draft_id}] -- full review each,
-                                      assignment assigned_to = caller            ☐
+POST /datasets/{id}/cycle/qc-reviews  -- never built; ✂ dropped for per-row
+                                      POST /recordsets/drafts/{id}/qc-reviews    ✂ retired 2026-08-06
 POST /datasets/{id}/cycle/publish     [{recordset_draft_id, release_number?}]    ☐
 POST /datasets/{id}/cycle/release     release_number?, [{recordset_release_id}]  ☐
 POST /datasets/{id}/cycle/transfers   [{destination_id}], generate_manifests?    ☐
@@ -392,18 +392,78 @@ Each lands and is reviewed before the next.
         step 4 (Verify) below — both stages need it, not just Assemble.
       - `Modal` needs its `xl` size added first (see "Shared shells" above) —
         the activity/timepoint browser is cramped at today's `max-w-lg` cap.
-- [ ] **4 — Verify.** Select drafts, then one action creates **one full
-      review per draft, assigned to the current user**. No sampling choice and no
-      splitting in this pass — the model supports several reviews per draft and
-      partial sampling, but the common path is one full review. Splitting and
-      reassignment stay on the review detail page. Extract
-      `lib/qcReviewForm.ts` from `QcReviewsCard` so both create reviews the same
-      way. New bulk `qc-reviews` endpoint.
-      - **Correction (2026-07-30):** `VerifyStage.tsx` today is a pure
-        read-only table over existing open drafts (no creation action yet —
-        that's this step's job to build). Nothing to gate until the "create
-        reviews" action exists; when it's built, gate *that action* on
-        `isCycleActive`, same as Assemble's "Start a Cycle" link.
+- [x] **4 — Verify.** *(done 2026-08-06 — see log)* Bring QC-review *creation* into the cycle. **Design
+      settled 2026-08-04** (supersedes the original checkbox/bulk sketch —
+      Verify mirrors the Assemble rework: per-row actions, no bulk endpoint):
+      - **No bulk `POST /cycle/qc-reviews`** — dropped for the same reason
+        `/cycle/drafts` was retired. Per-row create hits the existing
+        `POST /recordsets/drafts/{id}/qc-reviews`.
+      - **`VerifyStage.tsx` rewritten to mirror `AssembleStage`:** hand-rolled
+        table with a per-row expand chevron. Row actions gated on
+        `isCycleActive`:
+        - `reviews_total === 0` → primary **Start QC** → create modal defaulting
+          to **full**, `assign_to_caller: true` (first review = the caller's).
+        - `reviews_total > 0` → row shows progress/status; **expanding** lazily
+          fetches `useQcReviews(draftId)` (like `DraftSummary` self-fetches) and
+          lists the draft's reviews, each linking out to `/qc/reviews/:id`; a
+          secondary **Add Review** creates with `assign_to_caller: false`
+          (unclaimed → pickup pool). Stale reviews surface here and point to the
+          review page's re-clone.
+        - `!isCycleActive` → read-only, no create (same as Assemble).
+      - **Review-type default = full, partial available** in the modal.
+      - **Assignment rule:** first review on a draft is **claimed by the caller**
+        (born `in_progress`); every later review is **unclaimed** (`needs_qc`,
+        pickup pool). The frontend picks `assign_to_caller` from
+        `reviews_total === 0`.
+      - **Backend:** add `assign_to_caller: bool = False` to `QCReviewCreate`;
+        when set, `create_qc_review` inserts the initial `qc_review_assignment`
+        claimed (`assigned_to = caller`, `assignment_status = 'in_progress'`)
+        instead of `null / needs_qc`, same transaction. ⚠ uvicorn has no
+        `--reload` — restart after pulling.
+      - **Form reuse via a shared *component*, not a lib.** Extract the create
+        form out of `QcReviewsCard` into `components/QcReviewModal.tsx`
+        (parameterized by `draftId`, `onSuccess`, `defaultType`,
+        `assignToCaller`); both `QcReviewsCard`'s "New Review" and Verify's
+        Start/Add open it. The layout is identical in both places, so a shared
+        modal component dedups more than the planned `lib/qcReviewForm.ts` pure
+        split would — that lib entry in the form-reuse table is superseded.
+      - **Creation shipped 2026-08-04**, visually confirmed: `QcReviewModal`,
+        the `assign_to_caller` backend param + assignee rollup on the list
+        endpoint, and the expand's borderless review grid all landed.
+      - **Review MANAGEMENT ported into the cycle (design settled 2026-08-05).**
+        Reversed the earlier "excursion accepted" call — `/qc/reviews/:id` is
+        really a *management* surface (assignment slices + review lifecycle +
+        a status summary; the actual per-series approve/reject is in Mirabelle),
+        so that management belongs in the cycle. Scope **a/b/c** below, hosted
+        in a **per-review Manage modal** opened from the expand; the read-only
+        **expand** stays a lightweight review list (one `useQcReviews` call, no
+        per-review detail fetches). Built from components **shared** with
+        `ReviewDetail.tsx` (not copied — the two surfaces must not drift):
+        - **`components/qc/QcSeriesSummary.tsx`** (c) — series-status badges +
+          per-modality progress table. Pure display.
+        - **`components/qc/QcAssignments.tsx`** (a) — assignments table +
+          Claim / Release / Reassign + **Split**, owning its Split/Reassign
+          modals. Self-contained on `reviewId`. This is where per-slice
+          **assignment** status shows (distinct from **review** status — the
+          two were conflated in the first cut).
+        - **`components/qc/QcReviewLifecycle.tsx`** (b) — stale banner +
+          Mark Complete / Clone / Cancel, owning its Clone/Cancel modals.
+        - Each takes an optional **`onChanged`** callback so the Verify modal
+          can invalidate the `["dataset-cycle", datasetId]` rollup after a
+          mutation (the QC hooks already invalidate `qc-review(s)` /
+          `qc-assignments`, but not the cycle query). `ReviewDetail` passes
+          none and is refactored onto the three (its header actions move into
+          the `QcReviewLifecycle` block — a minor layout shift, acceptable).
+        - **`components/QcReviewManageModal.tsx`** — fetches
+          `useQcReview(reviewId)` once and stacks the three shared components;
+          opened per-review from the Verify expand (which keeps a **Manage**
+          button + an **Open** link to the full page for the metadata/notes
+          tail (d), left out of scope for now).
+      - **Not ported (d):** notes editing + created/updated audit stay on
+        `/qc/reviews/:id` only.
+      - No backend change for the management port — per-slice data comes from
+        the existing `GET /qc/reviews/{id}` detail; all mutation hooks already
+        exist in `useQc.ts`.
 - [ ] **5 — Bundle.** Extract `lib/publishForm.ts` (migrating the
       **hand-rolled** publish modal in `drafts/Detail.tsx` onto `Modal` while
       there) and `lib/datasetReleaseForm.ts`. The page lists drafts to publish
@@ -510,10 +570,20 @@ Recorded so they aren't rediscovered late.
   plan. Its whole premise is deep-linking to a stage's action — **and those
   targets just changed** to the new stage routes (`/cycle/verify`, `?action=…`).
   Sequence it after step 8 so the link targets are stable.
-- **Mirabelle link-out.** QC series are reviewed in Mirabelle, an external tool.
-  The Verify stage can show progress but has nowhere to send a reviewer. Decided
-  earlier as "omit until their URL contract exists" — still outstanding, and it
-  is the one stage whose real work happens outside this app.
+- **Mirabelle link-out — DONE 2026-08-05.** Verify's Manage modal (and the
+  `/qc/reviews/:id` page, via the shared `QcAssignments`) now link each claimed
+  slice to `/mira/qc/assignments/{assignment_id}` (same server, `basename:/mira`,
+  opens to the first series). ⚠ **Mirabelle reviews DICOM only.**
+- **Non-DICOM verification path — DONE 2026-08-06.** Non-DICOM-only recordsets
+  now get a real QC review through the **same** Verify UI. `qc_series` was
+  generalized to `qc_unit` (unit_type `series|file`; see TECH_DEBT resolved) so a
+  `review_type='non_dicom'` review creates **one unit per non-DICOM file** — the
+  row shows N/N, the expand lists the slice, and the per-slice **Review** button
+  opens an approve modal ("Mark Approved", file download deferred) instead of the
+  Mirabelle link. The review then completes and passes `isPublishable` like any
+  other. `Start QC`/`Add Review` picks non-DICOM mode when the draft is
+  non-DICOM-only. **Residual** (TECH_DEBT #13): mixed drafts and Clone-on-non_dicom.
+  See memory `mirabelle-dicom-only`.
 - **One draft dataset release at a time.** Bundle can cut a release while another
   is still `draft`, producing two half-assembled releases and an ambiguous
   "latest". The equivalent rule for drafts (one open per recordset) is now
@@ -542,6 +612,38 @@ dataset 4 (bare):
 7. `npm run build` clean at every step.
 
 ## Log
+
+**2026-08-06 — Verify stage completed (step 4): non-DICOM through the same UI.**
+The last piece of Verify — non-DICOM content — now flows through the *identical*
+QC UI as DICOM, after two rejected attempts (a review-level "Verify" attestation,
+then a separate non-DICOM sub-UI with `—` columns and a pill). What landed:
+
+- **Data model generalized** (see TECH_DEBT resolved 2026-08-06): `qc_series` →
+  `qc_unit` with a `unit_type` (`series | file`) discriminator, surrogate PK, a
+  CHECK enforcing one natural key per type, `series_file_hash` → `unit_hash`, and
+  `qc_series_history` → `qc_unit_history` re-keyed on `qc_unit_id`. Model **A**
+  (single-table inheritance) chosen over a separate `qc_file` table because ~12
+  count/rollup sites feed the same UI columns — two tables would make all of them
+  type-aware forever; one table pays a one-time mechanical rename (Mirabelle is
+  API-only, so no second consumer). Full DB reset applied.
+- **Backend:** `create_qc_review` accepts `review_type='non_dicom'` → inserts one
+  `qc_unit` per non-DICOM file (`unit_hash` = file digest). New shared helper
+  `qc_approve_all_units()` backs both the yellow test-Complete and a new real
+  `POST /qc/assignments/{id}/approve-units` (the modal's Mark Approved). Deleted
+  the special-case `verify/unverify-non-dicom` endpoints. Cycle payload: dropped
+  `non_dicom_verified*`, removed the `review_type <> 'non_dicom'` exclusion so
+  these reviews count in the normal rollup; kept `has_dicom`/`has_non_dicom`.
+  `split_qc_review` now allocates by `qc_unit_id` (type-agnostic).
+- **Frontend:** `isPublishable` back to the uniform `qc` gate; `QcReviewModal`
+  gained a `nonDicom` mode (no sampling controls); `QcSliceActions` Review button
+  is `reviewType`-aware — non-DICOM opens a "Review Non-DICOM Files" modal
+  (Mark Approved; download deferred), DICOM keeps Mirabelle. `VerifyStage`
+  reverted to one uniform table; "Add Review"/"Start QC" opens non-DICOM mode
+  when the draft is non-DICOM-only.
+- **Residual** (TECH_DEBT #13): mixed drafts have no path to a separate non-DICOM
+  review; Clone on a `non_dicom` review produces an empty review.
+- ⚠ uvicorn has no `--reload` — restart after pulling. Restarted + visually
+  confirmed 2026-08-06.
 
 **2026-08-04 — Assemble stage built (step 3).** The stage went from a
 read-only table to the working surface for draft assembly, decomposed so no

@@ -10,6 +10,11 @@ export type CycleOpenDraft = {
   draft_name: string;
   draft_status: string;
   file_count: number;
+  /** Whether the draft has any DICOM series / any non-DICOM files. Lets Verify
+   *  offer the right review kind (a non-DICOM draft's "Add Review" creates a
+   *  review_type='non_dicom' review that flows through the same QC UI). */
+  has_dicom: boolean;
+  has_non_dicom: boolean;
 };
 
 export type CycleQc = {
@@ -157,9 +162,13 @@ export function isCycleActive(cycle: DatasetCycle): boolean {
   return cycle.latest_dataset_release?.release_status === "draft";
 }
 
-/** True when a recordset's draft has passed the publish gate: at least one
- *  complete review and nothing open or stale. Mirrors the draft-detail gate. */
-export function isPublishable(qc: CycleQc): boolean {
+/** True when a recordset's open draft has passed the publish gate: at least one
+ *  complete QC review, with none open or stale. Non-DICOM reviews count here too
+ *  (they flow through the same qc rollup), so the gate is uniform across content
+ *  kinds. */
+export function isPublishable(r: CycleRecordset): boolean {
+  if (!r.open_draft) return false;
+  const qc = r.qc;
   return qc.complete > 0 && qc.open === 0 && qc.stale === 0;
 }
 

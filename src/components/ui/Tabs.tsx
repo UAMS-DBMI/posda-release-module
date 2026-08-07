@@ -83,18 +83,21 @@ export default function Tabs({
         const isActive = tab.key === active;
         const state = tab.state ?? "pending";
         const className = classNames(
-          "-mb-px flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2 text-sm transition-colors",
+          "-mb-px flex items-center gap-2 rounded-t-md border px-3 py-2 text-sm transition-colors",
           "focus-visible:outline-2 focus-visible:outline-offset-[-2px]",
           isActive
             ? "border-accent font-semibold text-accent"
-            : "border-transparent font-medium hover:text-foreground",
+            : "font-medium hover:text-foreground hover:border-(--border-strong)",
         );
         const style = isActive
           ? {
               background:
                 "color-mix(in srgb, var(--accent) 14%, transparent)",
             }
-          : { color: "var(--muted)" };
+          : {
+              color: "var(--muted)",
+              borderColor: "var(--border)",
+            };
         const shared = {
           id: tabId(idPrefix, tab.key),
           role: "tab" as const,

@@ -111,7 +111,7 @@ export default function AssembleStage() {
         <table className="data-table min-w-full border-collapse text-left text-sm">
           <thead>
             <tr className="bg-accent">
-              <th className="w-8 px-2 py-1" />
+              <th className="w-10 px-2 py-1" />
               <th className={TH}>Recordset</th>
               <th className={TH}>Draft</th>
               <th className={TH}>Status</th>
@@ -140,16 +140,28 @@ export default function AssembleStage() {
               return (
                 <Fragment key={r.recordset_id}>
                   <tr className="table-row">
-                    <td className="px-2 py-1">
+                    <td className="px-1 py-1">
                       {draftId != null && (
                         <button
                           type="button"
                           onClick={() => setExpandedId(expanded ? null : draftId)}
-                          className="px-1 text-xs"
+                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-(--surface-alt)"
                           style={{ color: "var(--muted)" }}
                           title={expanded ? "Hide contents" : "Show contents"}
                         >
-                          {expanded ? "▾" : "▸"}
+                          <svg
+                            viewBox="0 0 24 24"
+                            width={18}
+                            height={18}
+                            fill="currentColor"
+                            aria-hidden
+                            style={{
+                              transform: expanded ? "rotate(90deg)" : "none",
+                              transition: "transform 100ms",
+                            }}
+                          >
+                            <path d="M5 3l14 9-14 9z" />
+                          </svg>
                         </button>
                       )}
                     </td>
