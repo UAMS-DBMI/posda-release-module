@@ -6,6 +6,10 @@ import path from "node:path";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
+    // App is served from a subfolder of /release, so assets and the router
+    // basename must be prefixed. Override with BASE_PATH if the deploy path
+    // differs (must start and end with "/").
+    base: env.BASE_PATH ?? "/release/",
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

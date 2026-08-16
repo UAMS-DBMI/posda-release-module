@@ -145,7 +145,7 @@ DbSchema may not detect drift from out-of-band SQL changes).
 
 ## Commands
 
-- `npm run dev` — dev server at http://localhost:5173 (proxies `/papi` → backend)
+- `npm run dev` — dev server at http://localhost:5173/release/ (proxies `/papi` → backend)
 - `npm run build` — `tsc --noEmit` typecheck + Vite production build
 - `npm run preview` — serve the production build
 
