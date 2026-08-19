@@ -1,13 +1,15 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import CreateDraftModal from "@/components/CreateDraftModal";
 import DynamicTable from "@/components/DynamicTable";
 import RecordsetDestinationModal from "@/components/RecordsetDestinationModal";
 import RecordsetEditModal from "@/components/RecordsetEditModal";
 import WpLinkPill from "@/components/WpLinkPill";
-import { Button, LinkButton } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useFavorites } from "@/lib/useFavorites";
+import { useWpMap } from "@/lib/wpObjectMap";
 import { useDestinationLookups, useRecordset } from "@/lib/recordsetForm";
 import {
   useRecordsetDestinations,
@@ -127,6 +129,12 @@ export default function RecordsetDetail() {
     isError,
     error: recordsetError,
   } = useRecordset(recordsetId);
+  // Gates `CreateDraftModal`'s WordPress source tab. `WpLinkPill` fetches the
+  // same map internally; react-query shares the one request.
+  const { data: wpMap } = useWpMap(
+    "recordset",
+    recordsetId ? Number(recordsetId) : undefined,
+  );
   const [draftsPage, setDraftsPage] = useState(1);
   const [draftsItemsPerPage, setDraftsItemsPerPage] = useState(4);
   const [releasesPage, setReleasesPage] = useState(1);
@@ -149,6 +157,11 @@ export default function RecordsetDetail() {
   );
 
   const [showEditModal, setShowEditModal] = useState(false);
+
+  // The drafts list below is a hand-rolled fetch, so `CreateDraftModal`'s
+  // react-query invalidation can't reach it -- bump this to refetch instead.
+  const [showCreateDraftModal, setShowCreateDraftModal] = useState(false);
+  const [draftsRefreshKey, setDraftsRefreshKey] = useState(0);
 
   // Releases and drafts only need the id -- independent of the recordset
   // record itself, which comes from the shared `useRecordset` query (kept in
@@ -254,6 +267,7 @@ export default function RecordsetDetail() {
     draftsItemsPerPage,
     releasesPage,
     releasesItemsPerPage,
+    draftsRefreshKey,
   ]);
 
   function openAddDestModal() {
@@ -436,12 +450,9 @@ export default function RecordsetDetail() {
               )}
             </div>
             {!openDraft && (
-              <LinkButton
-                href={`/recordsets/drafts/create?recordset_id=${recordsetId}`}
-                size="sm"
-              >
+              <Button size="sm" onClick={() => setShowCreateDraftModal(true)}>
                 New Draft
-              </LinkButton>
+              </Button>
             )}
           </CardHeader>
           <div>
@@ -541,6 +552,16 @@ export default function RecordsetDetail() {
         open={showEditModal}
         onClose={() => setShowEditModal(false)}
         recordsetId={recordsetId}
+      />
+
+      <CreateDraftModal
+        open={showCreateDraftModal}
+        onClose={() => setShowCreateDraftModal(false)}
+        datasetId={recordset ? String(recordset.dataset_id) : undefined}
+        recordsetId={Number(recordsetId)}
+        recordsetName={recordset?.recordset_name ?? ""}
+        wpLinked={Boolean(wpMap)}
+        onCreated={() => setDraftsRefreshKey((k) => k + 1)}
       />
     </PageShell>
   );

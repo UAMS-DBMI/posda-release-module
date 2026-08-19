@@ -48,17 +48,29 @@ route + unused imports. Full analysis in the 2026-08-06 discussion.
       hook so the page reflects modal saves; releases/drafts fetch decoupled
       from it. `RecordsetRecord` gained optional `dataset_name`/
       `license_label`/`recordset_type_name` (present on reads). Build clean.
-- [ ] **3. `recordsets/Detail` → `CreateDraftModal`.** Replace the "New Draft"
-      link in the Drafts section header; remove page
-      **`recordsets/drafts/create`**. Pass `recordset_id` as a prop. ~~⚠ also
-      repoint `CurrentCycleCard:143`~~ — moot, that card is gone (see the
-      recordset-detail rework below), so this page's header link is the only
-      inbound one left. **Open question, unanswered:** after the modal creates a
-      draft, does it (A) navigate to `/recordsets/drafts/{id}`, matching what the
-      removed page did, or (B) stay put and refresh the Drafts table? Either way
-      the modal needs a new `onCreated` — this page's drafts list is a
-      hand-rolled `useEffect`, so the modal's `["dataset-cycle"]` invalidation
-      can't reach it.
+- [x] **3. `recordsets/Detail` → `CreateDraftModal`.** *(done 2026-08-19)*
+      Replaced the "New Draft" `LinkButton` in the Drafts section header with a
+      `Button` opening `CreateDraftModal`; removed page
+      **`recordsets/drafts/create`** (`Create.tsx`) + its route. Three decisions:
+      - **Open question answered: (B) stay put + refresh.** The modal gained an
+        optional `onCreated` (same escape hatch as `RecordsetEditModal`'s
+        `onSaved` in item 7) that bumps a local `draftsRefreshKey` in the
+        hand-rolled fetch effect's deps — the modal's `["dataset-cycle"]`
+        invalidation can't reach that list. `AssembleStage` is untouched (prop
+        is optional). ⚠ Known cost: the Drafts table pages at 4/row, so a new
+        draft may land off the visible page.
+      - **Fields dropped, deliberately.** The removed page collected
+        `draft_name` / `draft_status` / `draft_notes`; the modal collects none.
+        Not a real loss — the backend auto-names (`"Version N Draft"` /
+        `"Initial Draft"`, `distribution.py` ~L2379), notes are editable on
+        draft detail, and the page's `draft_status` was a free-text `input`
+        writing into a status field. The modal also *gains* Activity / Upload /
+        WordPress sources the page never had.
+      - **WordPress source kept at parity.** The modal's WP tab (pull the file
+        on the recordset's WP `download` object) needs a `wpLinked` flag, but
+        the 2026-08-06 rework had removed this page's `useWpMap` call when
+        `WpLinkPill` took over the WP section. Re-added one `useWpMap` call for
+        the flag only — react-query shares the request with the pill's.
 - [ ] **4. `recordsets/drafts/Detail` → `ManageFilesModal`.** Replace "Edit Files"
       link (`Detail:333`); remove page **`recordsets/drafts/:id/files`**
       (`Files.tsx`, already functionally superseded). Confirm `Files.tsx`'s own

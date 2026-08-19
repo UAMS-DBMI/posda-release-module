@@ -21,6 +21,9 @@ type CreateDraftModalProps = {
   recordsetId: number;
   recordsetName: string;
   wpLinked: boolean;
+  /** Optional: for callers whose drafts list isn't react-query, so the
+   *  `dataset-cycle` invalidation can't reach it. */
+  onCreated?: () => void;
 };
 
 const BASE_MODES: { key: Mode; label: string }[] = [
@@ -39,6 +42,7 @@ export default function CreateDraftModal({
   recordsetId,
   recordsetName,
   wpLinked,
+  onCreated,
 }: CreateDraftModalProps) {
   const modes: { key: Mode; label: string }[] = [
     ...BASE_MODES,
@@ -95,6 +99,7 @@ export default function CreateDraftModal({
         });
       }
       toastSuccess(addToast, `Draft created for ${recordsetName}.`);
+      onCreated?.();
       handleClose();
     } catch (e) {
       toastError(
