@@ -1,5 +1,7 @@
 import { Fragment, useState } from "react";
 import { Link } from "react-router-dom";
+import ExpandableTable from "@/components/ExpandableTable";
+import RecordsetLink from "@/components/RecordsetLink";
 import { useQueryClient } from "@tanstack/react-query";
 import QcReviewModal from "@/components/QcReviewModal";
 import QcReviewManageModal from "@/components/QcReviewManageModal";
@@ -16,23 +18,6 @@ import { isCycleActive, isPublishable, qcPercent, type CycleQc } from "@/lib/use
 import { useUsers } from "@/lib/useUsers";
 import { useCycleContext } from "./CycleLayout";
 
-/** Recordset links leave the cycle, so they open in a new tab -- the only
- *  navigation allowed off a cycle page. */
-function RecordsetLink({ id, name }: { id: number; name: string }) {
-  return (
-    <Link
-      to={`/recordsets/${id}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="hover:text-accent"
-      style={{ color: "var(--accent)" }}
-    >
-      {name}
-    </Link>
-  );
-}
-
-const TH = "px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-white";
 
 /** The recordset's QC state as a single badge status. */
 function qcStatus(qc: CycleQc): string {
@@ -236,21 +221,26 @@ export default function VerifyStage() {
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto">
-        <table className="data-table min-w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="bg-accent">
-              <th className="w-10 px-2 py-1" />
-              <th className={TH}>Recordset</th>
-              <th className={TH}>Reviews</th>
-              <th className={TH}>Approved</th>
-              <th className={TH}>Status</th>
-              <th className={TH}>Publish Gate</th>
-              <th className={TH} />
-            </tr>
-          </thead>
-          <tbody>
-            {withDraft.map((r) => {
+      <ExpandableTable
+        headers={["Recordset", "Reviews", "Approved", "Status", "Publish Gate", ""]}
+        rows={withDraft}
+        getRowKey={(r) => r.recordset_id}
+        canExpand={(r) =>
+          r.open_draft?.recordset_draft_id != null && r.qc.reviews_total > 0
+        }
+        expandLabel="reviews"
+        expandedKey={expandedId}
+        onExpandedKeyChange={(k) => setExpandedId(k as number | null)}
+        renderExpanded={(r) =>
+          r.open_draft ? (
+            <ReviewList
+              draftId={r.open_draft.recordset_draft_id}
+              datasetId={datasetId}
+              onManage={setManageReviewId}
+            />
+          ) : null
+        }
+        renderCells={(r) => {
               const draft = r.open_draft;
               const draftId = draft?.recordset_draft_id ?? null;
               const qc = r.qc;
@@ -262,38 +252,10 @@ export default function VerifyStage() {
                 qc.series_total === 0
                   ? "—"
                   : `${qc.series_approved.toLocaleString()}/${qc.series_total.toLocaleString()} (${qcPercent(qc)}%)`;
-              const expanded =
-                draftId != null && hasReviews && expandedId === draftId;
 
               return (
-                <Fragment key={r.recordset_id}>
-                  <tr className="table-row">
-                    <td className="px-1 py-1">
-                      {draftId != null && hasReviews && (
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(expanded ? null : draftId)}
-                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-(--surface-alt)"
-                          style={{ color: "var(--muted)" }}
-                          title={expanded ? "Hide reviews" : "Show reviews"}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            width={18}
-                            height={18}
-                            fill="currentColor"
-                            aria-hidden
-                            style={{
-                              transform: expanded ? "rotate(90deg)" : "none",
-                              transition: "transform 100ms",
-                            }}
-                          >
-                            <path d="M5 3l14 9-14 9z" />
-                          </svg>
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-2 py-1">
+                <>
+                  <td className="px-2 py-1">
                       <RecordsetLink id={r.recordset_id} name={r.recordset_name} />
                     </td>
                     <td className="px-2 py-1">
@@ -348,31 +310,10 @@ export default function VerifyStage() {
                         </div>
                       ) : null}
                     </td>
-                  </tr>
-                  {expanded && draftId != null && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-3"
-                        style={{
-                          background: "var(--surface)",
-                          borderTop: "1px solid var(--border-strong)",
-                        }}
-                      >
-                        <ReviewList
-                          draftId={draftId}
-                          datasetId={datasetId}
-                          onManage={setManageReviewId}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
+                </>
               );
-            })}
-          </tbody>
-        </table>
-      </div>
+            }}
+      />
 
       {!cycleActive && (
         <p className="text-sm" style={{ color: "var(--muted)" }}>

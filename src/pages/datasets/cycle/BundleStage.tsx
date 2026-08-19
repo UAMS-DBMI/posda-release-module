@@ -1,21 +1,9 @@
-import { Link } from "react-router-dom";
+import RecordsetLink from "@/components/RecordsetLink";
 import DynamicTable from "@/components/DynamicTable";
 import { LinkButton } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { unbundledRecordsets } from "@/lib/useCycle";
 import { useCycleContext } from "./CycleLayout";
-
-function RecordsetLink({ id, name }: { id: number; name: string }) {
-  return (
-    <Link
-      to={`/recordsets/${id}`}
-      className="hover:text-accent"
-      style={{ color: "var(--accent)" }}
-    >
-      {name}
-    </Link>
-  );
-}
 
 export default function BundleStage() {
   const { cycle, datasetId } = useCycleContext();

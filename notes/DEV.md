@@ -139,6 +139,29 @@ at all — would also have orphaned the inbound links from `/qc/reviews/:id`.
           Created-by/date dropped, matching `datasets/Detail`. **Notes** kept as
           its own section at the top of the panel (freeform text — too long for
           a subtitle strip), rendered only when present.
+### 🧹 `recordsets/Detail` Drafts table — Assemble parity (done 2026-08-19)
+
+Asked for directly: the Drafts table should have "some of the capability of the
+table in the assembly cycle — summary, same buttons, name linkable to open in a
+new tab". Taking the full-parity option meant doing **tech-debt #10's
+`ExpandableTable` extraction first** (see TECH_DEBT Resolved 2026-08-19) — this
+table was the third call site #10 was waiting for.
+
+- **Rows are drafts, not recordsets.** Assemble shows one row per recordset with
+  its single *open* draft; this table is one recordset's full draft history,
+  including published and discarded drafts. So Manage and Mark Ready/Reopen are
+  gated on `draft_status` — history rows get no action buttons.
+- **Reuses the shared pieces**: `ExpandableTable` (expander → `DraftSummary`),
+  `useSetDraftStatus` (extracted for the draft detail page earlier the same
+  day), `ManageFilesModal`, and `RecordsetLink` with a `to` override so the
+  name links the *draft*, new tab, like the other tables.
+- **Kept pagination** (`ExpandableTable` gained it for this) — draft history is
+  the one list here that reliably grows.
+- **Dropped**: the ID / Notes / Cloned Release ID columns (Assemble shows none
+  of them; noise beside action buttons) and **row-click-to-navigate**, replaced
+  by the name link, matching Assemble. The page also gained a `useToast` — it
+  had none before, since nothing on it used to mutate.
+
 - [ ] **6. (optional) `recordsets/List` → `CreateRecordsetModal`.** Replace "New
       Recordset" (`List:269` + `datasets/Detail:429`); remove page
       **`recordsets/create`**. Lower value (list→page create is fine).

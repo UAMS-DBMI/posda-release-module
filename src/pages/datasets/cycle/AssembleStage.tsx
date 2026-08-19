@@ -1,8 +1,9 @@
-import { Fragment, useState } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import RecordsetLink from "@/components/RecordsetLink";
 import CreateDraftModal from "@/components/CreateDraftModal";
 import CreateRecordsetModal from "@/components/CreateRecordsetModal";
 import DraftSummary from "@/components/DraftSummary";
+import ExpandableTable from "@/components/ExpandableTable";
 import ManageFilesModal, { type ManageTab } from "@/components/ManageFilesModal";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -11,23 +12,6 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { isCycleActive, useSetDraftStatus } from "@/lib/useCycle";
 import { useCycleContext } from "./CycleLayout";
 
-/** Recordset links leave the cycle, so they open in a new tab -- the only
- *  navigation allowed off a cycle page. */
-function RecordsetLink({ id, name }: { id: number; name: string }) {
-  return (
-    <Link
-      to={`/recordsets/${id}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="hover:text-accent"
-      style={{ color: "var(--accent)" }}
-    >
-      {name}
-    </Link>
-  );
-}
-
-const TH = "px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-white";
 
 type ManageTarget = { id: number; name: string; wpLinked: boolean; tab: ManageTab };
 
@@ -90,21 +74,20 @@ export default function AssembleStage() {
         </p>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="data-table min-w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="bg-accent">
-              <th className="w-10 px-2 py-1" />
-              <th className={TH}>Recordset</th>
-              <th className={TH}>Draft</th>
-              <th className={TH}>Status</th>
-              <th className={TH}>Files</th>
-              <th className={TH}>Frozen At</th>
-              <th className={TH} />
-            </tr>
-          </thead>
-          <tbody>
-            {cycle.recordsets.map((r) => {
+      <ExpandableTable
+        headers={["Recordset", "Draft", "Status", "Files", "Frozen At", ""]}
+        rows={cycle.recordsets}
+        getRowKey={(r) => r.recordset_id}
+        canExpand={(r) => r.open_draft?.recordset_draft_id != null}
+        expandLabel="contents"
+        expandedKey={expandedId}
+        onExpandedKeyChange={(k) => setExpandedId(k as number | null)}
+        renderExpanded={(r) =>
+          r.open_draft ? (
+            <DraftSummary draftId={r.open_draft.recordset_draft_id} />
+          ) : null
+        }
+        renderCells={(r) => {
               const draft = r.open_draft;
               const draftId = draft?.recordset_draft_id ?? null;
               const status = draft?.draft_status ?? null;
@@ -113,7 +96,6 @@ export default function AssembleStage() {
               const neverReleased = r.latest_release === null;
               const isReady = status === "ready";
               const hasFiles = (fileCount ?? 0) > 0;
-              const expanded = draftId != null && expandedId === draftId;
 
               function openManage(tab: ManageTab) {
                 if (draftId == null) return;
@@ -121,34 +103,8 @@ export default function AssembleStage() {
               }
 
               return (
-                <Fragment key={r.recordset_id}>
-                  <tr className="table-row">
-                    <td className="px-1 py-1">
-                      {draftId != null && (
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(expanded ? null : draftId)}
-                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-(--surface-alt)"
-                          style={{ color: "var(--muted)" }}
-                          title={expanded ? "Hide contents" : "Show contents"}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            width={18}
-                            height={18}
-                            fill="currentColor"
-                            aria-hidden
-                            style={{
-                              transform: expanded ? "rotate(90deg)" : "none",
-                              transition: "transform 100ms",
-                            }}
-                          >
-                            <path d="M5 3l14 9-14 9z" />
-                          </svg>
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-2 py-1">
+                <>
+                  <td className="px-2 py-1">
                       <RecordsetLink id={r.recordset_id} name={r.recordset_name} />
                     </td>
                     <td className="px-2 py-1">
@@ -225,27 +181,10 @@ export default function AssembleStage() {
                         </div>
                       ) : null}
                     </td>
-                  </tr>
-                  {expanded && draftId != null && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-3"
-                        style={{
-                          background: "var(--surface)",
-                          borderTop: "1px solid var(--border-strong)",
-                        }}
-                      >
-                        <DraftSummary draftId={draftId} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
+                </>
               );
-            })}
-          </tbody>
-        </table>
-      </div>
+            }}
+      />
 
       <CreateDraftModal
         open={createFor !== null}

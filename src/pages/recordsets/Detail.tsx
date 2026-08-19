@@ -1,6 +1,12 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import CreateDraftModal from "@/components/CreateDraftModal";
+import DraftSummary from "@/components/DraftSummary";
+import ExpandableTable from "@/components/ExpandableTable";
+import ManageFilesModal from "@/components/ManageFilesModal";
+import RecordsetLink from "@/components/RecordsetLink";
+import { useToast } from "@/components/Toast";
+import { toastError, toastSuccess } from "@/components/toastHelpers";
 import DynamicTable from "@/components/DynamicTable";
 import RecordsetDestinationModal from "@/components/RecordsetDestinationModal";
 import RecordsetEditModal from "@/components/RecordsetEditModal";
@@ -9,7 +15,9 @@ import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useFavorites } from "@/lib/useFavorites";
+import { useSetDraftStatus } from "@/lib/useCycle";
 import { useWpMap } from "@/lib/wpObjectMap";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useDestinationLookups, useRecordset } from "@/lib/recordsetForm";
 import {
   useRecordsetDestinations,
@@ -123,6 +131,7 @@ export default function RecordsetDetail() {
   const navigate = useNavigate();
   const { favoriteKeys, toggle: toggleFavorite } = useFavorites();
   const { recordset_id: recordsetId } = useParams<{ recordset_id: string }>();
+  const { addToast } = useToast();
   const {
     data: recordset,
     isLoading,
@@ -162,6 +171,31 @@ export default function RecordsetDetail() {
   // react-query invalidation can't reach it -- bump this to refetch instead.
   const [showCreateDraftModal, setShowCreateDraftModal] = useState(false);
   const [draftsRefreshKey, setDraftsRefreshKey] = useState(0);
+  const [expandedDraftId, setExpandedDraftId] = useState<number | null>(null);
+  const [manageDraftId, setManageDraftId] = useState<number | null>(null);
+
+  const datasetId = recordset ? String(recordset.dataset_id) : undefined;
+  const setStatus = useSetDraftStatus(datasetId);
+
+  function setDraftStatus(draftId: number, status: "ready" | "open") {
+    setStatus.mutate(
+      { draftId, status },
+      {
+        onSuccess: () => {
+          setDraftsRefreshKey((k) => k + 1);
+          toastSuccess(
+            addToast,
+            status === "ready" ? "Draft marked ready." : "Draft reopened.",
+          );
+        },
+        onError: (e) =>
+          toastError(
+            addToast,
+            e instanceof Error ? e.message : "Could not update the draft status.",
+          ),
+      },
+    );
+  }
 
   // Releases and drafts only need the id -- independent of the recordset
   // record itself, which comes from the shared `useRecordset` query (kept in
@@ -463,31 +497,94 @@ export default function RecordsetDetail() {
               </p>
             )}
             {!isLoadingDrafts && !draftsError && draftsData && (
-              <DynamicTable
+              <ExpandableTable
+                headers={["Name", "Status", "Files", "Cloned From", ""]}
                 rows={draftsData.drafts}
+                getRowKey={(d) => d.recordset_draft_id}
+                expandLabel="contents"
+                expandedKey={expandedDraftId}
+                onExpandedKeyChange={(k) => setExpandedDraftId(k as number | null)}
+                renderExpanded={(d) => (
+                  <DraftSummary draftId={d.recordset_draft_id} />
+                )}
                 pagination={{
-                  defaultItemsPerPage: 4,
-                  totalItems: draftsData.total,
                   page: draftsPage,
                   pageSize: draftsItemsPerPage,
+                  totalItems: draftsData.total,
                   onPageChange: setDraftsPage,
                   onPageSizeChange: (nextItemsPerPage) => {
                     setDraftsItemsPerPage(nextItemsPerPage);
                     setDraftsPage(1);
                   },
                 }}
-                columns={[
-                  { key: "recordset_draft_id", label: "ID" },
-                  { key: "draft_name", label: "Name" },
-                  { key: "draft_status", label: "Status" },
-                  { key: "draft_notes", label: "Notes" },
-                  { key: "file_count", label: "File Count" },
-                  { key: "cloned_from_release_id", label: "Cloned Release ID" },
-                ]}
-                onRowClick={(row) =>
-                  navigate(`/recordsets/drafts/${row.recordset_draft_id}`)
-                }
-                getRowKey={(row) => row.recordset_draft_id}
+                emptyMessage="No drafts yet."
+                renderCells={(d) => {
+                  // Published / discarded drafts are history -- only an open one
+                  // can be edited or moved through the ready lifecycle.
+                  const editable =
+                    d.draft_status !== "published" && d.draft_status !== "deleted";
+                  const isReady = d.draft_status === "ready";
+
+                  return (
+                    <>
+                      <td className="px-2 py-1">
+                        <RecordsetLink
+                          to={`/recordsets/drafts/${d.recordset_draft_id}`}
+                          name={d.draft_name}
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <StatusBadge status={d.draft_status} />
+                      </td>
+                      <td className="px-2 py-1">
+                        {d.file_count.toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1">
+                        {d.cloned_from_release_id != null
+                          ? `release ${d.cloned_from_release_id}`
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-1">
+                        {editable && (
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant={isReady ? "ghost" : undefined}
+                              onClick={() =>
+                                setDraftStatus(
+                                  d.recordset_draft_id,
+                                  isReady ? "open" : "ready",
+                                )
+                              }
+                              disabled={!isReady && d.file_count === 0}
+                              title={
+                                isReady || d.file_count > 0
+                                  ? undefined
+                                  : "Add files before marking ready"
+                              }
+                              loading={
+                                setStatus.isPending &&
+                                setStatus.variables?.draftId ===
+                                  d.recordset_draft_id
+                              }
+                            >
+                              {isReady ? "Reopen" : "Mark Ready"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setManageDraftId(d.recordset_draft_id)
+                              }
+                            >
+                              Manage
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                    </>
+                  );
+                }}
               />
             )}
           </div>
@@ -557,11 +654,24 @@ export default function RecordsetDetail() {
       <CreateDraftModal
         open={showCreateDraftModal}
         onClose={() => setShowCreateDraftModal(false)}
-        datasetId={recordset ? String(recordset.dataset_id) : undefined}
+        datasetId={datasetId}
         recordsetId={Number(recordsetId)}
         recordsetName={recordset?.recordset_name ?? ""}
         wpLinked={Boolean(wpMap)}
         onCreated={() => setDraftsRefreshKey((k) => k + 1)}
+      />
+
+      <ManageFilesModal
+        open={manageDraftId !== null}
+        onClose={() => {
+          setManageDraftId(null);
+          setDraftsRefreshKey((k) => k + 1);
+        }}
+        datasetId={datasetId}
+        draftId={manageDraftId}
+        recordsetName={recordset?.recordset_name ?? ""}
+        wpLinked={Boolean(wpMap)}
+        initialTab="add"
       />
     </PageShell>
   );
