@@ -3,13 +3,18 @@ import { useNavigate, useParams } from "react-router-dom";
 import DynamicSection, {
   DynamicSectionField,
 } from "@/components/DynamicSection";
-import { Button, LinkButton } from "@/components/ui/Button";
+import ManageFilesModal, { type ManageTab } from "@/components/ManageFilesModal";
+import { useDraftSummary } from "@/components/DraftSummary";
+import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
-import { toastSuccess } from "@/components/toastHelpers";
+import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
 import { useUsers } from "@/lib/useUsers";
+import { useRecordset } from "@/lib/recordsetForm";
+import { useSetDraftStatus } from "@/lib/useCycle";
+import { useWpMap } from "@/lib/wpObjectMap";
 import { useQcReviews } from "@/lib/useQc";
 import QcReviewsCard from "@/components/QcReviewsCard";
 import { LoadingState } from "@/components/ui/Spinner";
@@ -33,31 +38,6 @@ type DraftResponse = {
   timestamp: string;
 };
 
-type FileTypeSummary = {
-  file_type: string;
-  file_count: number;
-  total_size_bytes: number;
-};
-
-type ModalitySummary = {
-  modality: string;
-  series_count: number;
-  file_count: number;
-};
-
-type DraftSummary = {
-  draft_id: number;
-  total_files: number;
-  total_size_bytes: number;
-  by_file_type: FileTypeSummary[];
-  dicom: {
-    patient_count: number;
-    study_count: number;
-    series_count: number;
-    by_modality: ModalitySummary[];
-  };
-};
-
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -73,10 +53,15 @@ export default function RecordsetDraftDetail() {
   const { draft_id: draftId } = useParams<{ draft_id: string }>();
 
   const [data, setData] = useState<DraftResponse | null>(null);
-  const [summary, setSummary] = useState<DraftSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  // The draft record is a hand-rolled fetch, so `ManageFilesModal`'s react-query
+  // invalidation can't reach it -- bump this to refetch instead. (The file
+  // summary below is on the shared `useDraftSummary` query, which the modal
+  // does invalidate.)
+  const [manageTab, setManageTab] = useState<ManageTab | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [showPublish, setShowPublish] = useState(false);
   const [releaseNumber, setReleaseNumber] = useState("");
@@ -92,13 +77,12 @@ export default function RecordsetDraftDetail() {
     async function loadDraft() {
       setIsLoading(true);
       setError(null);
-      setSummaryError(null);
 
       try {
-        const [draftRes, summaryRes] = await Promise.all([
-          fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}`, { cache: "no-store" }),
-          fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}/summary`, { cache: "no-store" }),
-        ]);
+        const draftRes = await fetch(
+          `/papi/v1/distribution/recordsets/drafts/${draftId}`,
+          { cache: "no-store" },
+        );
 
         if (!isMounted) return;
 
@@ -110,13 +94,6 @@ export default function RecordsetDraftDetail() {
 
         const json = (await draftRes.json()) as DraftResponse;
         if (isMounted) setData({ ...json, draft: json.draft ?? json.data });
-
-        if (summaryRes.ok) {
-          const summaryJson = (await summaryRes.json()) as { data: DraftSummary };
-          if (isMounted) setSummary(summaryJson.data);
-        } else {
-          if (isMounted) setSummaryError("Could not load file summary.");
-        }
       } catch (caughtError) {
         if (!isMounted) return;
         setError(
@@ -134,7 +111,7 @@ export default function RecordsetDraftDetail() {
     return () => {
       isMounted = false;
     };
-  }, [draftId]);
+  }, [draftId, refreshKey]);
 
   async function handlePublish() {
     if (!draftId || !releaseNumber.trim() || !releaseDate) return;
@@ -208,7 +185,38 @@ export default function RecordsetDraftDetail() {
       ]
     : [];
 
+  const {
+    data: summary,
+    isLoading: isLoadingSummary,
+    isError: isSummaryError,
+  } = useDraftSummary(Number(draftId), Boolean(draftId));
   const hasDicom = (summary?.dicom.series_count ?? 0) > 0;
+
+  // `ManageFilesModal` needs the parent recordset's dataset + name, and whether
+  // the recordset is WP-linked (gates the modal's WordPress file source).
+  const { data: recordset } = useRecordset(
+    draft?.recordset_id != null ? String(draft.recordset_id) : undefined,
+  );
+  const { data: wpMap } = useWpMap("recordset", draft?.recordset_id);
+  const datasetId = recordset ? String(recordset.dataset_id) : undefined;
+
+  const setStatus = useSetDraftStatus(datasetId);
+  const isReady = draft?.draft_status === "ready";
+
+  function setDraftStatus(status: "ready" | "open") {
+    if (draft == null) return;
+    setStatus.mutate(
+      { draftId: draft.recordset_draft_id, status },
+      {
+        onSuccess: () => {
+          setRefreshKey((k) => k + 1);
+          toastSuccess(addToast, status === "ready" ? "Draft marked ready." : "Draft reopened.");
+        },
+        onError: (e) =>
+          toastError(addToast, e instanceof Error ? e.message : "Could not update the draft status."),
+      },
+    );
+  }
 
   return (
     <PageShell size="5xl">
@@ -241,9 +249,24 @@ export default function RecordsetDraftDetail() {
                 Publish Draft
               </Button>
             )}
-            <LinkButton href={draftId ? `/recordsets/drafts/${draftId}/edit` : "/recordsets"}>
-              Edit Draft
-            </LinkButton>
+            {!!draft && draft.draft_status !== "published" && draft.draft_status !== "deleted" && (
+              <Button
+                variant={isReady ? "ghost" : undefined}
+                onClick={() => setDraftStatus(isReady ? "open" : "ready")}
+                disabled={!isReady && (summary?.total_files ?? 0) === 0}
+                title={
+                  isReady || (summary?.total_files ?? 0) > 0
+                    ? undefined
+                    : "Add files before marking ready"
+                }
+                loading={setStatus.isPending}
+              >
+                {isReady ? "Reopen" : "Mark Ready"}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => setManageTab("add")}>
+              Manage
+            </Button>
           </>
         }
       />
@@ -329,22 +352,18 @@ export default function RecordsetDraftDetail() {
 
       <CardHeader className="mt-6 mb-0">
         <CardTitle>File Summary</CardTitle>
-        <LinkButton
-          href={draftId ? `/recordsets/drafts/${draftId}/files` : "#"}
-          size="sm"
-        >
-          Edit Files
-        </LinkButton>
       </CardHeader>
       <SectionCard className="mt-1">
 
-        {isLoading && <LoadingState />}
+        {isLoadingSummary && <LoadingState />}
 
-        {!isLoading && summaryError && (
-          <p className="text-sm text-red-600 dark:text-red-300">{summaryError}</p>
+        {!isLoadingSummary && isSummaryError && (
+          <p className="text-sm text-red-600 dark:text-red-300">
+            Could not load file summary.
+          </p>
         )}
 
-        {!isLoading && !summaryError && summary && (
+        {!isLoadingSummary && !isSummaryError && summary && (
           <div className="space-y-3 text-sm">
             <div className="flex gap-3">
               <div className="flex-1 rounded-md px-4 py-3" style={{ background: "var(--surface-alt)", borderLeft: "4px solid var(--accent)" }}>
@@ -453,6 +472,19 @@ export default function RecordsetDraftDetail() {
       </SectionCard>
 
       {draft && <QcReviewsCard draftId={draftId} />}
+
+      <ManageFilesModal
+        open={manageTab !== null}
+        onClose={() => {
+          setManageTab(null);
+          setRefreshKey((k) => k + 1);
+        }}
+        datasetId={datasetId}
+        draftId={draft?.recordset_draft_id ?? null}
+        recordsetName={recordset?.recordset_name ?? ""}
+        wpLinked={Boolean(wpMap)}
+        initialTab={manageTab ?? "add"}
+      />
     </PageShell>
   );
 }

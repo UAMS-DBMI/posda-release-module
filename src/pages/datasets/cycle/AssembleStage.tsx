@@ -1,5 +1,4 @@
 import { Fragment, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import CreateDraftModal from "@/components/CreateDraftModal";
 import CreateRecordsetModal from "@/components/CreateRecordsetModal";
@@ -9,8 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { extractApiError } from "@/lib/apiUtils";
-import { isCycleActive } from "@/lib/useCycle";
+import { isCycleActive, useSetDraftStatus } from "@/lib/useCycle";
 import { useCycleContext } from "./CycleLayout";
 
 /** Recordset links leave the cycle, so they open in a new tab -- the only
@@ -36,7 +34,6 @@ type ManageTarget = { id: number; name: string; wpLinked: boolean; tab: ManageTa
 export default function AssembleStage() {
   const { cycle, datasetId } = useCycleContext();
   const { addToast } = useToast();
-  const queryClient = useQueryClient();
 
   const [showCreateRecordset, setShowCreateRecordset] = useState(false);
   const [createFor, setCreateFor] = useState<{
@@ -47,33 +44,19 @@ export default function AssembleStage() {
   const [manage, setManage] = useState<ManageTarget | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  function invalidateCycle() {
-    void queryClient.invalidateQueries({
-      queryKey: ["dataset-cycle", datasetId ?? ""],
-    });
-  }
+  const setStatus = useSetDraftStatus(datasetId);
 
-  const setStatus = useMutation({
-    mutationFn: async (v: { draftId: number; status: "ready" | "open" }) => {
-      const res = await fetch(
-        `/papi/v1/distribution/recordsets/drafts/${v.draftId}`,
-        {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ draft_status: v.status }),
-        },
-      );
-      if (!res.ok) {
-        throw new Error(extractApiError(await res.json(), "Could not update the draft status."));
-      }
-    },
-    onSuccess: (_d, v) => {
-      invalidateCycle();
-      toastSuccess(addToast, v.status === "ready" ? "Draft marked ready." : "Draft reopened.");
-    },
-    onError: (e) =>
-      toastError(addToast, e instanceof Error ? e.message : "Could not update the draft status."),
-  });
+  function setDraftStatus(draftId: number, status: "ready" | "open") {
+    setStatus.mutate(
+      { draftId, status },
+      {
+        onSuccess: () =>
+          toastSuccess(addToast, status === "ready" ? "Draft marked ready." : "Draft reopened."),
+        onError: (e) =>
+          toastError(addToast, e instanceof Error ? e.message : "Could not update the draft status."),
+      },
+    );
+  }
 
   if (cycle.recordsets.length === 0) {
     return (
@@ -205,7 +188,7 @@ export default function AssembleStage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => setStatus.mutate({ draftId, status: "open" })}
+                              onClick={() => setDraftStatus(draftId, "open")}
                               loading={setStatus.isPending && setStatus.variables?.draftId === draftId}
                             >
                               Reopen
@@ -213,7 +196,7 @@ export default function AssembleStage() {
                           ) : (
                             <Button
                               size="sm"
-                              onClick={() => setStatus.mutate({ draftId, status: "ready" })}
+                              onClick={() => setDraftStatus(draftId, "ready")}
                               disabled={!hasFiles}
                               title={hasFiles ? undefined : "Add files before marking ready"}
                               loading={setStatus.isPending && setStatus.variables?.draftId === draftId}

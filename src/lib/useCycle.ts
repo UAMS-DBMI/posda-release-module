@@ -154,6 +154,24 @@ export function useCreateRecordsetDraft(datasetId: string | undefined) {
   });
 }
 
+/** Flip one draft between `open` and `ready` -- the Assemble lifecycle action,
+ *  also offered on the standalone draft detail page. Toasts stay at the call
+ *  site (per the other hooks here). */
+export function useSetDraftStatus(datasetId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { draftId: number; status: "ready" | "open" }) => {
+      await apiFetch(`${BASE}/recordsets/drafts/${v.draftId}`, {
+        method: "PUT",
+        body: JSON.stringify({ draft_status: v.status }),
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["dataset-cycle", datasetId ?? ""] });
+    },
+  });
+}
+
 /** True when a draft dataset_release exists -- this is what "a cycle is in
  *  progress" means. Assemble/Verify gate their working controls on this;
  *  when false, they show read-only state for the last completed release

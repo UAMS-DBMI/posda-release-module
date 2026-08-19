@@ -21,6 +21,17 @@ modals below **already exist** (built for Setup/Assemble/Verify). Work one item
 at a time; each = wire the modal in, repoint inbound links, delete the page +
 route + unused imports. Full analysis in the 2026-08-06 discussion.
 
+**Direction set 2026-08-19 — pages stay, navigation goes.** Asked whether the
+goal was to *eliminate* pages: no. The goal is that **a page accomplishes as
+much as possible without navigating away**, the way the cycle stages do.
+Sub-pages that exist only to edit something (`/edit`, `/files`, `/create`) get
+folded into modals on the page that owns the thing; the owning page stays.
+Applied to `recordsets/drafts/:id`, which keeps its route and becomes
+self-sufficient (files, details, discard, ready/reopen, publish, QC all in
+place) rather than being absorbed into `recordsets/:id`. The rejected
+alternative — Assemble-style draft rows on `recordsets/:id` and no draft page
+at all — would also have orphaned the inbound links from `/qc/reviews/:id`.
+
 - [x] **1. `datasets/Detail` → `DatasetEditModal`.** *(done 2026-08-06)* Replaced
       the "Edit Dataset" link with a button opening `DatasetEditModal`; removed
       page **`datasets/:id/edit`** (`Edit.tsx`) + its route. Along the way,
@@ -71,13 +82,38 @@ route + unused imports. Full analysis in the 2026-08-06 discussion.
         the 2026-08-06 rework had removed this page's `useWpMap` call when
         `WpLinkPill` took over the WP section. Re-added one `useWpMap` call for
         the flag only — react-query shares the request with the pill's.
-- [ ] **4. `recordsets/drafts/Detail` → `ManageFilesModal`.** Replace "Edit Files"
-      link (`Detail:333`); remove page **`recordsets/drafts/:id/files`**
-      (`Files.tsx`, already functionally superseded). Confirm `Files.tsx`'s own
-      `files/add` paths are covered by `DraftAddFiles`/`DraftSeriesReconcile`.
-- [ ] **5. `recordsets/drafts/Detail` → `ManageFilesModal` (Details tab).**
-      Replace "Edit" link (`Detail:244`); remove page
-      **`recordsets/drafts/:id/edit`**. Confirm no field beyond name/notes/discard.
+- [x] **4 + 5. `recordsets/drafts/Detail` → `ManageFilesModal`.** *(done
+      2026-08-19)* Done as one change with item 8, under a goal set this day:
+      **the draft page should accomplish everything without navigating away**,
+      like the cycle stages. Both entry points collapsed into **one ghost
+      "Manage" button** in the page header (matching `AssembleStage:224`,
+      opening on the `add` tab) — not the two separate Edit Draft / Edit Files
+      buttons originally planned. Removed pages **`recordsets/drafts/:id/edit`**
+      (`Edit.tsx`) and **`recordsets/drafts/:id/files`** (`Files.tsx`) + routes;
+      ~1,340 lines deleted.
+      - **Item 4's check passed.** `Files.tsx` was add-only — its two write
+        paths bulk-added an activity diff's and a release diff's missing files.
+        Both are covered: `DraftAddFiles` has the same sources, and
+        `DraftSeriesReconcile`'s Merge is the same idea done better (detects
+        *changed* series, not just missing files). Its File Browser and
+        Activities/Releases explorers have no equivalent — judged read-only
+        browsing, not editing, so deliberately not ported.
+      - **Item 5's check failed — gap found.** `Edit.tsx` had five fields; the
+        Details tab has name + notes + Discard. Resolved: `draft_status` (free
+        text into a status field, same as item 3) and `cloned_from_release_id`
+        (the provenance/staleness baseline — hand-editing it silently rewrites
+        what the draft diffs against) are **dropped**. `recordset_id`
+        reassignment also **dropped** — unlike item 2's dataset selector, a
+        draft's files came from that recordset's lineage, so moving it strands
+        the provenance; discard and recreate instead.
+      - **Staying fresh:** File Summary moved onto the shared `useDraftSummary`
+        query (`DraftSummary.tsx`), which `DraftAddFiles` already invalidates,
+        so file changes reflect behind the modal. Its **richer table markup was
+        kept** rather than swapping in the compact `DraftSummary` component,
+        which is tuned for Assemble's expander row — so the page keeps a
+        duplicate `formatBytes` and ~120 lines of summary markup. The draft
+        record itself isn't behind a shared query, so a local `refreshKey`
+        bumps on modal close and on the status mutation.
 - [ ] **6. (optional) `recordsets/List` → `CreateRecordsetModal`.** Replace "New
       Recordset" (`List:269` + `datasets/Detail:429`); remove page
       **`recordsets/create`**. Lower value (list→page create is fine).
@@ -89,8 +125,15 @@ route + unused imports. Full analysis in the 2026-08-06 discussion.
       the page passes `onCreated` to bump a local `refreshKey` that sits in the
       effect's deps. `RecordsetEditModal` gained the same escape hatch as an
       optional `onSaved`. See the dataset-detail rework below.
-- [ ] **8. (optional) `recordsets/drafts/Detail` Assemble parity** — inline
-      `DraftSummary` + a Mark Ready/Reopen action.
+- [x] **8. `recordsets/drafts/Detail` Assemble parity** *(done 2026-08-19,
+      promoted from optional and folded into 4+5)* — **Mark Ready / Reopen** in
+      the page header, shown by `draft_status` exactly as Assemble does. The
+      mutation was inline in `AssembleStage`; extracted to
+      `lib/useCycle.ts` as **`useSetDraftStatus(datasetId)`** and called from
+      both (toasts stay at the call sites, per the other hooks there).
+      ⚠ This item's own wording said "inline `DraftSummary`" — stale: the page
+      already had an inline File Summary, richer than the shared component. Its
+      real content was only the lifecycle action.
 - [ ] **9. (optional) `QcReviewsCard` → open `QcReviewManageModal`** in place;
       keep `ReviewDetail` as the deep-link/audit page.
 

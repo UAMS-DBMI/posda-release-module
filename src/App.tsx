@@ -34,8 +34,6 @@ import RecordsetCreate from "@/pages/recordsets/Create";
 import RecordsetById from "@/pages/recordsets/Detail";
 import RecordsetReleaseById from "@/pages/recordsets/releases/Detail";
 import RecordsetDraftById from "@/pages/recordsets/drafts/Detail";
-import RecordsetDraftEdit from "@/pages/recordsets/drafts/Edit";
-import RecordsetDraftFiles from "@/pages/recordsets/drafts/Files";
 
 import TransfersList from "@/pages/transfers/List";
 import TransferById from "@/pages/transfers/Detail";
@@ -158,8 +156,6 @@ export default function App() {
           <Route path=":recordset_id" element={<RecordsetById />} />
           <Route path="releases/:release_id" element={<RecordsetReleaseById />} />
           <Route path="drafts/:draft_id" element={<RecordsetDraftById />} />
-          <Route path="drafts/:draft_id/edit" element={<RecordsetDraftEdit />} />
-          <Route path="drafts/:draft_id/files" element={<RecordsetDraftFiles />} />
         </Route>
 
         <Route path="transfers">
