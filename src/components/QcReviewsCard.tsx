@@ -4,7 +4,7 @@ import { useQcReviews } from "@/lib/useQc";
 import DynamicTable from "@/components/DynamicTable";
 import QcReviewModal from "@/components/QcReviewModal";
 import { Button } from "@/components/ui/Button";
-import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
+import { CardHeader, CardTitle } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/Spinner";
 
@@ -20,13 +20,13 @@ export default function QcReviewsCard({
 
   return (
     <>
-      <CardHeader className="mt-6 mb-0">
+      <CardHeader className="mt-6">
         <CardTitle>QC Reviews</CardTitle>
         <Button size="sm" onClick={() => setShowCreate(true)} disabled={!draftId}>
           New Review
         </Button>
       </CardHeader>
-      <SectionCard className="mt-1">
+      <div>
         {reviews.isLoading && <LoadingState />}
 
         {reviews.isError && (
@@ -70,7 +70,7 @@ export default function QcReviewsCard({
             }}
           />
         )}
-      </SectionCard>
+      </div>
 
       <QcReviewModal
         open={showCreate}

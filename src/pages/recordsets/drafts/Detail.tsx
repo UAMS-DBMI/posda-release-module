@@ -1,10 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import DynamicSection, {
-  DynamicSectionField,
-} from "@/components/DynamicSection";
 import ManageFilesModal, { type ManageTab } from "@/components/ManageFilesModal";
-import { useDraftSummary } from "@/components/DraftSummary";
+import DraftSummary, { useDraftSummary } from "@/components/DraftSummary";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
@@ -37,14 +34,6 @@ type DraftResponse = {
   data?: Draft;
   timestamp: string;
 };
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
 
 export default function RecordsetDraftDetail() {
   const navigate = useNavigate();
@@ -162,35 +151,24 @@ export default function RecordsetDraftDetail() {
         ? "Publishing requires a completed QC review"
         : undefined;
 
-  const draftFields: DynamicSectionField[] = draft
+  const metadataStrip = draft
     ? [
-        { label: "Draft ID", value: draft.recordset_draft_id },
-        { label: "Recordset ID", value: draft.recordset_id },
-        { label: "Draft Name", value: draft.draft_name },
-        { label: "Draft Status", value: draft.draft_status },
-        {
-          label: "Cloned From Release ID",
-          value: draft.cloned_from_release_id ?? "N/A",
-        },
-        ...(draft.draft_notes
-          ? [
-              {
-                label: "Notes",
-                value: draft.draft_notes,
-                fullWidth: true,
-                valueClassName: "mt-1 whitespace-pre-wrap text-xs",
-              },
-            ]
-          : []),
+        `#${draft.recordset_draft_id}`,
+        draft.cloned_from_release_id != null
+          ? `cloned from release ${draft.cloned_from_release_id}`
+          : null,
+        draft.when_updated
+          ? `updated ${new Date(draft.when_updated).toLocaleDateString()}`
+          : null,
+        draft.who_updated != null ? `by ${userMap.get(draft.who_updated) ?? "—"}` : null,
       ]
-    : [];
+        .filter(Boolean)
+        .join(" · ")
+    : undefined;
 
-  const {
-    data: summary,
-    isLoading: isLoadingSummary,
-    isError: isSummaryError,
-  } = useDraftSummary(Number(draftId), Boolean(draftId));
-  const hasDicom = (summary?.dicom.series_count ?? 0) > 0;
+  // Only for Mark Ready's "has files" gate -- `DraftSummary` below renders from
+  // this same cached query, so this costs no extra request.
+  const { data: summary } = useDraftSummary(Number(draftId), Boolean(draftId));
 
   // `ManageFilesModal` needs the parent recordset's dataset + name, and whether
   // the recordset is WP-linked (gates the modal's WordPress file source).
@@ -221,7 +199,7 @@ export default function RecordsetDraftDetail() {
   return (
     <PageShell size="5xl">
       <PageDetailHeader
-        title="Draft Details"
+        title={draft?.draft_name ?? "Draft Details"}
         breadcrumbs={
           draft?.recordset_id
             ? [
@@ -233,7 +211,7 @@ export default function RecordsetDraftDetail() {
               ]
             : [{ label: "Recordsets", href: "/recordsets" }]
         }
-        subtitle={draft?.draft_name}
+        subtitle={metadataStrip}
         badge={draft ? {
           label: draft.draft_status === "published" ? "Published" : draft.draft_status === "deleted" ? "Deleted" : "Draft",
           variant: draft.draft_status === "published" ? "success" : draft.draft_status === "deleted" ? "danger" : "neutral",
@@ -338,140 +316,35 @@ export default function RecordsetDraftDetail() {
         </div>
       )}
 
-      <DynamicSection
-        isLoading={isLoading}
-        error={error}
-        fields={draftFields}
-        actions={
-          <div className="metadata-panel">
-            <p><strong>Created:</strong>{" "}{draft?.when_created ? new Date(draft.when_created).toLocaleString() : "—"} by {draft?.who_created != null ? (userMap.get(draft.who_created) ?? "—") : "—"}</p>
-            <p><strong>Updated:</strong>{" "}{draft?.when_updated ? new Date(draft.when_updated).toLocaleString() : "—"} by {draft?.who_updated != null ? (userMap.get(draft.who_updated) ?? "—") : "—"}</p>
-          </div>          
-        }
-      />
+      {isLoading && <LoadingState />}
 
-      <CardHeader className="mt-6 mb-0">
-        <CardTitle>File Summary</CardTitle>
-      </CardHeader>
-      <SectionCard className="mt-1">
+      {!isLoading && error && (
+        <SectionCard className="mt-4">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </SectionCard>
+      )}
 
-        {isLoadingSummary && <LoadingState />}
+      {!isLoading && !error && draft && (
+        <SectionCard className="mt-4">
+          {draft.draft_notes && (
+            <>
+              <CardHeader>
+                <CardTitle>Notes</CardTitle>
+              </CardHeader>
+              <p className="whitespace-pre-wrap text-sm">{draft.draft_notes}</p>
+            </>
+          )}
 
-        {!isLoadingSummary && isSummaryError && (
-          <p className="text-sm text-red-600 dark:text-red-300">
-            Could not load file summary.
-          </p>
-        )}
-
-        {!isLoadingSummary && !isSummaryError && summary && (
-          <div className="space-y-3 text-sm">
-            <div className="flex gap-3">
-              <div className="flex-1 rounded-md px-4 py-3" style={{ background: "var(--surface-alt)", borderLeft: "4px solid var(--accent)" }}>
-                <p className="text-2xl font-bold">{summary.total_files.toLocaleString()}</p>
-                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--muted)" }}>Total Files</p>
-              </div>
-              <div className="flex-1 rounded-md px-4 py-3" style={{ background: "var(--surface-alt)", borderLeft: "4px solid var(--accent)" }}>
-                <p className="text-2xl font-bold">{formatBytes(summary.total_size_bytes)}</p>
-                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--muted)" }}>Total Size</p>
-              </div>
-            </div>
-
-            {summary.by_file_type.length > 0 && (
-              <div className="rounded-md" style={{ background: "var(--surface-alt)", border: "1px solid var(--border-strong)" }}>
-                <div className="px-3 py-2" style={{ borderLeft: "4px solid var(--accent)" }}>
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>File Types</p>
-                </div>
-                <div className="px-3 pb-3 pt-2">
-                  <table className="w-full table-fixed">
-                    <colgroup>
-                      <col className="w-1/2" />
-                      <col className="w-1/4" />
-                      <col className="w-1/4" />
-                    </colgroup>
-                    <thead>
-                      <tr className="text-left text-xs font-semibold" style={{ color: "var(--muted)", background: "var(--border-strong)" }}>
-                        <th className="py-1.5">Type</th>
-                        <th className="py-1.5">Files</th>
-                        <th className="py-1.5">Size</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summary.by_file_type.map((ft) => (
-                        <tr key={ft.file_type} className="border-t" style={{ borderColor: "var(--border-strong)" }}>
-                          <td className="py-1.5">{ft.file_type}</td>
-                          <td className="py-1.5">{ft.file_count.toLocaleString()}</td>
-                          <td className="py-1.5">{formatBytes(ft.total_size_bytes)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {hasDicom && (
-              <div className="rounded-md" style={{ background: "var(--surface-alt)", border: "1px solid var(--border-strong)" }}>
-                <div className="px-3 py-2" style={{ borderLeft: "4px solid var(--accent)" }}>
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>DICOM</p>
-                </div>
-                <div className="px-3 pb-3 pt-2">
-                  <table className="w-full table-fixed">
-                    <colgroup>
-                      <col className="w-1/2" />
-                      <col className="w-1/4" />
-                      <col className="w-1/4" />
-                    </colgroup>
-                    <thead>
-                      <tr className="text-left text-xs font-semibold" style={{ color: "var(--muted)", background: "var(--border-strong)" }}>
-                        <th className="py-1.5">Patients</th>
-                        <th className="py-1.5">Studies</th>
-                        <th className="py-1.5">Series</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-t" style={{ borderColor: "var(--border-strong)" }}>
-                        <td className="py-1.5">{summary.dicom.patient_count.toLocaleString()}</td>
-                        <td className="py-1.5">{summary.dicom.study_count.toLocaleString()}</td>
-                        <td className="py-1.5">{summary.dicom.series_count.toLocaleString()}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  {summary.dicom.by_modality.length > 0 && (
-                    <div className="mt-3 border-t" style={{ borderColor: "var(--border-strong)" }}>
-                      <table className="w-full table-fixed">
-                        <colgroup>
-                          <col className="w-1/2" />
-                          <col className="w-1/4" />
-                          <col className="w-1/4" />
-                        </colgroup>
-                        <thead>
-                          <tr className="text-left text-xs font-semibold" style={{ color: "var(--muted)", background: "var(--border-strong)" }}>
-                            <th className="py-1.5">Modality</th>
-                            <th className="py-1.5">Series</th>
-                            <th className="py-1.5">Files</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {summary.dicom.by_modality.map((m) => (
-                            <tr key={m.modality} className="border-t" style={{ borderColor: "var(--border-strong)" }}>
-                              <td className="py-1.5">{m.modality}</td>
-                              <td className="py-1.5">{m.series_count.toLocaleString()}</td>
-                              <td className="py-1.5">{m.file_count.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+          <CardHeader className={draft.draft_notes ? "mt-6" : undefined}>
+            <CardTitle>File Summary</CardTitle>
+          </CardHeader>
+          <div>
+            <DraftSummary draftId={draft.recordset_draft_id} />
           </div>
-        )}
-      </SectionCard>
 
-      {draft && <QcReviewsCard draftId={draftId} />}
+          <QcReviewsCard draftId={draftId} />
+        </SectionCard>
+      )}
 
       <ManageFilesModal
         open={manageTab !== null}

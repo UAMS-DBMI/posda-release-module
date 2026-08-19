@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import DraftFileList from "@/components/DraftFileList";
 import { LoadingState } from "@/components/ui/Spinner";
 
 type FileTypeSummary = {
@@ -26,6 +27,12 @@ export type DraftSummaryData = {
     by_modality: ModalitySummary[];
   };
 };
+
+/** "1 File" / "2 Files" -- the stat line reads as prose, so a bare plural on a
+ *  count of one looks wrong. Pass `plural` for irregular forms. */
+function pluralize(count: number, one: string, many = `${one}s`): string {
+  return count === 1 ? one : many;
+}
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -112,12 +119,19 @@ export default function DraftSummary({
   const hasDicom = s.dicom.series_count > 0;
 
   const stats: [string, string][] = [
-    [s.total_files.toLocaleString(), "Files"],
+    [s.total_files.toLocaleString(), pluralize(s.total_files, "File")],
     [formatBytes(s.total_size_bytes), "Size"],
   ];
   if (hasDicom) {
-    stats.push([s.dicom.patient_count.toLocaleString(), "Patients"]);
-    stats.push([s.dicom.study_count.toLocaleString(), "Studies"]);
+    stats.push([
+      s.dicom.patient_count.toLocaleString(),
+      pluralize(s.dicom.patient_count, "Patient"),
+    ]);
+    stats.push([
+      s.dicom.study_count.toLocaleString(),
+      pluralize(s.dicom.study_count, "Study", "Studies"),
+    ]);
+    // "Series" is already both singular and plural.
     stats.push([s.dicom.series_count.toLocaleString(), "Series"]);
   }
 
@@ -165,6 +179,12 @@ export default function DraftSummary({
           ))}
         </ChipRow>
       )}
+
+      {/* Non-DICOM files have no modality/series to summarize by, so the name is
+       *  the only identifier -- list them. Renders nothing when there are none,
+       *  which is why it isn't gated on a count (the summary payload has no
+       *  reliable non-DICOM count to gate on). */}
+      <DraftFileList draftId={draftId} readOnly />
     </div>
   );
 }

@@ -30,13 +30,18 @@ export function draftFilesKey(draftId: number) {
 /** Scrollable, editable list of a draft's non-DICOM files by name. DICOM files
  *  are covered by the summary's modality breakdown, not their (meaningless)
  *  names -- and DICOM edits are per-series, handled elsewhere. Replace a file by
- *  removing it here, then adding its replacement below. */
+ *  removing it here, then adding its replacement below.
+ *
+ *  `readOnly` drops the remove action, for the read-only surfaces (DraftSummary)
+ *  where editing belongs to the Manage modal instead. */
 export default function DraftFileList({
   draftId,
   datasetId,
+  readOnly = false,
 }: {
   draftId: number;
-  datasetId: string | undefined;
+  datasetId?: string | undefined;
+  readOnly?: boolean;
 }) {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
@@ -44,10 +49,10 @@ export default function DraftFileList({
 
   // A primed remove reverts on its own so a stray first click can't linger.
   useEffect(() => {
-    if (confirmId === null) return;
+    if (readOnly || confirmId === null) return;
     const t = setTimeout(() => setConfirmId(null), 4000);
     return () => clearTimeout(t);
-  }, [confirmId]);
+  }, [confirmId, readOnly]);
 
   const files = useQuery({
     queryKey: draftFilesKey(draftId),
@@ -114,7 +119,7 @@ export default function DraftFileList({
         className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide"
         style={{ color: "var(--muted)", background: "var(--surface-alt)" }}
       >
-        Non-DICOM Files ({files.data.length.toLocaleString()})
+        {readOnly ? "Files" : "Non-DICOM Files"} ({files.data.length.toLocaleString()})
       </div>
       <ul className="max-h-52 divide-y overflow-y-auto" style={{ borderColor: "var(--border)" }}>
         {files.data.map((f) => {
@@ -131,18 +136,20 @@ export default function DraftFileList({
                 <span className="text-xs" style={{ color: "var(--muted)" }}>
                   {f.size != null ? formatBytes(f.size) : "—"}
                 </span>
-                <button
-                  type="button"
-                  disabled={removing}
-                  onClick={() =>
-                    armed
-                      ? remove.mutate(f.recordset_draft_file_id)
-                      : setConfirmId(f.recordset_draft_file_id)
-                  }
-                  className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                >
-                  {removing ? "Removing…" : armed ? "Confirm remove?" : "Remove"}
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    disabled={removing}
+                    onClick={() =>
+                      armed
+                        ? remove.mutate(f.recordset_draft_file_id)
+                        : setConfirmId(f.recordset_draft_file_id)
+                    }
+                    className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                  >
+                    {removing ? "Removing…" : armed ? "Confirm remove?" : "Remove"}
+                  </button>
+                )}
               </span>
             </li>
           );

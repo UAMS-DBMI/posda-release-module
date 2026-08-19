@@ -108,12 +108,37 @@ at all — would also have orphaned the inbound links from `/qc/reviews/:id`.
         the provenance; discard and recreate instead.
       - **Staying fresh:** File Summary moved onto the shared `useDraftSummary`
         query (`DraftSummary.tsx`), which `DraftAddFiles` already invalidates,
-        so file changes reflect behind the modal. Its **richer table markup was
-        kept** rather than swapping in the compact `DraftSummary` component,
-        which is tuned for Assemble's expander row — so the page keeps a
-        duplicate `formatBytes` and ~120 lines of summary markup. The draft
-        record itself isn't behind a shared query, so a local `refreshKey`
-        bumps on modal close and on the status mutation.
+        so file changes reflect behind the modal. The draft record itself isn't
+        behind a shared query, so a local `refreshKey` bumps on modal close and
+        on the status mutation.
+      - **Follow-on same day — page rework** (asked for on sight: the summary
+        "no longer fits with the rest"). The heavy summary markup was first
+        kept, then dropped:
+        - **File Summary → the shared `DraftSummary` component.** The tiles /
+          nested boxes / three grey-banded tables were ~115 lines carrying
+          *exactly* the same numbers the component shows as a stat line + chip
+          rows — verified field by field before swapping. Deletes the page's
+          duplicate `formatBytes`. Assemble's expander and this page now render
+          identically. The page keeps one `useDraftSummary` call for Mark
+          Ready's has-files gate (same cached query, no extra request).
+        - **Three panels → one**, per the 2026-08-06 dataset/recordset detail
+          rework: `CardHeader`s are in-card dividers inside a single
+          `SectionCard`. `QcReviewsCard` dropped its own `SectionCard` to sit
+          inside the panel (its only call site, so safe). `DynamicSection` is
+          shared app-wide and was **not** touched — instead the details block
+          was dissolved the way `recordsets/Detail`'s was.
+        - **Non-DICOM file names listed** (closes tech-debt #11, which had been
+          re-flagged when the tables went): `DraftFileList` gained a `readOnly`
+          prop and `DraftSummary` renders it after the chip rows — so both the
+          draft page and Assemble's expander now name the files. See TECH_DEBT
+          Resolved 2026-08-19 for the unbounded-payload residual.
+        - **Header** now `title = draft_name` (was the literal "Draft Details")
+          with subtitle `#id · cloned from release N · updated <date> by <user>`.
+          Draft ID/Name/Status and Recordset ID left the body: name is the
+          title, status is the badge, recordset is already a breadcrumb.
+          Created-by/date dropped, matching `datasets/Detail`. **Notes** kept as
+          its own section at the top of the panel (freeform text — too long for
+          a subtitle strip), rendered only when present.
 - [ ] **6. (optional) `recordsets/List` → `CreateRecordsetModal`.** Replace "New
       Recordset" (`List:269` + `datasets/Detail:429`); remove page
       **`recordsets/create`**. Lower value (list→page create is fine).
