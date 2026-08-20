@@ -342,7 +342,6 @@ export default function RecordsetDetail() {
     ? [
         `#${recordset.recordset_id}`,
         recordset.recordset_doi,
-        recordset.dataset_name,
         recordset.recordset_type_name,
         recordset.license_label,
         `updated ${new Date(recordset.when_updated).toLocaleDateString()}`,
@@ -355,7 +354,17 @@ export default function RecordsetDetail() {
     <PageShell size="5xl">
       <PageDetailHeader
         title={recordset?.recordset_name ?? "Recordset Details"}
-        breadcrumb={{ label: "Recordsets", href: "/recordsets" }}
+        breadcrumbs={[
+          { label: "Datasets", href: "/datasets" },
+          ...(recordset?.dataset_id != null
+            ? [
+                {
+                  label: recordset.dataset_name ?? `Dataset ${recordset.dataset_id}`,
+                  href: `/datasets/${recordset.dataset_id}`,
+                },
+              ]
+            : []),
+        ]}
         subtitle={metadataStrip}
         badge={
           recordset

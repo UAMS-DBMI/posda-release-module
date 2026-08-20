@@ -203,13 +203,23 @@ export default function RecordsetDraftDetail() {
         breadcrumbs={
           draft?.recordset_id
             ? [
-                { label: "Recordsets", href: "/recordsets" },
+                { label: "Datasets", href: "/datasets" },
+                ...(recordset?.dataset_id != null
+                  ? [
+                      {
+                        label:
+                          recordset.dataset_name ?? `Dataset ${recordset.dataset_id}`,
+                        href: `/datasets/${recordset.dataset_id}`,
+                      },
+                    ]
+                  : []),
                 {
-                  label: `Recordset ${draft.recordset_id}`,
+                  label:
+                    recordset?.recordset_name ?? `Recordset ${draft.recordset_id}`,
                   href: `/recordsets/${draft.recordset_id}`,
                 },
               ]
-            : [{ label: "Recordsets", href: "/recordsets" }]
+            : [{ label: "Datasets", href: "/datasets" }]
         }
         subtitle={metadataStrip}
         badge={draft ? {

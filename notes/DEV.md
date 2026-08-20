@@ -211,6 +211,38 @@ table was the third call site #10 was waiting for.
 
 ### 🧹 `/qc/reviews/:id` rework — done 2026-08-19
 
+### 🧹 Breadcrumbs — ownership path (done 2026-08-20)
+
+Prompted by "in a recordset there is no way to link to the dataset it belongs
+to". True: `recordsets/Detail` printed `dataset_name` as **plain text** in the
+subtitle, and its breadcrumb was just `Recordsets` — so dataset → recordset
+worked (via the table) but recordset → dataset did not.
+
+**Decided: breadcrumbs mean containment**, labelled with **names**, everywhere:
+
+| Page | Was | Now |
+|---|---|---|
+| `datasets/:id` | `Datasets` | unchanged (top of chain) |
+| `recordsets/:id` | `Recordsets` | `Datasets / <dataset>` |
+| `drafts/:id` | `Recordsets / Recordset 7` | `Datasets / <dataset> / <recordset>` |
+| `qc/reviews/:id` | `Recordsets / Draft 11` | `Datasets / <dataset> / <recordset> / <draft>` |
+
+- **`/recordsets` leaves the breadcrumb trail** (still a navbar item). Accepted
+  cost of making crumbs mean ownership rather than entry point.
+- **`qc/Queue` keeps `Dashboard`** — work intake, not part of the chain.
+- **No backend change for the recordset/draft pages**: `RecordsetRecord` already
+  carries `dataset_id` / `dataset_name` / `recordset_name`, and the draft page
+  already calls `useRecordset` (for the Manage modal).
+- **Review page needed one**: it had only `recordset_draft_id`. `GET
+  /qc/reviews/{id}` now joins `recordset_draft → recordset → dataset` and returns
+  `draft_name`, `recordset_id/name`, `dataset_id/name` — the same idiom the
+  assignments list already used. `QcReviewRow` gained them as optional (absent on
+  list rows); every crumb falls back to `Dataset {id}` / `Recordset {id}` /
+  `Draft {id}` if a name is missing.
+- **Dropped `dataset_name` from the recordset subtitle** — it would otherwise
+  print one line below the breadcrumb linking to the same place. (The "Both"
+  option, crumb *and* linked subtitle, was offered and not chosen.)
+
 **Follow-up 2026-08-20 — DICOM-centric wording on a non-DICOM review.**
 The `qc_series` → `qc_unit` model rename (2026-08-06) never reached the UI.
 Two spots fixed on sight: the **"Series Status"** section is now just

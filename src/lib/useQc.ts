@@ -25,6 +25,13 @@ export type QcReviewRow = {
   who_created: number | null;
   when_updated: string;
   who_updated: number | null;
+  /** Ownership chain, joined by the detail endpoint for the breadcrumb trail.
+   *  Absent on list rows. */
+  draft_name?: string;
+  recordset_id?: number;
+  recordset_name?: string;
+  dataset_id?: number;
+  dataset_name?: string;
 };
 
 /** List row = qc_review row + per-review series counts and assignment rollup

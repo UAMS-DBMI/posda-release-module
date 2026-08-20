@@ -95,13 +95,30 @@ export default function QcReviewDetail() {
         breadcrumbs={
           review
             ? [
-                { label: "Recordsets", href: "/recordsets" },
+                { label: "Datasets", href: "/datasets" },
+                ...(review.dataset_id != null
+                  ? [
+                      {
+                        label: review.dataset_name ?? `Dataset ${review.dataset_id}`,
+                        href: `/datasets/${review.dataset_id}`,
+                      },
+                    ]
+                  : []),
+                ...(review.recordset_id != null
+                  ? [
+                      {
+                        label:
+                          review.recordset_name ?? `Recordset ${review.recordset_id}`,
+                        href: `/recordsets/${review.recordset_id}`,
+                      },
+                    ]
+                  : []),
                 {
-                  label: `Draft ${review.recordset_draft_id}`,
+                  label: review.draft_name ?? `Draft ${review.recordset_draft_id}`,
                   href: `/recordsets/drafts/${review.recordset_draft_id}`,
                 },
               ]
-            : [{ label: "Recordsets", href: "/recordsets" }]
+            : [{ label: "Datasets", href: "/datasets" }]
         }
         subtitle={metadataStrip}
         badge={
