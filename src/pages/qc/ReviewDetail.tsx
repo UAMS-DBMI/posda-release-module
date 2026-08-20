@@ -2,16 +2,14 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQcReview, useUpdateQcReview } from "@/lib/useQc";
 import { useUsers } from "@/lib/useUsers";
-import DynamicSection, {
-  type DynamicSectionField,
-} from "@/components/DynamicSection";
 import QcAssignments from "@/components/qc/QcAssignments";
-import QcReviewLifecycle from "@/components/qc/QcReviewLifecycle";
+import { useQcReviewLifecycle } from "@/components/qc/QcReviewLifecycle";
 import QcSeriesSummary from "@/components/qc/QcSeriesSummary";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import Modal from "@/components/ui/Modal";
+import { LoadingState } from "@/components/ui/Spinner";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 
@@ -43,31 +41,40 @@ export default function QcReviewDetail() {
     byStatus.find((s) => s.qc_status === "approved")?.count ?? 0;
   const allApproved = seriesTotal > 0 && approvedCount === seriesTotal;
 
-  const fields: DynamicSectionField[] = review
+  // A non-DICOM review's units are files, not series (the model calls both
+  // `qc_unit`); "series" is only right for a DICOM review.
+  const unitLabel =
+    review?.review_type === "non_dicom"
+      ? `${seriesTotal.toLocaleString()} file${seriesTotal === 1 ? "" : "s"}`
+      : `${seriesTotal.toLocaleString()} series`;
+
+  const metadataStrip = review
     ? [
-        { label: "Type", value: review.review_type },
-        {
-          label: "Sample %",
-          value:
-            review.review_type === "partial"
-              ? `${review.sample_percentage}%`
-              : "—",
-        },
-        { label: "Series", value: seriesTotal.toLocaleString() },
-        {
-          label: "Cloned From",
-          value: review.cloned_from_review_id
-            ? `#${review.cloned_from_review_id}`
-            : "—",
-        },
-        {
-          label: "Notes",
-          value: review.review_notes || "—",
-          fullWidth: true,
-          valueClassName: "whitespace-pre-wrap",
-        },
+        review.review_type === "partial"
+          ? `partial · ${review.sample_percentage}%`
+          : review.review_type === "non_dicom"
+            ? "non-DICOM"
+            : "full",
+        unitLabel,
+        review.cloned_from_review_id
+          ? `cloned from #${review.cloned_from_review_id}`
+          : null,
+        review.when_updated ? `updated ${fmt(review.when_updated)}` : null,
+        review.who_updated != null
+          ? `by ${userMap.get(review.who_updated) ?? "—"}`
+          : null,
       ]
-    : [];
+        .filter(Boolean)
+        .join(" · ")
+    : undefined;
+
+  const lifecycle = useQcReviewLifecycle({
+    reviewId: reviewId ?? "",
+    review,
+    allApproved,
+    stale,
+    onCloned: (id: number) => navigate(`/qc/reviews/${id}`),
+  });
 
   async function saveNotes() {
     try {
@@ -84,7 +91,7 @@ export default function QcReviewDetail() {
   return (
     <PageShell size="5xl">
       <PageDetailHeader
-        title="QC Review"
+        title={reviewId ? `Review #${reviewId}` : "QC Review"}
         breadcrumbs={
           review
             ? [
@@ -96,7 +103,7 @@ export default function QcReviewDetail() {
               ]
             : [{ label: "Recordsets", href: "/recordsets" }]
         }
-        subtitle={reviewId ? `Review #${reviewId}` : undefined}
+        subtitle={metadataStrip}
         badge={
           review
             ? {
@@ -114,71 +121,61 @@ export default function QcReviewDetail() {
         }
         actions={
           active ? (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setNotesDraft(review.review_notes ?? "");
-                setShowNotes(true);
-              }}
-            >
-              Edit Notes
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setNotesDraft(review.review_notes ?? "");
+                  setShowNotes(true);
+                }}
+              >
+                Edit Notes
+              </Button>
+              {lifecycle.actions}
+            </>
           ) : undefined
         }
       />
 
-      {review && reviewId && (
-        <div className="mt-1">
-          <QcReviewLifecycle
-            reviewId={reviewId}
-            review={review}
-            allApproved={allApproved}
-            stale={stale}
-            onCloned={(id) => navigate(`/qc/reviews/${id}`)}
-          />
-        </div>
+      {lifecycle.banner && <div className="mt-1">{lifecycle.banner}</div>}
+      {lifecycle.modals}
+
+      {detail.isLoading && <LoadingState className="mt-4" />}
+
+      {detail.isError && (
+        <SectionCard className="mt-4">
+          <p className="text-sm text-red-600 dark:text-red-400">
+            Could not load this QC review.
+          </p>
+        </SectionCard>
       )}
 
-      <DynamicSection
-        isLoading={detail.isLoading}
-        error={detail.isError ? "Could not load this QC review." : null}
-        fields={fields}
-        actions={
-          review ? (
-            <div className="metadata-panel">
-              <p>
-                <strong>Created:</strong> {fmt(review.when_created)} by{" "}
-                {review.who_created != null
-                  ? (userMap.get(review.who_created) ?? "—")
-                  : "—"}
-              </p>
-              <p>
-                <strong>Updated:</strong> {fmt(review.when_updated)} by{" "}
-                {review.who_updated != null
-                  ? (userMap.get(review.who_updated) ?? "—")
-                  : "—"}
-              </p>
-            </div>
-          ) : undefined
-        }
-      />
-
       {review && reviewId && (
-        <>
-          <CardHeader className="mt-6 mb-0">
-            <CardTitle>Series Status</CardTitle>
+        <SectionCard className="mt-4">
+          {review.review_notes && (
+            <>
+              <CardHeader>
+                <CardTitle>Notes</CardTitle>
+              </CardHeader>
+              <p className="whitespace-pre-wrap text-sm">{review.review_notes}</p>
+            </>
+          )}
+
+          <CardHeader className={review.review_notes ? "mt-6" : undefined}>
+            <CardTitle>Status</CardTitle>
           </CardHeader>
-          <SectionCard className="mt-1">
+          <div>
             <QcSeriesSummary byStatus={byStatus} byModality={byModality} />
-          </SectionCard>
+          </div>
 
           <QcAssignments
             reviewId={reviewId}
             assignments={assignments}
             reviewType={review.review_type}
+            reviewStatus={review.review_status}
             canManage={review.review_status !== "cancelled"}
           />
-        </>
+        </SectionCard>
       )}
 
       {/* Edit notes */}

@@ -23,6 +23,7 @@ export default function QcSliceActions({
   reviewId,
   assignment,
   reviewType,
+  reviewStatus,
   onChanged,
 }: {
   reviewId: string;
@@ -30,6 +31,9 @@ export default function QcSliceActions({
   /** Parent review's type; drives the Review action (non_dicom -> approve modal
    *  instead of Mirabelle). Undefined is treated as a DICOM review. */
   reviewType?: QcReviewType;
+  /** Parent review's status. The API refuses claim/release/reassign on a
+   *  terminal review, so those actions aren't offered for one. */
+  reviewStatus?: string;
   onChanged?: () => void;
 }) {
   const { addToast } = useToast();
@@ -41,6 +45,10 @@ export default function QcSliceActions({
   const approveUnits = useApproveAssignmentUnits(reviewId);
 
   const isNonDicom = reviewType === "non_dicom";
+  // Only the claim endpoint rejects a terminal review ("Cannot claim a slice on
+  // a complete review"); PUT /qc/assignments/{id} has no such guard, so Assign
+  // stays available -- it is the only way to correct the assignee afterwards.
+  const terminal = reviewStatus === "complete" || reviewStatus === "cancelled";
 
   const [showReassign, setShowReassign] = useState(false);
   const [reassignUser, setReassignUser] = useState("");
@@ -106,6 +114,11 @@ export default function QcSliceActions({
       await reassign.mutateAsync({
         assignmentId: assignment.assignment_id,
         assigned_to: Number(reassignUser),
+        // The API defaults a newly-assigned slice to 'in_progress'; keep a
+        // finished slice finished when only the assignee is being corrected.
+        ...(assignment.assignment_status === "complete"
+          ? { assignment_status: "complete" }
+          : {}),
       });
       toastSuccess(addToast, "Slice assigned.");
       setShowReassign(false);
@@ -118,25 +131,26 @@ export default function QcSliceActions({
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {assignment.assigned_to == null ? (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => void handleClaim()}
-            disabled={claim.isPending}
-          >
-            Claim
-          </Button>
-        ) : (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => void handleRelease()}
-            disabled={release.isPending}
-          >
-            Release
-          </Button>
-        )}
+        {!terminal &&
+          (assignment.assigned_to == null ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => void handleClaim()}
+              disabled={claim.isPending}
+            >
+              Claim
+            </Button>
+          ) : (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => void handleRelease()}
+              disabled={release.isPending}
+            >
+              Release
+            </Button>
+          ))}
         <Button size="xs" variant="ghost" onClick={openReassign}>
           Assign
         </Button>

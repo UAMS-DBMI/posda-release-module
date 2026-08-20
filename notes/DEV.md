@@ -182,8 +182,87 @@ table was the third call site #10 was waiting for.
       ⚠ This item's own wording said "inline `DraftSummary`" — stale: the page
       already had an inline File Summary, richer than the shared component. Its
       real content was only the lifecycle action.
-- [ ] **9. (optional) `QcReviewsCard` → open `QcReviewManageModal`** in place;
-      keep `ReviewDetail` as the deep-link/audit page.
+- [x] **9. `QcReviewsCard` → `ReviewList` + `QcReviewManageModal`.** *(done
+      2026-08-19, and bigger than the "(optional)" tag implied — it was the last
+      page still navigating away, i.e. tech-debt #8 in miniature.)*
+      - **The gap wasn't expansion.** Asked whether the card should become an
+        expandable table "like the verify page" — it shouldn't, because Verify's
+        review list **isn't** expandable: `ReviewList` is a CSS grid whose
+        assignment slices are always visible, indented under their review with a
+        ↳ and per-slice `QcSliceActions`. (The chevron on Verify belongs to the
+        *outer* recordset table.) The real gap was **slices** — the card was a
+        flat `DynamicTable`, one row per review, no actions.
+      - **Fix: use `ReviewList` itself.** Extracted from `VerifyStage.tsx` to
+        `components/qc/ReviewList.tsx` (with `assigneeName` + `REVIEW_COLS`);
+        `QcReviewsCard` now renders it and takes a `datasetId` prop. **Columns
+        match Verify exactly** — Review #/Status/Type/Approved/Manage; the old
+        Pending and Created columns went (decided: one component, one look).
+      - **Manage opens `QcReviewManageModal` in place**, replacing the row-click
+        → `/qc/reviews/:id`. No plumbing needed for freshness: the lifecycle
+        mutations already invalidate `["qc-reviews"]` and slice actions
+        invalidate `["qc-assignments"]`, which prefix-matches
+        `useAssignmentQueue`'s key.
+      - **`/qc/reviews/:id` stays** — four other entry points link to it (pickup
+        queue, both dashboard widgets, Verify's own review list).
+      - **Notes gap accepted, not closed.** The modal has no notes editing and
+        no "Open full page" link, so notes/audit are unreachable *from the draft
+        page*. Offered both; answer was "I really don't care about the notes
+        value on the review". Add the link later if it's ever missed.
+
+### 🧹 `/qc/reviews/:id` rework — done 2026-08-19
+
+**Follow-up 2026-08-20 — DICOM-centric wording on a non-DICOM review.**
+The `qc_series` → `qc_unit` model rename (2026-08-06) never reached the UI.
+Two spots fixed on sight: the **"Series Status"** section is now just
+**"Status"** (both `ReviewDetail` and `QcReviewManageModal`, kept in step), and
+the page subtitle says **"N file(s)"** on a `non_dicom` review instead of
+"N series". The `(none)` modality row was left alone — judged fine as-is.
+⚠ Still DICOM-flavoured and **not** changed: the `QcSeriesSummary` component
+name and the `series_total` / `series_approved` / `series_pending` field names
+that run from `distribution.py` through `useQc.ts` into every rollup. Renaming
+those is a cross-repo sweep, not a label tweak.
+
+**Follow-up 2026-08-20 — lifecycle actions moved into the header.**
+- **Clone / Cancel Review / Mark Complete** now sit beside **Edit Notes** in the
+  page header instead of a button row above the panel. (Asked for Clone +
+  Cancel; Mark Complete moved too, decided — same class of action, and it would
+  otherwise be left alone in a one-button row.)
+- **`QcReviewLifecycle` → `useQcReviewLifecycle`**, returning
+  `{ actions, banner, modals }` instead of one fragment. The hosts place them
+  differently — actions in a page header, the stale banner in the body — but the
+  Clone/Cancel modals share state with the actions, so two components wasn't an
+  option. Takes `review` as possibly-undefined and returns all-null while
+  loading, since hooks can't early-return. `QcReviewManageModal` keeps the
+  actions where they were (no page header there) and was updated to match.
+- **Clone is now gated: stale **and** DICOM only** (decided). Two reasons:
+  re-running the draw is only meaningful once the draft has moved under the
+  review, and on a `non_dicom` review it draws nothing and yields an **empty**
+  clone — which **closes the Clone half of tech-debt #13**.
+  ⚠ **Known cost:** the notes make `review_type` / `sample_percentage` /
+  `sample_seed` immutable with "re-draw = clone", so `resample` on a *non-stale*
+  review is no longer reachable. If re-drawing a fresh sample without staleness
+  is ever needed, this gate is what to revisit.
+  ⚠ On a stale DICOM review both the header **Clone** and the banner's **Clone
+  to refresh** now appear; the banner's version is kept because it presets
+  carry-forward.
+
+Same treatment as the dataset/recordset/draft detail pages, asked for in the
+same breath as item 9 ("should we align the qc/reviews/# page like the rest?").
+
+- **Header**: `title` was the literal "QC Review" with subtitle "Review #12" —
+  now `title = Review #12`, subtitle = `partial · 20% · 240 series · cloned from
+  #11 · updated <date> by <user>`.
+- **`DynamicSection` dropped**: Type / Sample % / Series / Cloned From moved into
+  that strip, Created-by/date dropped as on the other pages, Notes promoted to
+  its own section (kept despite the "don't care" above — this page owns notes
+  editing, and removing it wasn't asked for).
+- **Three panels → one.** Required making **`QcAssignments` panel-native**
+  (dropped its own `SectionCard`; `CardHeader` is now an in-card divider) — it's
+  shared with `QcReviewManageModal`, so **the modal was updated to match** and
+  is now one panel too, rather than two stacked cards.
+- `QcReviewLifecycle` keeps its own stale-banner card and sits above the panel,
+  as an actions strip.
+
 
 **Explicitly out of scope for this pass:**
 - **`datasets/create`** — no create modal exists (`DatasetEditModal` is edit-only,
@@ -539,6 +618,59 @@ of 1 ⇒ merge to a single slice; ≥2 ⇒ split; re-run ⇒ rebalance.
 - **Preserves `qc_status`** — split only moves `assignment_id`, never decisions.
 - **Guard (decided):** refuse if any existing slice is `in_progress`/`complete`
   unless `force: true` (protects active reviewers from silent reassignment).
+- **Guard (added 2026-08-19, bug fix):** refuse `N > unit count` (422), and
+  refuse a review with 0 units. **Found in the wild:** a 1-unit non-DICOM review
+  (#9) was split into 2 slices and slice #11 got 0 units — `counts = [c // n] * n`
+  is `[0, 0]` for `c=1, n=2`, and the single leftover goes to slice 0. An empty
+  slice can never be worked or completed, so it wedges the review. Frontend
+  mirrors it: `QcAssignments` sums `assignments[].series_total` for the unit
+  total, disables **Split** entirely at `<= 1` unit, caps the count input, and
+  blocks selecting more reviewers than units. Applies to both `count` and
+  `user_ids` modes.
+  ⚠ Reviews already split this way stay broken until re-split with `count: 1`,
+  which merges them back to one slice. **The first cut of the frontend guard
+  disabled Split at `<= 1` unit, which locked out that very repair** — corrected
+  same day: the invariant is `N <= unit count`, and **N = 1 is always allowed**
+  because that is the documented merge. Split is disabled only at 0 units, and
+  the modal opens on `min(2, unitTotal)` so a 1-unit review lands on the merge
+  with the button enabled.
+- **Bug (fixed 2026-08-19): split left slice statuses stale.** New slices are
+  inserted `'needs_qc'`, but a split only *moves* units — it never changes a
+  decision — so a slice inheriting already-approved units claimed work that was
+  already done (seen on review #9: slice showed `needs_qc` at 1/1 approved).
+  `qc_sync_assignment_status()` already implemented the rule ("complete when 0
+  pending"); the split simply never called it. Now called per new slice, after
+  the old-slice delete and **before** the response query, so the returned slices
+  carry correct statuses.
+- **Bug (fixed 2026-08-19): terminal reviews offered impossible actions.** The
+  stale `needs_qc` above surfaced a Claim button, which the API refuses
+  ("Cannot claim a slice on a complete review", 409). `QcSliceActions` now takes
+  **`reviewStatus`** and renders no Claim / Release / Assign when the review is
+  `complete` or `cancelled`. Threaded from all four hosts (`ReviewList`,
+  `QcAssignments`, `ReviewDetail`, `QcReviewManageModal`).
+- **Bug (fixed 2026-08-19): the UI silently defeated the force guard.** The
+  decided guard above (refuse when a slice is `in_progress`/`complete` unless
+  `force: true`) was **never reachable** — `QcAssignments` auto-passed
+  `force: true` whenever any slice was in either state. That is how review #9's
+  *complete* slice got re-split, losing its assignee: a rebalance only moves
+  units, but it destroys slice boundaries and with them the attribution of
+  finished work. **Decided:** Split is now **disabled when any slice is
+  `complete`**; `in_progress` slices may still be rebalanced (force auto-sent
+  for those, which is what the guard asks for). `force` stays in the API for
+  scripts/recovery, unreachable from the UI for completed work.
+- **Correction, same day:** hiding *all* slice actions on a terminal review went
+  too far. Only `POST .../claim` refuses one; **`PUT /qc/assignments/{id}` has no
+  terminal guard**, so **Assign stays available** — it is the only way to
+  correct the assignee after a bad split (and hiding it had left review #9
+  stuck: complete, unclaimed, unfixable). Claim/Release remain hidden.
+- **Bug (fixed 2026-08-19): reassign un-completed a finished slice.** The PUT does
+  `case when assigned_to is not null then 'in_progress'`, and the UI sent only
+  `assigned_to` — so correcting the assignee on a complete slice reset its
+  status. `useUpdateAssignment` now forwards an optional `assignment_status`,
+  and `QcSliceActions` passes `complete` through when the slice already is.
+  ⚠ The first attempt at this passed the field to a mutation whose type didn't
+  accept it; the object-spread bypassed TS's excess-property check, so it
+  compiled and silently did nothing. The hook had to change too.
 - **Concurrency:** `SELECT … FOR UPDATE` the review's `qc_series` during the split.
 - **Response:** new slices with per-slice counts + per-modality breakdown
   (e.g. "Reviewer A: 4 (CT 3, MR 1)").

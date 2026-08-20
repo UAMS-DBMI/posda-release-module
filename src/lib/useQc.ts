@@ -278,12 +278,22 @@ export function useReleaseAssignment(reviewId: string | undefined) {
 export function useUpdateAssignment(reviewId: string | undefined) {
   const invalidate = useReviewInvalidation(reviewId);
   return useMutation({
-    mutationFn: (vars: { assignmentId: number; assigned_to: number }) =>
+    mutationFn: (vars: {
+      assignmentId: number;
+      assigned_to: number;
+      /** Omit to let the API default a newly-assigned slice to 'in_progress'. */
+      assignment_status?: string;
+    }) =>
       apiFetch<ItemEnvelope<QcAssignment>>(
         `${BASE}/qc/assignments/${vars.assignmentId}`,
         {
           method: "PUT",
-          body: JSON.stringify({ assigned_to: vars.assigned_to }),
+          body: JSON.stringify({
+            assigned_to: vars.assigned_to,
+            ...(vars.assignment_status
+              ? { assignment_status: vars.assignment_status }
+              : {}),
+          }),
         },
       ),
     onSuccess: invalidate,

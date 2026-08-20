@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useQcReview } from "@/lib/useQc";
 import QcAssignments from "@/components/qc/QcAssignments";
-import QcReviewLifecycle from "@/components/qc/QcReviewLifecycle";
+import { useQcReviewLifecycle } from "@/components/qc/QcReviewLifecycle";
 import QcSeriesSummary from "@/components/qc/QcSeriesSummary";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
@@ -44,6 +44,19 @@ export default function QcReviewManageModal({
     byStatus.find((s) => s.qc_status === "approved")?.count ?? 0;
   const allApproved = seriesTotal > 0 && approvedCount === seriesTotal;
 
+  const lifecycle = useQcReviewLifecycle({
+    reviewId: idStr ?? "",
+    review,
+    allApproved,
+    stale,
+    onChanged: () => invalidateCycle(),
+    onCloned: () => {
+      invalidateCycle();
+      onClose();
+    },
+  });
+
+
   return (
     <Modal
       open={open}
@@ -65,31 +78,26 @@ export default function QcReviewManageModal({
 
       {review && idStr && (
         <div className="mt-2">
-          <QcReviewLifecycle
-            reviewId={idStr}
-            review={review}
-            allApproved={allApproved}
-            stale={stale}
-            onChanged={invalidateCycle}
-            onCloned={() => {
-              invalidateCycle();
-              onClose();
-            }}
-          />
+          {lifecycle.banner}
+          <div className="flex flex-wrap gap-2">{lifecycle.actions}</div>
+          {lifecycle.modals}
 
-          <QcAssignments
-            reviewId={idStr}
-            assignments={assignments}
-            reviewType={review.review_type}
-            canManage={review.review_status !== "cancelled"}
-            onChanged={invalidateCycle}
-          />
+          <SectionCard className="mt-4">
+            <CardHeader>
+              <CardTitle>Status</CardTitle>
+            </CardHeader>
+            <div>
+              <QcSeriesSummary byStatus={byStatus} byModality={byModality} />
+            </div>
 
-          <CardHeader className="mt-6 mb-0">
-            <CardTitle>Series Status</CardTitle>
-          </CardHeader>
-          <SectionCard className="mt-1">
-            <QcSeriesSummary byStatus={byStatus} byModality={byModality} />
+            <QcAssignments
+              reviewId={idStr}
+              assignments={assignments}
+              reviewType={review.review_type}
+              reviewStatus={review.review_status}
+              canManage={review.review_status !== "cancelled"}
+              onChanged={invalidateCycle}
+            />
           </SectionCard>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   useCancelQcReview,
   useCloneQcReview,
@@ -16,8 +16,13 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
  *  plus Mark Complete / Clone / Cancel, owning the Clone and Cancel modals.
  *  Shared by the review-detail page and the cycle's Verify Manage modal.
  *  `onChanged` lets a host refresh its own rollup after a mutation; `onCloned`
- *  hands back the new review id (the page navigates to it). */
-export default function QcReviewLifecycle({
+ *  hands back the new review id (the page navigates to it).
+ *
+ *  Returns its pieces separately rather than one fragment, because the hosts
+ *  place them differently: the actions belong in a page header while the banner
+ *  stays in the body. The modals share state with the actions, so they cannot
+ *  simply be split into two components. */
+export function useQcReviewLifecycle({
   reviewId,
   review,
   allApproved,
@@ -26,12 +31,13 @@ export default function QcReviewLifecycle({
   onCloned,
 }: {
   reviewId: string;
-  review: QcReviewRow;
+  /** Undefined while the host is still loading; everything returns null then. */
+  review: QcReviewRow | undefined;
   allApproved: boolean;
   stale: QcStaleBreakdown | null;
   onChanged?: () => void;
   onCloned?: (newReviewId: number) => void;
-}) {
+}): { actions: ReactNode; banner: ReactNode; modals: ReactNode } {
   const { addToast } = useToast();
   const update = useUpdateQcReview(reviewId);
   const cancel = useCancelQcReview(reviewId);
@@ -43,8 +49,15 @@ export default function QcReviewLifecycle({
   );
   const [showCancel, setShowCancel] = useState(false);
 
-  const active = review.review_status !== "cancelled";
-  if (!active) return null;
+  const active = !!review && review.review_status !== "cancelled";
+
+  // Clone re-runs the series draw, which is only meaningful when the draft has
+  // moved under the review -- and on a non-DICOM review it draws nothing and
+  // yields an empty clone (tech-debt #13). So: stale DICOM reviews only.
+  const canClone =
+    active &&
+    review?.review_status === "stale" &&
+    review?.review_type !== "non_dicom";
 
   async function handleMarkComplete() {
     try {
@@ -79,10 +92,9 @@ export default function QcReviewLifecycle({
     }
   }
 
-  return (
-    <>
-      {review.review_status === "stale" && stale && (
-        <SectionCard className="mt-1">
+  const banner =
+    active && review?.review_status === "stale" && stale ? (
+      <SectionCard className="mt-1">
           <div
             className="rounded-md px-4 py-3 text-sm"
             style={{
@@ -98,6 +110,7 @@ export default function QcReviewLifecycle({
               {stale.would_drop} to drop. Clone (carry-forward) to refresh while
               preserving decisions.
             </p>
+          {canClone && (
             <Button
               size="sm"
               className="mt-3"
@@ -108,32 +121,39 @@ export default function QcReviewLifecycle({
             >
               Clone to refresh
             </Button>
-          </div>
-        </SectionCard>
-      )}
+          )}
+        </div>
+      </SectionCard>
+    ) : null;
 
-      <div className="flex flex-wrap gap-2">
-        {review.review_status !== "complete" && (
-          <Button
-            onClick={() => void handleMarkComplete()}
-            disabled={!allApproved || update.isPending}
-            title={
-              allApproved
-                ? undefined
-                : "All series must be approved before completing"
-            }
-          >
-            Mark Complete
-          </Button>
-        )}
+  const actions = active ? (
+    <>
+      {review?.review_status !== "complete" && (
+        <Button
+          onClick={() => void handleMarkComplete()}
+          disabled={!allApproved || update.isPending}
+          title={
+            allApproved
+              ? undefined
+              : "All series must be approved before completing"
+          }
+        >
+          Mark Complete
+        </Button>
+      )}
+      {canClone && (
         <Button variant="ghost" onClick={() => setShowClone(true)}>
           Clone
         </Button>
-        <Button variant="ghost" onClick={() => setShowCancel(true)}>
-          Cancel Review
-        </Button>
-      </div>
+      )}
+      <Button variant="ghost" onClick={() => setShowCancel(true)}>
+        Cancel Review
+      </Button>
+    </>
+  ) : null;
 
+  const modals = active ? (
+    <>
       {/* Clone */}
       <Modal
         open={showClone}
@@ -211,5 +231,7 @@ export default function QcReviewLifecycle({
         </p>
       </Modal>
     </>
-  );
+  ) : null;
+
+  return { actions, banner, modals };
 }

@@ -342,7 +342,7 @@ export default function RecordsetDraftDetail() {
             <DraftSummary draftId={draft.recordset_draft_id} />
           </div>
 
-          <QcReviewsCard draftId={draftId} />
+          <QcReviewsCard draftId={draftId} datasetId={datasetId} />
         </SectionCard>
       )}
 
