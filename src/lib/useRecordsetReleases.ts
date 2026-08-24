@@ -6,10 +6,18 @@ export type RecordsetRelease = {
   release_number: number | string;
   release_date: string | null;
   file_count: number;
+  /** Also returned by the endpoint; used by Bundle's version picker to tell
+   *  otherwise-similar versions apart. */
+  release_notes: string | null;
+  release_doi: string | null;
+  when_created: string | null;
+  who_created: number | null;
 };
 
-/** A recordset's releases, newest-first from the API. Shared by the draft
- *  create/edit flows that clone or add from a previous release. */
+/** A recordset's releases, **oldest-first** (the endpoint orders by
+ *  `release_number` ascending). Callers that want newest-first sort locally.
+ *  Shared by the draft create/edit flows that clone or add from a previous
+ *  release, and by Bundle's version picker. */
 export function useRecordsetReleases(recordsetId: number, enabled: boolean) {
   return useQuery({
     queryKey: ["recordset-releases", recordsetId],

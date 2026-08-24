@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ManageFilesModal, { type ManageTab } from "@/components/ManageFilesModal";
+import PublishDraftModal from "@/components/PublishDraftModal";
 import DraftSummary, { useDraftSummary } from "@/components/DraftSummary";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
@@ -53,11 +54,6 @@ export default function RecordsetDraftDetail() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [showPublish, setShowPublish] = useState(false);
-  const [releaseNumber, setReleaseNumber] = useState("");
-  const [releaseDate, setReleaseDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [releaseNotes, setReleaseNotes] = useState("");
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [publishError, setPublishError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!draftId) return;
@@ -101,37 +97,6 @@ export default function RecordsetDraftDetail() {
       isMounted = false;
     };
   }, [draftId, refreshKey]);
-
-  async function handlePublish() {
-    if (!draftId || !releaseNumber.trim() || !releaseDate) return;
-
-    setIsPublishing(true);
-    setPublishError(null);
-
-    try {
-      const res = await fetch(`/papi/v1/distribution/recordsets/drafts/${draftId}/publish`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          release_number: releaseNumber.trim(),
-          release_date: releaseDate,
-          release_notes: releaseNotes.trim() || null,
-        }),
-      });
-
-      if (!res.ok) {
-        const json = (await res.json()) as unknown;
-        throw new Error(extractApiError(json, "Could not publish draft."));
-      }
-
-      toastSuccess(addToast, `Draft published as release ${releaseNumber.trim()}.`);
-      navigate(draft?.recordset_id ? `/recordsets/${draft.recordset_id}` : "/recordsets");
-    } catch (e) {
-      setPublishError(e instanceof Error ? e.message : "Could not publish draft.");
-    } finally {
-      setIsPublishing(false);
-    }
-  }
 
   const draft = data?.draft ?? data?.data ?? null;
 
@@ -259,73 +224,6 @@ export default function RecordsetDraftDetail() {
         }
       />
 
-      {showPublish && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg p-6 shadow-xl" style={{ background: "var(--surface)", border: "1px solid var(--border-strong)" }}>
-            <h2 className="text-lg font-semibold">Publish Draft</h2>
-            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-              This will create an immutable release from the current draft files.
-            </p>
-
-            {publishError && (
-              <p className="mt-3 text-sm text-red-600 dark:text-red-400">{publishError}</p>
-            )}
-
-            <div className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium">Release Number</label>
-                <input
-                  type="text"
-                  value={releaseNumber}
-                  onChange={(e) => setReleaseNumber(e.target.value)}
-                  placeholder="e.g. 1.0.0"
-                  className="input mt-1 w-full"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Release Date</label>
-                <input
-                  type="date"
-                  value={releaseDate}
-                  onChange={(e) => setReleaseDate(e.target.value)}
-                  className="input mt-1 w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">
-                  Release Notes{" "}
-                  <span className="font-normal text-neutral-500">(optional)</span>
-                </label>
-                <textarea
-                  value={releaseNotes}
-                  onChange={(e) => setReleaseNotes(e.target.value)}
-                  rows={3}
-                  className="input mt-1 w-full"
-                />
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => { setShowPublish(false); setPublishError(null); }}
-                disabled={isPublishing}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => void handlePublish()}
-                loading={isPublishing}
-                disabled={!releaseNumber.trim() || !releaseDate}
-              >
-                Publish
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {isLoading && <LoadingState />}
 
       {!isLoading && error && (
@@ -355,6 +253,19 @@ export default function RecordsetDraftDetail() {
           <QcReviewsCard draftId={draftId} datasetId={datasetId} />
         </SectionCard>
       )}
+
+      <PublishDraftModal
+        open={showPublish}
+        onClose={() => setShowPublish(false)}
+        draftId={draft?.recordset_draft_id}
+        datasetId={datasetId}
+        draftName={draft?.draft_name}
+        onPublished={() =>
+          navigate(
+            draft?.recordset_id ? `/recordsets/${draft.recordset_id}` : "/recordsets",
+          )
+        }
+      />
 
       <ManageFilesModal
         open={manageTab !== null}

@@ -44,6 +44,10 @@ export type CycleRecordset = {
   recordset_name: string;
   recordset_type_name: string;
   open_draft: CycleOpenDraft | null;
+  /** The draft the QC rollup came from: the open draft while one exists, else
+   *  the published draft it became. Use this (not `open_draft`) to reach a
+   *  recordset's reviews, so they stay available after freezing. */
+  qc_draft_id: number | null;
   qc: CycleQc;
   latest_release: CycleRecordsetRelease | null;
   /** False when the recordset is frozen but not yet bundled — the fan-in signal. */
@@ -74,6 +78,9 @@ export type CycleDatasetRelease = {
   release_date: string | null;
   release_doi: string | null;
   release_status: DatasetReleaseStatus;
+  /** When the cycle started. `release_date` is null while draft, so this is the
+   *  marker for "frozen during this cycle". */
+  when_created: string | null;
   transfers: CycleTransfer[];
 };
 
@@ -188,6 +195,36 @@ export function isPublishable(r: CycleRecordset): boolean {
   if (!r.open_draft) return false;
   const qc = r.qc;
   return qc.complete > 0 && qc.open === 0 && qc.stale === 0;
+}
+
+/** True when this recordset's work was done during the current cycle: either
+ *  its frozen release is already in the draft dataset release, or it was frozen
+ *  after the cycle started and simply hasn't been included yet.
+ *
+ *  Assemble and Verify key off `open_draft`, which goes null the moment a draft
+ *  is published -- so without this, both stages emptied out exactly when their
+ *  work completed. A recordset carried forward from an earlier cycle is
+ *  correctly excluded: its release predates the cycle and is bundled elsewhere. */
+export function frozenThisCycle(
+  cycle: DatasetCycle,
+  r: CycleRecordset,
+): boolean {
+  if (r.open_draft || !r.latest_release) return false;
+  const release = cycle.latest_dataset_release;
+  if (!release) return false;
+  if (r.in_latest_dataset_release) return true;
+  if (!release.when_created || !r.latest_release.release_date) return false;
+  return (
+    new Date(r.latest_release.release_date).getTime() >=
+    new Date(release.when_created).getTime()
+  );
+}
+
+/** Recordsets in play this cycle: an open draft to work, or already frozen. */
+export function cycleRecordsets(cycle: DatasetCycle): CycleRecordset[] {
+  return cycle.recordsets.filter(
+    (r) => r.open_draft !== null || frozenThisCycle(cycle, r),
+  );
 }
 
 /** Recordsets that are frozen but not in the latest dataset release. */
@@ -317,11 +354,13 @@ function assembleStage(cycle: DatasetCycle): StageSummary {
 }
 
 function verifyStage(cycle: DatasetCycle): StageSummary {
-  const withDraft = cycle.recordsets.filter((r) => r.open_draft !== null);
-  if (withDraft.length === 0) return { state: "pending", detail: "—" };
+  // Includes recordsets frozen this cycle -- their QC is what justified
+  // freezing, so the stage must not fall back to "pending" once they publish.
+  const inCycle = cycleRecordsets(cycle);
+  if (inCycle.length === 0) return { state: "pending", detail: "—" };
 
   const sum = (pick: (qc: CycleQc) => number) =>
-    withDraft.reduce((n, r) => n + pick(r.qc), 0);
+    inCycle.reduce((n, r) => n + pick(r.qc), 0);
 
   const stale = sum((q) => q.stale);
   if (stale > 0) return { state: "blocked", detail: `${stale} stale` };

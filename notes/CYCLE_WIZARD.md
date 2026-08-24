@@ -226,7 +226,7 @@ Each lands and is reviewed before the next.
       (`SetupStage` starts empty; step 2 fills it. Its `stageSummaries` entry:
       `done` once every recordset has a destination and a WP collection map,
       else `active`.)
-- [ ] **2 — Setup stage.** Everything downstream of the dataset but done once.
+- [x] **2 — Setup stage.** Everything downstream of the dataset but done once.
       The page lists recordsets with their readiness (destination set? WP
       download mapped?), plus the dataset's WP collection page status.
       - [x] **Recordsets** created here via `CreateRecordsetModal`; a shortcut to
@@ -464,20 +464,160 @@ Each lands and is reviewed before the next.
       - No backend change for the management port — per-slice data comes from
         the existing `GET /qc/reviews/{id}` detail; all mutation hooks already
         exist in `useQc.ts`.
-- [ ] **5 — Bundle.** Extract `lib/publishForm.ts` (migrating the
-      **hand-rolled** publish modal in `drafts/Detail.tsx` onto `Modal` while
-      there) and `lib/datasetReleaseForm.ts`. The page lists drafts to publish
-      and composes the release with **include-latest checkboxes** — one per
-      recordset meaning "include its latest release", with an expander to pick an
-      older version. **This is where carry-forward is expressed**: a just-frozen
-      recordset and an unchanged one look the same in the list, differing only in
-      which version they contribute. **Updated 2026-07-24:** the draft
-      `dataset_release` already exists by this point (created via "Start Next
-      Cycle") — the confirm modal now *finalizes* it (release notes, flip
-      `release_status` → `released`, which auto-stamps `release_date`) rather
-      than creating one; `release_number` was already auto-assigned at
-      cycle-start. New `publish` + `release` endpoints (`release` becomes an
-      update against the existing draft, not an insert).
+- [x] **5 — Bundle.** *(done 2026-08-23)* Freeze drafts into
+      recordset releases, choose which version each recordset contributes, then
+      finalize the dataset release. **This is where carry-forward is expressed**:
+      a just-frozen recordset and an unchanged one look the same in the list,
+      differing only in which version they contribute.
+
+      **Findings from reading the code (the earlier spec was wrong in places):**
+      - ~~**Nothing stamps `release_date`**~~ — **this finding was wrong**
+        (corrected 2026-08-23 while starting 5.3). There is no *trigger*, which
+        is what I checked, but `update_dataset_release` has always handled it:
+        `if payload.release_status == "released" and payload.release_date is
+        None: updates.append("release_date = coalesce(release_date, now())")`.
+        `create_dataset_release` covers the insert path. **So 5.3 needed no
+        backend change** — the PUT already does the right thing.
+      - **Recordset publish can't auto-number.** `RecordsetReleaseInsert`
+        requires `release_number`, `release_date` *and* `release_notes`, which is
+        why `drafts/Detail.tsx` makes the curator type a version. Copy the
+        auto-assign pattern from `create_dataset_release`.
+      - **Composition needs no new endpoints.**
+        `POST /datasets/releases/{id}/recordsets/add` and `/remove` already
+        exist. Only *finalize* needs backend work — contradicting the old note's
+        "new `publish` + `release` endpoints".
+      - **Cycle payload already carries** per-recordset `latest_release`,
+        `in_latest_dataset_release`, `last_bundled_dataset_release_number`,
+        `open_draft`, `qc`. Only the older-release *list* is missing.
+
+      **Decisions (2026-08-23):**
+      - **Stage does both** — publishes ready drafts *and* composes the release,
+        so a curator never leaves mid-cycle to freeze something.
+      - **Older versions load lazily** on row expand via the existing
+        `GET /recordsets/{id}/releases`; the cycle payload is left alone, since
+        most rows are never expanded and latest is the near-universal default.
+
+      **Steps:**
+      - [x] **5.1 — Publish flow.** *(done 2026-08-23)* New `lib/publishForm.ts`
+        (`PublishFormValues`, `publishPayload`, `usePublishDraft`) and
+        `components/PublishDraftModal.tsx` on `Modal`, replacing the hand-rolled
+        overlay in `drafts/Detail.tsx` — which also closes that item from step 9.
+        Version number and date left the UI entirely; the server assigns them.
+        - **Two live bugs fixed on the way.** The Release Number field's
+          placeholder read `e.g. 1.0.0`, but the column is `integer NOT NULL` and
+          the model typed it `int` — a semver string 422'd. And the page sent
+          `release_notes: null` for an empty box against a required non-nullable
+          `str`, so **publishing with no notes always failed**.
+        - **Backend:** `RecordsetReleaseInsert` all-optional; insert uses the
+          `coalesce(max(release_number), 0) + 1` idiom copied from
+          `create_dataset_release`, with `coalesce($3, now())` for the NOT NULL
+          date. `(recordset_id, release_number)` unique index backstops it.
+        - **Republish guard added** (asked for): publish now 422s when
+          `draft_status` is already `published`/`deleted`. Without it a second
+          call cut another release from a spent draft — reachable by double
+          submit, and 5.2 adds a second caller.
+        - ⚠ **Pre-existing bug found and fixed:** the endpoint's
+          `except Exception → db_error` had no `except HTTPException: raise`
+          ahead of it, so its own 404 ("Draft not found") was being swallowed and
+          re-raised as a 500. The new 422 would have gone the same way.
+        - **`usePublishDraft` deliberately does not navigate** — the draft page
+          passes `onPublished` to go to the recordset; 5.2's Bundle row will stay
+          put. Destination is the caller's call.
+        - QC gate (`canPublish` / `publishBlockedReason`) untouched on the page.
+      - [x] **5.2 — Bundle stage.** *(done 2026-08-23)* Rebuilt on
+        `ExpandableTable` (fourth call site, as tech-debt #10 anticipated). Rows
+        are **all** recordsets now, not just frozen ones — an unfrozen one needs
+        to be visible to get a Publish action. Columns: Recordset / Frozen At /
+        Contributing / In Release / actions; expander is the version picker.
+        - **Two integrity holes found in the composition endpoints**, both fixed
+          in `add_recordset_release_to_dataset_release`:
+          1. **Not idempotent.** `dataset_release_recordset`'s PK is
+             `(dataset_release_id, recordset_release_id)` and the insert looped
+             with no `ON CONFLICT`, so re-adding raised a PK violation that
+             `db_error` surfaced as a **500**. Now a set-based insert with
+             `on conflict do nothing`.
+          2. **Nothing stopped two versions of the same recordset** being
+             bundled — the PK is on *release* ids, not recordset id. The version
+             picker is exactly a swap, so this was reachable in normal use. Add
+             now **evicts any other release of the same recordset first**, making
+             "include this version" one safe idempotent call.
+          Also wrapped in a transaction: the old per-id loop ran outside one, so
+          a partial add was possible. Response gained
+          `replaced_recordset_release_ids`.
+        - **No swap endpoint needed** after that — include/exclude is enough.
+        - `lib/datasetReleaseForm.ts`: `useBundledRecordsets` (the cycle payload
+          only has a per-recordset boolean, not *which* version is in), plus
+          `useIncludeRecordsetRelease` / `useExcludeRecordsetRelease`.
+        - **Version picker** reuses the existing `useRecordsetReleases`, fetched
+          on expand. A row contributing an older version than its own latest is
+          labelled **"carried forward"** rather than flagged — that's the whole
+          point of the stage.
+        - **Publish** per row opens `PublishDraftModal` from 5.1, gated on
+          `isPublishable`; it stays on the cycle (the hook doesn't navigate).
+        - Kept the pre-existing "N frozen but not bundled" warning banner.
+        - **Follow-ups from first use (2026-08-23):**
+          - Version picker went from chips to a list carrying **file count, date,
+            creator, notes and DOI** — all already returned by
+            `GET /recordsets/{id}/releases`; the frontend type just declared four
+            fields. Sorted newest-first *locally*, so `ReleasePicker` keeps its
+            order. (Also corrected `useRecordsetReleases`' docstring: it claimed
+            newest-first, but the SQL orders ascending.)
+          - Picker button renamed **Use this → Include**, matching the row action.
+            The row's Include always takes the recordset's *latest* release; the
+            expander exists to deliberately pick an older one.
+
+### 🧹 Verify emptied out when drafts were published — fixed 2026-08-23
+
+Reported on first real use of Bundle: "now that the drafts are releases, all
+recordsets disappear from the verify cycle and it looks incomplete."
+
+**Cause:** Assemble and Verify keyed entirely off `open_draft`, and publishing
+sets `draft_status = 'published'`, which the cycle SQL's `open_draft` CTE
+excludes. So **the stage flipped from Complete to — precisely because the work
+finished**. Worse, the `qc` CTE joined `open_draft`, so the QC rollup zeroed too:
+the evidence that justified freezing vanished with the draft.
+
+**Fixes:**
+- **Backend:** new `qc_draft` CTE — the latest non-deleted draft, open or
+  published — now feeds the `qc` rollup. Identical mid-cycle; after publishing
+  the counts persist. `open_draft` itself is unchanged, so Assemble's semantics
+  and `isPublishable` (which short-circuits on `!open_draft`) are untouched.
+  The cycle payload's `latest_dataset_release` also gained **`when_created`** —
+  `release_date` is null while draft, so it was the only available marker of
+  "during this cycle".
+- **Frontend:** `frozenThisCycle(cycle, r)` — true when the recordset has no open
+  draft but its release is either bundled into the current draft release or was
+  frozen after the cycle started; and `cycleRecordsets(cycle)` = open drafts plus
+  those. Verify's table and `verifyStage()` both use it, and a frozen row shows a
+  **Frozen vN** badge in the publish-gate column. A recordset carried forward
+  from an earlier cycle is correctly excluded — its release predates the cycle.
+- Assemble needed no change: its table already lists every recordset, and its
+  summary already fell through to "N ready to bundle".
+
+**Gap closed same day:** a frozen row can now **expand to its reviews**. The
+cycle payload exposes **`qc_draft_id`** — the draft the QC rollup came from (open
+while one exists, else the published draft it became) — and Verify's `canExpand`
+/ `renderExpanded` key off it instead of `open_draft`. So a frozen recordset's
+reviews stay readable, and the slice actions inside `ReviewList` keep working
+against a real draft id.
+      - [x] **5.3 — Finalize.** *(done 2026-08-23)* `useFinalizeDatasetRelease`
+        in `lib/datasetReleaseForm.ts` + `components/FinalizeReleaseModal.tsx`,
+        opened from a **Finalize Release** button beside the release identity in
+        the Bundle header (shown only while a cycle is active).
+        - **No backend change was needed** — see the corrected finding above.
+          The modal sends `release_status: "released"` plus optional notes/DOI;
+          `update_dataset_release` already stamps `release_date` on that
+          transition, so the frontend deliberately sends no date.
+        - **The summary is the point**, not the form: the modal lists every
+          recordset release going in (name + version), warns when frozen
+          recordsets are being left out (`unbundledRecordsets`), and **disables
+          Finalize when nothing is bundled**. The release is immutable
+          afterwards, so the last look matters more than the two fields.
+
+      ⚠ **Tech-debt #12 becomes load-bearing here**: the yellow "Complete for
+      testing" button exists to stand up publishable QC state for exactly this
+      stage. Gate or remove it before production.
+
 - [ ] **6 — Transfer.** Extract `lib/transferForm.ts`. The page lists
       destinations defaulted from `recordset_destination` (`default_display`,
       `transfer_mode_id`); a modal collects per-transfer settings. New

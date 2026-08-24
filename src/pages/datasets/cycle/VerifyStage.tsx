@@ -7,7 +7,13 @@ import QcReviewManageModal from "@/components/QcReviewManageModal";
 import ReviewList from "@/components/qc/ReviewList";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { isCycleActive, isPublishable, qcPercent, type CycleQc } from "@/lib/useCycle";
+import {
+  cycleRecordsets,
+  isCycleActive,
+  isPublishable,
+  qcPercent,
+  type CycleQc,
+} from "@/lib/useCycle";
 import { useCycleContext } from "./CycleLayout";
 
 
@@ -33,9 +39,11 @@ export default function VerifyStage() {
   const [manageReviewId, setManageReviewId] = useState<number | null>(null);
 
   const cycleActive = isCycleActive(cycle);
-  const withDraft = cycle.recordsets.filter((r) => r.open_draft !== null);
+  // Frozen recordsets stay listed: publishing nulls `open_draft`, and dropping
+  // the row made the stage look undone at the moment its work completed.
+  const inCycle = cycleRecordsets(cycle);
 
-  if (withDraft.length === 0) {
+  if (inCycle.length === 0) {
     return (
       <p className="text-sm" style={{ color: "var(--muted)" }}>
         No open drafts, so there is nothing to review.
@@ -47,18 +55,16 @@ export default function VerifyStage() {
     <div className="space-y-3">
       <ExpandableTable
         headers={["Recordset", "Reviews", "Approved", "Status", "Publish Gate", ""]}
-        rows={withDraft}
+        rows={inCycle}
         getRowKey={(r) => r.recordset_id}
-        canExpand={(r) =>
-          r.open_draft?.recordset_draft_id != null && r.qc.reviews_total > 0
-        }
+        canExpand={(r) => r.qc_draft_id != null && r.qc.reviews_total > 0}
         expandLabel="reviews"
         expandedKey={expandedId}
         onExpandedKeyChange={(k) => setExpandedId(k as number | null)}
         renderExpanded={(r) =>
-          r.open_draft ? (
+          r.qc_draft_id != null ? (
             <ReviewList
-              draftId={r.open_draft.recordset_draft_id}
+              draftId={r.qc_draft_id}
               datasetId={datasetId}
               onManage={setManageReviewId}
             />
@@ -90,7 +96,17 @@ export default function VerifyStage() {
                       <StatusBadge status={qcStatus(qc)} />
                     </td>
                     <td className="px-2 py-1">
-                      {isPublishable(r) ? (
+                      {draft == null ? (
+                        <StatusBadge
+                          status="frozen"
+                          variant="success"
+                          label={
+                            r.latest_release
+                              ? `Frozen v${r.latest_release.release_number}`
+                              : "Frozen"
+                          }
+                        />
+                      ) : isPublishable(r) ? (
                         <span className="text-xs text-green-700 dark:text-green-400">
                           Ready
                         </span>
