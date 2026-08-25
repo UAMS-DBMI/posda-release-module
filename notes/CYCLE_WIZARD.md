@@ -629,6 +629,157 @@ against a real draft id.
       daemon and starts real uploads to an external bucket — and there is no
       un-queue path back through `transfer_status`. That step should never be a
       side effect of a bulk action.
+
+      **Findings from reading the code (2026-08-24):**
+      - **The orchestration already exists — in the browser.**
+        `releases/transfers/List.tsx`'s "Sync with Default Config" fetches
+        destinations, then per destination fetches expected recordsets, creates
+        missing transfers, and diffs membership add/remove. ~6 sequential round
+        trips, `Promise.allSettled`, non-atomic, partial failure reported as a
+        toast. This is what `POST /cycle/transfers` was meant to replace.
+      - **Composition needs no new endpoint** (same as Bundle).
+        `POST /datasets/releases/{id}/transfers` is **already transactional** and
+        already defaults membership to every recordset release in the dataset
+        release when `recordset_release_ids` is omitted.
+        `GET /datasets/releases/{id}/destinations` derives destinations *from
+        what Bundle composed* and carries `transfer_mode_id` — so destination
+        **and** mode are already defaulted. `transfer_name` is the only real
+        input, and List.tsx already auto-derives it as `"<dataset> v<n> — <ABBR>"`.
+      - **A recordset with no configured destination vanishes silently.** The
+        destinations query inner-joins `recordset_destination`, so a recordset
+        Bundle included but Setup never gave a destination contributes to no
+        transfer at all — no error. Warrants a warning banner in the spirit of
+        Bundle's "N frozen but not bundled".
+
+      **Decisions (2026-08-24):**
+      - **Rows are destinations, not transfers.** Every destination configured
+        for the release gets a row whether or not a transfer exists yet, so a
+        destination you haven't acted on is visible. Same shape as Bundle, where
+        unfrozen recordsets still get a row.
+      - **Per-destination settings + transfer manifests live in a Manage modal**,
+        built from components **shared** with `transfers/Detail.tsx` so the two
+        can't drift — same pattern as `QcAssignments` / `QcReviewLifecycle` with
+        `ReviewDetail`. The expand stays a lightweight read-only summary.
+      - **The expand groups recordsets by which manifest they feed**, not one row
+        per recordset — the imaging manifest is **one per transfer**, spanning
+        every Radiology Images recordset, with a single dataset-level
+        `dataset_hash`. Grouping makes that structure self-evident and matches
+        the bucket layout (`<dataset>/<version>/imaging_manifest.csv`).
+      - **Retriever manifests are out of scope** — they are per-recordset and
+        belong to Disseminate. See step 7.
+      - **Manifest generation stays an explicit action, not a side effect of
+        creation** — revisit after 6.0. (The 2026-07-16 "generated at transfer
+        initialization" decision is not yet honoured; wiring it in before the
+        generator is fixed would bake the bug below into every transfer.)
+      - **Close TECH_DEBT #5 here**: `POST /datasets/releases/{id}/transfers` and
+        the queue transition reject a release whose `release_status = 'draft'`,
+        with a 422 the UI surfaces. Now that Bundle has a real Finalize, the
+        UI-only gate is the last thing between a half-composed release and a
+        live upload.
+
+      **✅ Not a bug — the IDC scope rule.** `generate_idc_imaging_manifest`'s
+      `rt.recordset_type_name = 'Radiology Images'` filter reads like a
+      hardcoded oversight and was initially flagged as one. It is **correct and
+      deliberate**: IDC is only ever assigned imaging it can house plus clinical
+      data it parses. Histopathology goes to Aspera; DICOM SEG/RTSTRUCT
+      annotations are bundled *inside* Radiology Images recordsets rather than
+      living in an `Image Annotations` recordset. Destination assignment per
+      recordset is the real control. Leave the filter alone.
+
+      **Steps:**
+      - [x] **6.0 — Fix the imaging manifest generator first.** *(done
+        2026-08-24)* Prerequisite to deciding anything about auto-generation.
+        **Three** defects, all in the `files` CTE, all **silent**:
+        - **INNER joins on `file_patient` / `file_study` / `file_series` /
+          `file_sop_common`** drop any DICOM file missing a row in one of them.
+          Because `series_hash` → `study_hash` → `patient_hash` → `dataset_hash`
+          are all computed over the same CTE, a dropped file doesn't merely go
+          missing — **it changes the dataset-level hash for the whole
+          submission**, and the manifest still looks internally consistent. This
+          is a data-integrity bug, not a completeness one.
+        - **`file_patient.patient_id` is nullable**, so an inner join can match
+          and still yield null. `patient_hashes` groups by it, collapsing every
+          null-patient file into one bogus patient bucket that feeds
+          `dataset_hash`. Not fixed by switching to LEFT JOIN.
+        - **Third defect, found while implementing: no `DISTINCT`.** The same
+          `file_id` can appear in two Radiology Images recordset releases in one
+          transfer (overlapping recordsets are legal) — emitting duplicate SOP
+          instance rows and feeding the digest into `string_agg` twice, which
+          corrupts `series_hash` and everything above it.
+        - **Resolved: refuse and report.** A **preflight query** runs before any
+          bytes are written — same FROM/WHERE, but LEFT JOINs so incomplete files
+          are *counted* rather than dropped. Any incomplete file ⇒ **422
+          `MANIFEST_INCOMPLETE`** carrying `dicom_file_count`,
+          `incomplete_file_count`, a per-cause breakdown
+          (`missing_patient_row` / `missing_study_row` / `missing_series_row` /
+          `missing_sop_row` / `blank_patient_id`) and up to 20 `sample_file_ids`
+          so a curator can chase the indexing. Chosen over generate-and-warn
+          because `dataset_hash` describes the entire submission: a manifest
+          built over a partial set tells IDC something false *while looking
+          valid*, and unlike a missing manifest there is no way for them to
+          detect it. `SELECT DISTINCT` added to the `files` CTE, and
+          `except HTTPException: raise` ahead of the `except Exception →
+          db_error` — without it `api_error`'s own 422 would be swallowed and
+          resurface as a 500 (the identical bug fixed on the publish endpoint in
+          5.1).
+        - **Verified against the local `posda_files` DB**, not by eye: both
+          queries `PREPARE` cleanly (syntax + every column reference); the
+          preflight reports the seeded fixture clean (transfer 1 = 10 DICOM, 0
+          incomplete, so no false positives); and in a **rolled-back**
+          transaction, deleting one `file_sop_common` row, nulling a
+          `patient_id`, and duplicating a file each got detected, with `DISTINCT`
+          collapsing the duplicate. That same test demonstrated the original bug:
+          removing one index row silently took the manifest from 10 rows to 9
+          with no error raised.
+      - [ ] **6.1 — `lib/transferForm.ts`.** `useReleaseDestinations`,
+        `useReleaseTransfers`, `useCreateTransfer` (auto-name, auto-mode,
+        destination-filtered membership), `useSyncTransferRecordsets`,
+        `useQueueTransfer`. Moves List.tsx's sync logic out of the page.
+      - [ ] **6.2 — Transfer stage on `ExpandableTable`.** Rows are destinations.
+        Columns: Destination / Transfer / Recordsets / Status / actions.
+      - [ ] **6.3 — Manage modal**, shared with `transfers/Detail.tsx`.
+      - [ ] **6.4 — Queue**, its own deliberate per-transfer click with an
+        explicit confirm.
+
+      - [ ] **6.5 — Clinical manifest.** `generate_idc_clinical_manifest` is a
+        501 stub; **in scope for this step** *(2026-08-24)*. An IDC transfer
+        does **not** always carry clinical data — it only *may*. Per the
+        2026-07-30 rule, the manifest's presence is itself the signal: present =
+        complete, absent = nothing clinical in this release. So a transfer with
+        no clinical content is correct and unremarkable, **not** a warning state.
+        Spec and field list live in
+        [IDC_TRANSFER.md](IDC_TRANSFER.md) → *Clinical manifest*.
+        - **Source is Posda, not a live Collection Manager read** *(settled
+          2026-08-24)*. By the time a transfer runs, clinical files have already
+          been pulled into Posda — from CM downloads or anywhere else — and
+          verified through QC. So the generator reads the transfer's own
+          recordset releases; **assume the content is always accessible in
+          Posda**. This closes three of the spec's open follow-ups at once:
+          - *"Is the relevance decision recorded anywhere, or re-made each
+            time?"* — **recorded**, as which recordsets exist, what they hold,
+            and which have IDC as a destination. Decided once during
+            Setup/Assemble, not re-made per generation.
+          - *"CM may not be live yet at generation time"* — largely dissolves;
+            the files were imported at Assemble time. Only the CM **metadata**
+            columns still need a live read (or a stored snapshot).
+          - No new table, picker UI, or import step is needed —
+            `POST /recordsets/drafts/{id}/files/from-wp` is already the import
+            path the manifest's `posda_file_id` field anticipates.
+        - **One row per file, download metadata repeated.** The spec says "one
+          row per selected CM download", but `file_hash` and `relative_file_url`
+          are inherently per-file and each clinical file is dropped into the
+          bucket individually. A recordset may hold several files, so rows are
+          per-file and the CM download columns repeat — exactly the precedent
+          the imaging manifest set with `dataset_hash`.
+        - **CM columns are nullable.** Clinical data pulled from somewhere other
+          than a CM download has no `wp_object_map` link, so `download_slug` /
+          `download_id` / `download_url` etc. emit blank. Not an error.
+        - **Filter still to confirm when 6.5 starts:** the Posda-side equivalent
+          of the spec's two-stage CM filter is most likely
+          `is_dicom_file = false` **and** `file.file_type` in
+          (CSV / TSV / XLS / XLSX), over recordsets of type Clinical Data /
+          Image Annotations / Other. Confirm before implementing — it decides
+          whether e.g. a non-tabular README or a NIfTI segmentation is swept in.
 - [ ] **7 — Disseminate.** The go-live stage — **per-release** WordPress objects
       and publishing. Setup (step 2) already created the dataset's `collection`
       and per-recordset `download` pages; this stage adds the `version` and
@@ -656,6 +807,39 @@ against a real draft id.
         `POST /manager/wp-objects`,
         `PUT /manager/wp-objects/{id}/status`,
         `POST /manager/posda/dataset/{id}/wp/publish`.
+      - **Retriever manifests belong to this stage, not Transfer**
+        *(settled 2026-08-24 while planning step 6).* There are **two distinct
+        manifest families**, and they were being conflated:
+
+        | Family | Scope | Stored on | Consumer |
+        |---|---|---|---|
+        | dataset / imaging / clinical | per **transfer**, dataset-level | `transfer_idc.*_manifest_file_id` | IDC submission |
+        | **retriever** | per **recordset**, per transfer | `transfer_recordset.retriever_manifest_file_id` | TCIA Data Retriever |
+
+        The retriever manifest is a per-recordset **series-UID CSV** used by the
+        Data Retriever app to pull files from whichever destination holds them,
+        and it gets **attached to the recordset's WordPress `version_download`
+        page** — which is why it is dissemination work, not transfer work.
+        - **Already implemented:**
+          `POST /transfers/{id}/recordsets/{rrid}/manifest/generate` builds and
+          stores it. Nothing new is needed to *generate* one; this stage needs
+          to trigger it per recordset release and attach the resulting
+          `downloadable_file` to the WP page.
+        - ⚠ **Stale comment:** that route is commented "Generate (or replace) an
+          **IDC** download manifest CSV". It is not IDC's — same naming lag as
+          the `file_manifest` → `imaging_manifest` rename. The column name
+          (`retriever_manifest_file_id`) is correct; fix the comment.
+        - ⚠ **Keying question to resolve here.** It is keyed
+          `(dataset_release_transfer_id, recordset_release_id)`, so a recordset
+          release shipped to two destinations gets two rows. Today the payload is
+          a bare series-UID list, so both are byte-identical and content-addressed
+          storage collapses them to a single `file` — harmless. **But** if the
+          manifest ever needs a `downloadServerUrl` (the real `.tcia` format
+          carries one), per-destination keying stops being incidental and becomes
+          load-bearing — and "which destination's manifest goes on the WP page?"
+          becomes a real question. Decide before the WP attachment depends on it.
+        - ⚠ **Silent empty:** the generator joins `file_series`, so a non-DICOM
+          recordset produces a **header-only CSV** and still returns 200.
 - [ ] **8 — Overview page.** Per-stage summary cards plus a recordset × stage
       matrix (rows = recordsets, columns = Setup / Assemble / Verify / Frozen), then
       fan-in, transfer, and landing-page rows.

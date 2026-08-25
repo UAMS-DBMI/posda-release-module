@@ -809,11 +809,30 @@ _(running log)_
   need a click-through to confirm.
 
 Pick back up here (nothing in flight, no half-done edits):
-1. **Imaging manifest generator fixes** — the two silent-data-loss risks in
-   `generate_idc_imaging_manifest`: the hardcoded `'Radiology Images'` filter,
-   and the INNER joins on `file_patient`/`file_study`/`file_series`/
-   `file_sop_common` that silently drop files. Agreed these come *before*
-   adding the missing manifest fields.
+1. ~~**Imaging manifest generator fixes**~~ — ✅ **done 2026-08-24**, with one
+   correction and one addition:
+   - The hardcoded `'Radiology Images'` filter is **not a bug**. It is the IDC
+     scope rule: IDC is only assigned imaging it can house plus clinical data it
+     parses; histopathology goes to Aspera, and DICOM SEG/RTSTRUCT annotations
+     are bundled *inside* Radiology Images recordsets rather than living in an
+     `Image Annotations` recordset. Per-recordset destination assignment is the
+     real control. **Leave the filter alone.**
+   - The **INNER joins** on `file_patient`/`file_study`/`file_series`/
+     `file_sop_common` were real, and worse than "drops files": the hash chain is
+     computed over the same CTE, so a dropped file changes `dataset_hash` for the
+     whole submission while the manifest still looks internally consistent.
+   - **Also found:** `file_patient.patient_id` is nullable (an inner join can
+     match and still yield null, collapsing every null-patient file into one
+     bogus `patient_hashes` bucket), and the CTE had **no `DISTINCT`**, so a file
+     in two Radiology Images recordset releases was emitted twice and hashed
+     twice.
+   - **Fix:** a preflight query (LEFT JOINs, counts rather than drops) refuses
+     with **422 `MANIFEST_INCOMPLETE`** — per-cause counts plus up to 20
+     `sample_file_ids` — before anything is written; `SELECT DISTINCT` in the
+     CTE; `except HTTPException: raise` so the 422 isn't swallowed into a 500.
+     Verified against the local DB (both queries `PREPARE`; fixture reports
+     clean; detection + dedup confirmed in a rolled-back transaction). See
+     [CYCLE_WIZARD.md](CYCLE_WIZARD.md) step 6.0.
 2. **Then** the ❌ fields: imaging manifest (`dataset_type`, `dataset_name`,
    `dataset_doi`, `collection_name`, `relative_file_url`) and dataset manifest
    (`dataset_version_doi` — now has a source in `dataset_release.release_doi`,
