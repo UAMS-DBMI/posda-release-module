@@ -271,10 +271,10 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 | `dataset_version_date` | Current dataset version date | ✅ |
 | `dataset_url` | TCIA collection URL | ✅ |
 | `dataset_tooltip` | Tooltip/short description — from the **NBIA API** (see Sources above) | ❌ needs adding |
-| `cancer_type` | Cancer types represented in dataset | ✅ |
+| `cancer_types` | Cancer types represented in dataset | ✅ |
 | `supporting_data` | Supporting data found in dataset | ✅ |
 | `species` | Species represented in dataset | ✅ |
-| `location` | Cancer location represented in dataset | ✅ |
+| `cancer_locations` | Cancer locations represented in dataset | ✅ |
 | `program` | Program (community, etc.) | ✅ |
 | `abstract` | NBIA short description | ✅ |
 | `citation` | TCIA collection version citation (Data Citation only) | ✅ |
@@ -762,6 +762,12 @@ record, not the reference.
 - **Bucket folder renamed:** `files/` → `imaging/`, alongside the new
   `clinical/` folder from the 2026-07-30 meeting. → *Bucket layout & versioning*
 
+**2026-08-25 (from IDC)**
+- **Dataset manifest field renames:** `cancer_type` → **`cancer_types`** and
+  `location` → **`cancer_locations`**. Both already read from the plural
+  WordPress fields of the same name, so the output now matches its source.
+  Column order and everything else unchanged. → *Dataset manifest*
+
 **2026-08-02**
 - **Imaging manifest rename landed in DB + code**: `transfer_idc.
   file_manifest_file_id` → `imaging_manifest_file_id` (+ its FK constraint,
@@ -782,7 +788,7 @@ record, not the reference.
   ✅ model finalized 2026-07-21 (release DOIs + `transfer_file` consolidation).
 - **Michael:** add `file_manifest_url` and `dataset_version_doi` fields to the
   dataset manifest. (`tumor_locations` from the meeting turned out to be a
-  duplicate of the existing `location` field — dropped.)
+  duplicate of the existing `cancer_locations` field — dropped.)
 - **Michael:** add licensing info to the manifest. ⚠ The meeting said "pulled
   from the WordPress DB," but we since established license lives on
   `recordset.license_id` in **Posda** — derive it from the recordsets instead.
