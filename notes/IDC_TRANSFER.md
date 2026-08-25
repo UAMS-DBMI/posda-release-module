@@ -400,14 +400,45 @@ linked on WordPress; they're now handled **the same way as imaging files**:
   `imaging` subfolder — see *Bucket layout*), which is what enables
   **hash generation** and lets clinical files be handled consistently with
   imaging files instead of as a special link-only case.
-- **Status:** endpoint (`POST /transfers/{id}/idc/clinical-manifest/generate`
-  / `generate_idc_clinical_manifest`) is still a stub — TODO to implement
-  against this (now-changed) model.
-- **Timing risk still applies:** since clinical files are sourced from CM
-  (WordPress) downloads, **CM may not be live yet** at generation time — the
-  files it would pull might not exist/be published when the transfer is
-  initialized. Need a plan for the not-yet-live case (defer/regenerate, or
-  block generation until CM is up).
+- **Status: implemented 2026-08-25** (`POST /transfers/{id}/idc/clinical-manifest/generate`
+  / `generate_idc_clinical_manifest`), replacing the stub. Sources the file rows
+  from **Posda**, not a live CM read — by transfer time the clinical files have
+  already been pulled in and QC'd, so the transfer's recordsets are the record of
+  what ships. Selection is `is_dicom_file is not true` with **no** file-type
+  filter: Posda's `file.file_type` is a libmagic description ("ASCII text, with
+  CRLF line terminators") and cannot distinguish CSV, so the spec's stage-2
+  filter has no Posda equivalent; per-recordset destination assignment is the
+  selection mechanism instead. CM columns are fetched per recordset via
+  `wp_object_map` and are best-effort — failures are returned in
+  `wp_lookup_failures`, not fatal. See [CYCLE_WIZARD.md](CYCLE_WIZARD.md) 6.5.
+- **✅ Timing risk resolved 2026-08-25 — WordPress takes precedence.** The
+  original worry was that CM might not be live at generation time. The sharper
+  version, raised in review: the Posda clinical file is often an **update** of
+  what CM already holds. Since the manifest gives IDC a **`download_url` into
+  CM** rather than a copy of the file, generating before the WordPress transfer
+  refreshes CM makes IDC resolve the **previous version** — and the manifest
+  looks entirely valid, so nothing downstream can detect it.
+  - Checking that the CM download merely *has a file attached* is **not
+    sufficient**: the stale file is attached too.
+  - **The gate is the WordPress transfer for the same dataset release having
+    `transfer_status = 'success'`** — WordPress is `default_display` for these
+    recordsets, so the file reaches CM first and the manifest is then generated
+    from current metadata. Implemented as `_wp_precedence_block()` in
+    `distribution.py`, enforced on **clinical-manifest generation** (422
+    `WP_TRANSFER_REQUIRED`, naming the recordsets).
+  - **Queueing is gated separately, on manifests existing**
+    (`_idc_manifest_state()` → 422 `MANIFESTS_REQUIRED`), which makes the
+    WordPress ordering **transitive**: *WP delivers → CM current → clinical
+    manifest generates → IDC has its manifests → IDC can queue.* An earlier cut
+    gated queueing on WordPress directly and described IDC as not carrying "its
+    own copy" of the file — both wrong. It is one file in one recordset bound
+    for two destinations; the only real dependency is that CM holds the current
+    version before the manifest is built from its metadata.
+  - **Scoped to IDC transfers, and only when the transfer carries non-DICOM
+    files whose `default_display` destination is WordPress.** Other destinations
+    carry their own copy of the file and have no such ordering — and without the
+    IDC scoping the **WordPress transfer blocked on itself**, which made the gate
+    impossible to satisfy (caught in testing, fixed).
 - **Clinical-only changes:** per-dataset scoping means a release where only
   clinical data changed can ship with the file and dataset manifests unchanged
   from the prior version — only the clinical manifest (and its new/changed
@@ -440,19 +471,19 @@ enables:
 
 | Field | Meaning | In impl? |
 |---|---|---|
-| `download_slug` | CM download's slug | ❌ needs adding |
-| `download_id` | CM download's WordPress post ID | ❌ needs adding |
-| `date_updated` | CM download's last-updated date | ❌ needs adding |
-| `download_title` | CM download's display title/label | ❌ needs adding |
-| `file_type` | CM `file_type` (CSV / TSV / XLS / XLSX) | ❌ needs adding |
-| `file_name` | Original file name | ❌ needs adding |
-| `download_size` | File size | ❌ needs adding |
-| `download_size_unit` | Unit for `download_size` (e.g. KB/MB) | ❌ needs adding |
-| `download_url` | Link to the file's original location on WordPress/CM | ❌ needs adding |
-| `download_type` | CM `download_type` (`clinical data` / `image annotations` / `other`) | ❌ needs adding |
-| `file_hash` | Hash of the deposited file — same idea as the imaging manifest's `instance_hash`, only possible now that clinical files are dropped into the bucket | ❌ needs adding |
-| `relative_file_url` | Path relative to the manifest, dot notation — same scheme as the imaging manifest's field of the same name | ❌ needs adding |
-| `posda_file_id` | Posda `file_id` once the clinical file is imported | ❌ needs adding |
+| `download_slug` | CM download's slug | ✅ CM |
+| `download_id` | CM download's WordPress post ID | ✅ CM |
+| `date_updated` | CM download's last-updated date | ✅ CM |
+| `download_title` | CM download's display title/label | ✅ CM |
+| `file_type` | CM `file_type` (CSV / TSV / XLS / XLSX) | ⚠ filename extension — Posda has no CM-style file_type |
+| `file_name` | Original file name | ✅ Posda |
+| `download_size` | File size | ✅ Posda (bytes) |
+| `download_size_unit` | Unit for `download_size` (e.g. KB/MB) | ✅ always `B` |
+| `download_url` | Link to the file's original location on WordPress/CM | ✅ CM |
+| `download_type` | CM `download_type` (`clinical data` / `image annotations` / `other`) | ✅ CM |
+| `file_hash` | Hash of the deposited file — same idea as the imaging manifest's `instance_hash`, only possible now that clinical files are dropped into the bucket | ✅ `file.digest` |
+| `relative_file_url` | Path relative to the manifest, dot notation — same scheme as the imaging manifest's field of the same name | ✅ `./clinical/<name>` |
+| `posda_file_id` | Posda `file_id` once the clinical file is imported | ✅ Posda |
 
 Open follow-ups on this:
 - **Field list still open-ended** — flagged as "[others?]" when drafted; add

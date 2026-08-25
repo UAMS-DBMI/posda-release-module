@@ -731,17 +731,138 @@ against a real draft id.
           collapsing the duplicate. That same test demonstrated the original bug:
           removing one index row silently took the manifest from 10 rows to 9
           with no error raised.
-      - [ ] **6.1 — `lib/transferForm.ts`.** `useReleaseDestinations`,
-        `useReleaseTransfers`, `useCreateTransfer` (auto-name, auto-mode,
-        destination-filtered membership), `useSyncTransferRecordsets`,
-        `useQueueTransfer`. Moves List.tsx's sync logic out of the page.
-      - [ ] **6.2 — Transfer stage on `ExpandableTable`.** Rows are destinations.
-        Columns: Destination / Transfer / Recordsets / Status / actions.
-      - [ ] **6.3 — Manage modal**, shared with `transfers/Detail.tsx`.
-      - [ ] **6.4 — Queue**, its own deliberate per-transfer click with an
-        explicit confirm.
+      - [x] **6.1 — `lib/transferForm.ts`.** *(done 2026-08-24)*
+        `useReleaseDestinations`, `useReleaseTransfers`, `useTransferRecordsets`,
+        `useCreateTransfer` (auto-name, auto-mode, destination-filtered
+        membership), `useSyncTransferRecordsets`, `useQueueTransfer`, plus a pure
+        `transferName()`. Moves List.tsx's inline sync orchestration into hooks.
+        No consumers yet — 6.2 wires it.
+        - **Transfers are fetched separately from the cycle payload.** The
+          rollup's `CycleTransfer` has no `destination_id`, which the stage needs
+          to line transfers up against destination rows.
+        - **`useCreateTransfer` refuses an empty membership set.** Passing `[]`
+          (or null) to `POST .../transfers` does **not** mean "no recordsets" —
+          the endpoint falls through to *every* recordset in the release, which
+          for a destination-scoped transfer ships the wrong data. Normally
+          unreachable (the destinations endpoint derives from recordsets, so
+          every listed destination has ≥1), but reachable if a recordset's
+          destination is removed between page load and click.
+        - **Queueing is deliberately its own hook** with the one-way warning on
+          it, never folded into create or sync.
+        - **Response shapes verified against the live API**, not assumed — all
+          four endpoints return `{data, meta:{count}}` matching the declared
+          types. Noted in passing: `meta` never carries `total` though
+          `ListEnvelope` declares it required (pre-existing, nothing reads it).
+        - **Membership drift is detected server-side** *(backend addition,
+          2026-08-24)*. A transfer's membership is snapshotted into
+          `transfer_recordset` at creation, but what it *should* carry moves
+          afterwards — a recordset gains/loses the destination in Setup, or
+          **Bundle's version picker swaps which `recordset_release` is bundled**,
+          leaving the transfer pointed at a superseded release. That last case is
+          not a misconfiguration; it is the picker working as designed, and it
+          would silently ship the wrong version to an external destination.
+          `GET /datasets/releases/{id}/transfers` now returns `recordset_count`,
+          `expected_recordset_count` and `membership_drifted`, via two CTEs
+          (`actual` / `expected`) compared with `is distinct from`.
+          - **Counts alone are insufficient** — one added plus one removed leaves
+            the count unchanged — so the id *sets* are compared. Confirmed
+            empirically: the version-swap case reports
+            `has=3 expected=3 drifted=true`.
+          - Chosen over client-side detection, which would have cost 2 fetches
+            per destination row on a page that otherwise loads in two.
+          - **Verified against the local DB** in a rolled-back transaction: the
+            fixture reports every transfer in sync (no false positives), removing
+            a `recordset_destination` flips `drifted` true with unequal counts,
+            and a Bundle-style version swap flips it true with *equal* counts.
+      - [x] **6.2 — Transfer stage on `ExpandableTable`.** *(done 2026-08-24)*
+        Fifth call site. Rows are destinations; columns Destination / Transfer /
+        Recordsets / Status / actions. Replaced the read-only chip strip +
+        `DynamicTable` launchpad — the last pure launchpad in the cycle.
+        - **Rows are a union, not just the destination list.** A transfer whose
+          destination has since been unconfigured on every recordset has no
+          destination row of its own; listing only configured destinations would
+          **hide a real transfer**. Those rows render with
+          "no longer configured" and no Create action.
+        - **The expand groups by manifest** (`manifestGroups`), keyed on
+          `destination_abbr` to match `transfers/Detail.tsx`'s
+          `SETTINGS_ENDPOINT`. For IDC: Radiology Images → *Imaging manifest*,
+          Clinical Data → *Clinical manifest* (flagged "generator not
+          implemented yet" until 6.5), anything else → *Not manifested for IDC*
+          with a pointer to check that recordset's destinations. Non-IDC
+          destinations get a plain list — they ship recordsets directly, and
+          retriever manifests belong to step 7.
+        - **Two warning banners**, both surfacing things nothing else reported:
+          drifted transfers (from `membership_drifted`), and **stranded
+          recordsets** — bundled into the release but with no destination
+          configured at all, so their files ship nowhere.
+        - **Per-row Open still links to `/transfers/:id`** — deliberate, so the
+          stage doesn't lose access to settings and manifest generation before
+          6.3 brings them inline. Remove it when the Manage modal lands.
+        - `TransferChip` now has **no component call sites** (only `useCycle.ts`
+          imports its *type*) — exactly the shape of `CycleStrip` in TECH_DEBT
+          #16. Left in place, not deleted.
+        - ⚠ **Transfer mode was re-surfaced by accident and removed again.** The
+          first cut showed `transfer_mode_name` as the destination sub-line,
+          contradicting the 2026-07-24 decision to hide the concept everywhere.
+          It is internal plumbing only (NOT NULL on the row, derived from the
+          destination), now documented as such on `ReleaseDestination`. Direction
+          is to eliminate it entirely and let grouping belong to the transfer
+          destination — recorded as TECH_DEBT #17.
+        - `npm run build` clean.
+      - [x] **6.3 — Manage modal.** *(done 2026-08-24)* Destination settings and
+        IDC manifest generation without leaving the cycle.
+        - **`lib/transferSettings.ts`** — `SETTINGS_ENDPOINT` (note `asp` →
+          `aspera`; abbr and route segment differ), `useTransferSettings`,
+          `useSaveTransferSettings`, `useGenerateIdcManifest`, plus pure
+          `settingsToValues` / `settingsPayload` / `manifestDownloadUrl` /
+          `hasManifest`. `settingsPayload` sends **only** the destination's own
+          fields — each settings table has its own Pydantic model, so a foreign
+          field would 422.
+        - **`components/transfers/TransferSettingsForm.tsx`** — the
+          destination-specific fields (GCS URL / Faspex URL / NBIA
+          collection+site / WP media id), published/public, and IDC's three
+          manifests. Self-contained on `transferId`.
+        - **`components/TransferManageModal.tsx`** — hosts it at `xl`.
+        - **`transfers/Detail.tsx` migrated onto the same component**, not a
+          copy: **23,253 → 10,923 chars**. Its `DestSettings` type, its own
+          `SETTINGS_ENDPOINT`, eleven pieces of settings form state,
+          `populateSettingsFields`, `saveSettings` and `generateIdcManifest` all
+          went. It keeps the transfer load, the **retriever** manifest row
+          actions (step 7's concern, deliberately not moved) and Queue.
+        - The manifest list is labelled "one set per transfer, covering the whole
+          submission — not per recordset", since that is the thing most likely
+          to be misread.
+        - **The imaging generator's 422 message is passed through** rather than
+          flattened to "could not generate" — it names how many files are
+          unindexed, which is the whole point of 6.0.
+        - **"Open" button dropped; the Transfer column links instead.** The
+          transfer name is now a new-tab link to `/transfers/{id}` (reusing
+          `RecordsetLink`'s `to` override — its third entity after recordsets and
+          drafts), matching how every other cycle table links out. Frees the
+          action column for Create / Sync / Manage, and still reaches Queue on
+          the detail page until 6.4 brings it inline.
+        - Settings endpoint shapes verified live for idc/gc/nbia/wp;
+          `npm run build` clean.
+      - [x] **6.4 — Queue.** *(done 2026-08-25)* `QueueTransferModal`, opened
+        from a per-row **Queue** button shown only on a `draft` transfer. Never
+        bulk, never a side effect — the modal names the destination, says
+        plainly that there is no un-queue, and shows what will ship.
+        - **Blocks on drift.** Queue is disabled when `membership_drifted`,
+          since queueing a stale transfer irreversibly ships the wrong contents
+          — the exact failure the 6.1 backend addition exists to catch.
+        - **Warns on missing IDC manifests.** For IDC only, the modal fetches
+          settings while open and flags any of the three manifests not yet
+          generated: IDC reads the submission *from* its manifests, so queueing
+          without them ships an incomplete package that can't be recalled. A
+          warning, not a block — the clinical generator is still a stub (6.5),
+          so blocking would make IDC unqueueable.
+        - **TECH_DEBT #5 closed server-side** (both halves — see TECH_DEBT
+          Resolved): creating a transfer for a `draft` release 422s, and so does
+          the `queued` transition while the parent release is a draft. The guard
+          runs only for that transition, leaving other field updates alone.
+        - Guard queries verified against the local DB; `npm run build` clean.
 
-      - [ ] **6.5 — Clinical manifest.** `generate_idc_clinical_manifest` is a
+      - [x] **6.5 — Clinical manifest.** *(done 2026-08-25)* `generate_idc_clinical_manifest` is a
         501 stub; **in scope for this step** *(2026-08-24)*. An IDC transfer
         does **not** always carry clinical data — it only *may*. Per the
         2026-07-30 rule, the manifest's presence is itself the signal: present =
@@ -749,6 +870,77 @@ against a real draft id.
         no clinical content is correct and unremarkable, **not** a warning state.
         Spec and field list live in
         [IDC_TRANSFER.md](IDC_TRANSFER.md) → *Clinical manifest*.
+        - **Implemented 2026-08-25.** Replaces the 501 stub.
+        - **The filter is just `is_dicom_file is not true`.** `file.file_type`
+          cannot classify anything — Posda stores a libmagic description there
+          (every non-DICOM file in the fixture reads *"ASCII text, with CRLF line
+          terminators"*), so the spec's CSV/TSV/XLS/XLSX stage-2 filter has no
+          Posda equivalent. `is not true` rather than `= false` because the
+          column is nullable and `= false` would silently skip an unprocessed
+          file. **No recordset-type filter**: destination assignment already made
+          the selection, and silently dropping a file from a manifest is the
+          exact failure 6.0 existed to eliminate. `file_name` carries the
+          identity (populated for non-DICOM, null for DICOM).
+        - **`file_type` in the manifest is the filename extension**, uppercased
+          — CM keeps its own file_type list, and the extension is the closest
+          honest answer from Posda's side.
+        - **CM columns are fetched once per recordset**, not per file
+          (`wp_object_map` is unique both ways), and **best-effort**: a failed
+          lookup leaves those cells blank and is reported back in
+          `wp_lookup_failures` rather than swallowed or fatal, since CM may not
+          be live when a transfer is prepared.
+        - **⚠ WordPress takes precedence over IDC** *(raised in review, added
+          2026-08-25)*. The manifest hands IDC a **`download_url` into Collection
+          Manager**, not a copy of the file. So when the Posda clinical file is
+          an *update* of what CM holds, generating before the WordPress transfer
+          refreshes CM makes IDC resolve the **previous version** — while the
+          manifest looks valid. Checking that CM has *a* file attached does not
+          help: the stale one is attached too.
+          - `_wp_precedence_block()` gates **clinical-manifest generation** on
+            this release's WordPress transfer being `success` (422
+            `WP_TRANSFER_REQUIRED`, naming the recordsets). WordPress is
+            `default_display` for these recordsets, so it ships first and the
+            manifest is generated from the refreshed CM metadata.
+          - Scoped to **IDC** transfers carrying non-DICOM files whose
+            `default_display` is WordPress. Other destinations have no such
+            ordering — and **without that scoping the WordPress transfer blocked
+            on itself**, making the gate impossible to ever satisfy. Caught by
+            testing the gate against every fixture transfer, not by reading it.
+          - ⚠ **Corrected in review:** the first cut also gated *queueing* on the
+            WordPress transfer, and described IDC as not "carrying its own copy"
+            of the file. Both were wrong. It is one file in one recordset bound
+            for two destinations; nobody carries a separate copy. The dependency
+            is only that the new file must reach WordPress so the **metadata the
+            clinical manifest is generated from** is current. Queueing is gated
+            on **manifests existing** (below), which makes the WordPress ordering
+            **transitive** and removes the need to state it twice:
+            *WP delivers → CM current → clinical manifest generates → IDC has its
+            manifests → IDC can queue.*
+        - **⚠ A transfer cannot be queued without its manifests**
+          *(raised in review, added 2026-08-25)*. `_idc_manifest_state()` derives
+          what a transfer **needs** from what it actually carries — dataset
+          always, imaging when it carries Radiology Images DICOM, clinical when
+          it carries non-DICOM — and the `queued` transition 422s
+          (`MANIFESTS_REQUIRED`) while any are ungenerated. IDC reads a
+          submission *from* its manifests, so queueing without them ships a
+          package it cannot interpret, and the upload cannot be recalled.
+          - Requirements are **derived, not fixed**: a transfer with no clinical
+            content needs no clinical manifest, so the absent-manifest signal
+            stays meaningful.
+          - `GET /transfers/{id}/idc` now returns `required_manifests` /
+            `missing_manifests`, so the Queue button **disables against the same
+            rule the API enforces** rather than re-deriving it client-side. The
+            modal explains the WordPress dependency only when `clinical` is among
+            the missing — which is where that explanation actually belongs.
+          - Non-IDC transfers have no transfer-level manifests and are not gated.
+        - **No clinical files → 404**, not an empty CSV — absence of the manifest
+          is itself the signal that nothing clinical changed.
+        - **Verified against the local DB:** both queries `PREPARE`; per-transfer
+          row selection checked across all 10 fixture transfers (3 have clinical
+          content, 7 correctly 404); CSV output rendered and inspected. ⚠ The
+          live path — including the WordPress fetch that fills the CM columns —
+          is **not yet exercised**: the running backend still served the 501 stub
+          when probed, so it needs the restart first.
         - **Source is Posda, not a live Collection Manager read** *(settled
           2026-08-24)*. By the time a transfer runs, clinical files have already
           been pulled into Posda — from CM downloads or anywhere else — and
@@ -780,6 +972,48 @@ against a real draft id.
           (CSV / TSV / XLS / XLSX), over recordsets of type Clinical Data /
           Image Annotations / Other. Confirm before implementing — it decides
           whether e.g. a non-tabular README or a NIfTI segmentation is swept in.
+### 🧹 The cycle declared itself over at `released` — fixed 2026-08-25
+
+Reported on first real use of the Transfer stage: the banner read *"Last
+release: v1 (released). No cycle is currently in progress"* with a **Start Next
+Cycle** button — while that release had an unsent draft transfer and had never
+been disseminated.
+
+**Cause:** `CycleNextAction` short-circuited on `!isCycleActive(cycle)`, and
+`isCycleActive` is `release_status === "draft"`. So **finalizing in Bundle ended
+the cycle**, exactly as publishing a draft used to empty out Verify (see the
+2026-08-23 fix above — same shape of bug, one stage later). Two different
+questions were being answered by one predicate:
+
+1. **Is composition still open?** — only while the release is a draft. This is
+   what Assemble/Verify/Bundle correctly gate their controls on.
+2. **Is there still work on this release?** — true until it has shipped and gone
+   live.
+
+**Fixes:**
+- **`isCycleInProgress(cycle)`** = release status `draft` **or** `released`.
+  `isCycleActive` is unchanged and still gates the composition stages; only the
+  banner moved to the new predicate. The two are documented as
+  not-interchangeable at the definition site, since conflating them is what
+  caused this.
+- **`transferStage` returns `active`, not `pending`,** for a released release
+  with no transfers ("None yet") or with unsent ones ("N to queue"). `pending`
+  hid the work from `nextAction()`, which only surfaces `blocked`/`active` — so
+  even after the banner was fixed it would have had nothing to report.
+- **`stageMessage("transfer")` no longer says "0 transfers in flight"**, which
+  was reachable whenever every transfer was still a draft. Now: in flight →
+  ready to queue → all delivered.
+- **The "nothing outstanding" branch carries the Start Next Cycle button.** It
+  used to be documented as unreachable; it is now the normal end state of a
+  released cycle, and without the button a released cycle would have had **no
+  way forward at all** (dissemination, which would set `live`, is step 7).
+
+⚠ **Known and not addressed here:** starting the next cycle while the previous
+release is still shipping makes that release's transfer state disappear from the
+cycle view, since every stage reads `latest_dataset_release`. Pre-existing, and
+more likely to be hit now that a released cycle stays visible. Worth resolving
+with step 8's Overview.
+
 - [ ] **7 — Disseminate.** The go-live stage — **per-release** WordPress objects
       and publishing. Setup (step 2) already created the dataset's `collection`
       and per-recordset `download` pages; this stage adds the `version` and

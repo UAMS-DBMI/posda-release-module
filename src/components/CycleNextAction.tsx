@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import {
-  isCycleActive,
+  isCycleInProgress,
   nextAction,
   useStartNextCycle,
   type DatasetCycle,
@@ -27,26 +27,39 @@ export default function CycleNextAction({
   const { addToast } = useToast();
   const startNextCycle = useStartNextCycle(datasetId);
 
-  // Whether a cycle is in progress is orthogonal to Setup/other per-stage
-  // readiness -- a dataset can be mid-Setup (e.g. WP not linked yet, so
-  // nextAction() reports that) with no draft dataset_release at all. Check
-  // isCycleActive directly rather than inferring it from nextAction() being
-  // null, which it usually isn't even with no active cycle.
-  if (!isCycleActive(cycle)) {
-    const release = cycle.latest_dataset_release;
+  const release = cycle.latest_dataset_release;
 
-    async function handleStartNextCycle() {
-      try {
-        await startNextCycle.mutateAsync();
-        toastSuccess(addToast, "Started the next release cycle.");
-      } catch (e) {
-        toastError(
-          addToast,
-          e instanceof Error ? e.message : "Could not start the next cycle.",
-        );
-      }
+  async function handleStartNextCycle() {
+    try {
+      await startNextCycle.mutateAsync();
+      toastSuccess(addToast, "Started the next release cycle.");
+    } catch (e) {
+      toastError(
+        addToast,
+        e instanceof Error ? e.message : "Could not start the next cycle.",
+      );
     }
+  }
 
+  const startButton = (
+    <Button
+      size="sm"
+      loading={startNextCycle.isPending}
+      onClick={() => void handleStartNextCycle()}
+    >
+      Start Next Cycle
+    </Button>
+  );
+
+  // Whether work remains is orthogonal to Setup/other per-stage readiness -- a
+  // dataset can be mid-Setup (e.g. WP not linked yet, so nextAction() reports
+  // that) with no dataset_release at all. Check the release directly rather
+  // than inferring it from nextAction() being null.
+  //
+  // Note this is isCycleInProgress, NOT isCycleActive: a released-but-not-live
+  // release is past composition but still mid-cycle, and saying "no cycle in
+  // progress" there hid unsent transfers behind a Start Next Cycle button.
+  if (!isCycleInProgress(cycle)) {
     return (
       <div
         className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md px-4 py-3 text-sm"
@@ -60,32 +73,30 @@ export default function CycleNextAction({
             ? `Last release: v${release.release_number} (${release.release_status}). No cycle is currently in progress.`
             : "No cycle is currently in progress."}
         </span>
-        <Button
-          size="sm"
-          loading={startNextCycle.isPending}
-          onClick={() => void handleStartNextCycle()}
-        >
-          Start Next Cycle
-        </Button>
+        {startButton}
       </div>
     );
   }
 
-  // Reachable only as a defensive fallback -- an active draft dataset_release
-  // always keeps Bundle "active" until released, so nextAction() should never
-  // actually be null once isCycleActive is true.
+  // Reached once a released cycle's transfers are all delivered. Dissemination
+  // isn't modelled yet (step 7), so this is as far as the cycle can be tracked
+  // -- carry the Start button here too, or a released cycle would have no way
+  // forward at all.
   if (!action) {
     return (
       <div
-        className="mt-4 flex flex-wrap items-center gap-3 rounded-md px-4 py-3 text-sm"
+        className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md px-4 py-3 text-sm"
         style={{
           background: "var(--surface-alt)",
           border: "1px solid var(--border-strong)",
         }}
       >
         <span style={{ color: "var(--muted)" }}>
-          Nothing outstanding — this cycle is fully distributed.
+          {release
+            ? `v${release.release_number} is distributed — nothing outstanding.`
+            : "Nothing outstanding."}
         </span>
+        {startButton}
       </div>
     );
   }

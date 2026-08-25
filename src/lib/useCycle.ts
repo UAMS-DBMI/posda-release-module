@@ -187,6 +187,19 @@ export function isCycleActive(cycle: DatasetCycle): boolean {
   return cycle.latest_dataset_release?.release_status === "draft";
 }
 
+/** True while the latest release still has outstanding work -- through
+ *  transfers and dissemination, not just composition.
+ *
+ *  Distinct from `isCycleActive`, and the two must not be conflated: finalizing
+ *  in Bundle closes *composition* (draft -> released) but the release still has
+ *  to ship and go live. Treating `released` as "cycle over" made the banner
+ *  announce "no cycle in progress" while transfers sat unsent. Gate *controls*
+ *  on `isCycleActive`; gate *"is there still work?"* on this. */
+export function isCycleInProgress(cycle: DatasetCycle): boolean {
+  const status = cycle.latest_dataset_release?.release_status;
+  return status === "draft" || status === "released";
+}
+
 /** True when a recordset's open draft has passed the publish gate: at least one
  *  complete QC review, with none open or stale. Non-DICOM reviews count here too
  *  (they flow through the same qc rollup), so the gate is uniform across content
@@ -418,7 +431,10 @@ function transferStage(cycle: DatasetCycle): StageSummary {
   }
 
   const transfers = release.transfers;
-  if (transfers.length === 0) return { state: "pending", detail: "None" };
+  // The release is out of draft, so its data is meant to ship: an absent or
+  // unsent transfer is outstanding work, not something to wait on. `pending`
+  // would hide it from nextAction(), which only surfaces blocked/active.
+  if (transfers.length === 0) return { state: "active", detail: "None yet" };
 
   const failed = transfers.filter((t) => t.transfer_status === "failed").length;
   if (failed > 0) return { state: "blocked", detail: `${failed} failed` };
@@ -430,7 +446,7 @@ function transferStage(cycle: DatasetCycle): StageSummary {
 
   return transfers.every((t) => t.transfer_status === "success")
     ? { state: "done", detail: "Delivered" }
-    : { state: "pending", detail: `${transfers.length} draft` };
+    : { state: "active", detail: `${transfers.length} to queue` };
 }
 
 // Placeholder until step 7 wires WordPress state into the cycle payload. Stays
@@ -547,7 +563,14 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       const running = release.transfers.filter(
         (t) => t.transfer_status === "queued" || t.transfer_status === "in_progress",
       ).length;
-      return `${plural(running, "transfer")} in flight.`;
+      if (running > 0) return `${plural(running, "transfer")} in flight.`;
+      const drafts = release.transfers.filter(
+        (t) => t.transfer_status === "draft",
+      ).length;
+      if (drafts > 0) {
+        return `${plural(drafts, "transfer")} ready to queue for v${release.release_number}.`;
+      }
+      return "All transfers delivered.";
     }
     case "disseminate":
       return "Publish the landing pages when the release is ready.";

@@ -7,6 +7,7 @@ import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
+import TransferSettingsForm from "@/components/transfers/TransferSettingsForm";
 import { LoadingState } from "@/components/ui/Spinner";
 
 type Transfer = {
@@ -22,26 +23,6 @@ type Transfer = {
   transfer_notes: string | null;
   when_created: string;
   when_updated: string;
-};
-
-type DestSettings = {
-  dataset_release_transfer_id: number;
-  published: boolean | null;
-  public: boolean | null;
-  base_gcs_url?: string | null;
-  dataset_manifest_file_id?: number | null;
-  dataset_manifest_downloadable_file_id?: number | null;
-  dataset_manifest_security_hash?: string | null;
-  imaging_manifest_file_id?: number | null;
-  imaging_manifest_downloadable_file_id?: number | null;
-  imaging_manifest_security_hash?: string | null;
-  clinical_manifest_file_id?: number | null;
-  clinical_manifest_downloadable_file_id?: number | null;
-  clinical_manifest_security_hash?: string | null;
-  faspex_url?: string | null;
-  collection?: string | null;
-  site?: string | null;
-  wp_media_file_id?: number | null;
 };
 
 type RecordsetRelease = {
@@ -69,14 +50,6 @@ const STATUS_BADGE: Record<string, "neutral" | "warning" | "success" | "danger">
   failed: "danger",
 };
 
-const SETTINGS_ENDPOINT: Record<string, string> = {
-  idc: "idc",
-  gc: "gc",
-  wp: "wp",
-  asp: "aspera",
-  nbia: "nbia",
-};
-
 export default function TransferDetail() {
   const { addToast } = useToast();
   const { transfer_id: transferId } = useParams<{ transfer_id: string }>();
@@ -88,28 +61,6 @@ export default function TransferDetail() {
 
   const [isQueuing, setIsQueuing] = useState(false);
   const [generatingManifestId, setGeneratingManifestId] = useState<number | null>(null);
-
-  const [destSettings, setDestSettings] = useState<DestSettings | null | undefined>(undefined);
-  const [settingsPublished, setSettingsPublished] = useState(false);
-  const [settingsPublic, setSettingsPublic] = useState(false);
-  const [settingsGcsUrl, setSettingsGcsUrl] = useState("");
-  const [settingsFaspexUrl, setSettingsFaspexUrl] = useState("");
-  const [settingsCollection, setSettingsCollection] = useState("");
-  const [settingsSite, setSettingsSite] = useState("");
-  const [settingsWpMediaFileId, setSettingsWpMediaFileId] = useState("");
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
-  const [generatingIdcManifest, setGeneratingIdcManifest] = useState<"dataset" | "imaging" | "clinical" | null>(null);
-
-  function populateSettingsFields(data: DestSettings) {
-    setSettingsPublished(data.published ?? false);
-    setSettingsPublic(data.public ?? false);
-    setSettingsGcsUrl(data.base_gcs_url ?? "");
-    setSettingsFaspexUrl(data.faspex_url ?? "");
-    setSettingsCollection(data.collection ?? "");
-    setSettingsSite(data.site ?? "");
-    setSettingsWpMediaFileId(data.wp_media_file_id != null ? String(data.wp_media_file_id) : "");
-  }
 
   useEffect(() => {
     if (!transferId) return;
@@ -141,22 +92,6 @@ export default function TransferDetail() {
           if (isMounted) setRecordsets(rsJson.data ?? []);
         }
 
-        const settingsPath = SETTINGS_ENDPOINT[loadedTransfer.destination_abbr];
-        if (settingsPath) {
-          const settingsRes = await fetch(`/papi/v1/distribution/transfers/${transferId}/${settingsPath}`, { cache: "no-store" });
-          if (!isMounted) return;
-          if (settingsRes.ok) {
-            const settingsJson = (await settingsRes.json()) as { data: DestSettings | null };
-            if (isMounted) {
-              setDestSettings(settingsJson.data);
-              if (settingsJson.data) populateSettingsFields(settingsJson.data);
-            }
-          } else {
-            if (isMounted) setDestSettings(null);
-          }
-        } else {
-          if (isMounted) setDestSettings(null);
-        }
       } catch (e) {
         if (!isMounted) return;
         setError(e instanceof Error ? e.message : `Could not load transfer ${transferId}.`);
@@ -230,96 +165,6 @@ export default function TransferDetail() {
     }
   }
 
-  async function generateIdcManifest(type: "dataset" | "imaging" | "clinical") {
-    if (!transferId) return;
-    setGeneratingIdcManifest(type);
-    try {
-      const res = await fetch(`/papi/v1/distribution/transfers/${transferId}/idc/${type}-manifest/generate`, { method: "POST" });
-      if (!res.ok) {
-        const json = (await res.json()) as unknown;
-        throw new Error(extractApiError(json, "Could not generate manifest."));
-      }
-      const json = (await res.json()) as {
-        data: { file_id: number; downloadable_file_id: number; security_hash: string };
-      };
-      setDestSettings((prev) => ({
-        ...(prev ?? { dataset_release_transfer_id: Number(transferId), published: null, public: null }),
-        [`${type}_manifest_file_id`]:               json.data.file_id,
-        [`${type}_manifest_downloadable_file_id`]:  json.data.downloadable_file_id,
-        [`${type}_manifest_security_hash`]:         json.data.security_hash,
-      }));
-      toastSuccess(addToast, `${type.charAt(0).toUpperCase() + type.slice(1)} manifest generated.`);
-    } catch (e) {
-      toastError(addToast, e instanceof Error ? e.message : "Could not generate manifest.");
-    } finally {
-      setGeneratingIdcManifest(null);
-    }
-  }
-
-  async function saveSettings(e: { preventDefault: () => void }) {
-    e.preventDefault();
-    if (!transferId || !transfer) return;
-
-    const settingsPath = SETTINGS_ENDPOINT[transfer.destination_abbr];
-    if (!settingsPath) return;
-
-    setIsSavingSettings(true);
-    setSettingsSaveError(null);
-
-    let payload: Record<string, unknown>;
-    const abbr = transfer.destination_abbr;
-
-    if (abbr === "idc") {
-      payload = {
-        base_gcs_url: settingsGcsUrl.trim() || null,
-        published: settingsPublished,
-        public: settingsPublic,
-      };
-    } else if (abbr === "asp") {
-      payload = {
-        faspex_url: settingsFaspexUrl.trim() || null,
-        published: settingsPublished,
-        public: settingsPublic,
-      };
-    } else if (abbr === "nbia") {
-      payload = {
-        collection: settingsCollection.trim() || null,
-        site: settingsSite.trim() || null,
-        published: settingsPublished,
-        public: settingsPublic,
-      };
-    } else if (abbr === "wp") {
-      payload = {
-        wp_media_file_id: settingsWpMediaFileId.trim() ? parseInt(settingsWpMediaFileId, 10) : null,
-        published: settingsPublished,
-        public: settingsPublic,
-      };
-    } else {
-      payload = { published: settingsPublished, public: settingsPublic };
-    }
-
-    try {
-      const res = await fetch(`/papi/v1/distribution/transfers/${transferId}/${settingsPath}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const json = (await res.json()) as unknown;
-        throw new Error(extractApiError(json, "Could not save settings."));
-      }
-      const json = (await res.json()) as { data: DestSettings };
-      setDestSettings(json.data);
-      toastSuccess(addToast, "Settings saved.");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Could not save settings.";
-      setSettingsSaveError(msg);
-      toastError(addToast, msg);
-    } finally {
-      setIsSavingSettings(false);
-    }
-  }
-
   const transferFields: DynamicSectionField[] = transfer
     ? [
         { label: "Transfer ID", value: transfer.dataset_release_transfer_id },
@@ -339,8 +184,6 @@ export default function TransferDetail() {
       ]
     : [];
 
-  const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide";
-  const abbr = transfer?.destination_abbr;
 
   return (
     <PageShell size="5xl">
@@ -442,148 +285,17 @@ export default function TransferDetail() {
         )}
       </SectionCard>
 
-      {destSettings !== undefined && transfer && abbr && SETTINGS_ENDPOINT[abbr] && (
+      {transfer && (
         <>
           <CardHeader className="mt-6 mb-0">
             <CardTitle>{transfer.destination_name} Settings</CardTitle>
           </CardHeader>
           <SectionCard className="mt-1">
-            <form onSubmit={(e) => void saveSettings(e)}>
-              <div className="space-y-4">
-
-                {abbr === "idc" && (
-                  <>
-                    <label className="block">
-                      <span className={labelClass} style={{ color: "var(--muted)" }}>GCS URL</span>
-                      <input
-                        type="text"
-                        value={settingsGcsUrl}
-                        onChange={(e) => setSettingsGcsUrl(e.target.value)}
-                        className="mt-1 input w-full"
-                        placeholder="gs://bucket/path"
-                      />
-                    </label>
-
-                    <div>
-                      <span className={labelClass} style={{ color: "var(--muted)" }}>IDC Manifests</span>
-                      <ul className="mt-1 divide-y text-sm" style={{ borderColor: "var(--border-strong)" }}>
-                        {(["dataset", "imaging", "clinical"] as const).map((type) => {
-                          const fileIdKey  = `${type}_manifest_file_id`                as keyof DestSettings;
-                          const dfIdKey    = `${type}_manifest_downloadable_file_id`   as keyof DestSettings;
-                          const hashKey    = `${type}_manifest_security_hash`          as keyof DestSettings;
-                          const hasFile    = destSettings?.[fileIdKey] != null;
-                          const dfId       = destSettings?.[dfIdKey];
-                          const hash       = destSettings?.[hashKey];
-                          const isGenerating = generatingIdcManifest === type;
-                          return (
-                            <li key={type} className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0">
-                              <span className="capitalize">{type}</span>
-                              <span className="flex shrink-0 items-center gap-2">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => void generateIdcManifest(type)}
-                                  loading={isGenerating}
-                                >
-                                  {hasFile ? "Replace" : "Generate"}
-                                </Button>
-                                {hasFile && dfId && hash && (
-                                  <a
-                                    className="btn btn-sm btn-ghost"
-                                    href={`/papi/v1/download/file/${String(dfId)}/${String(hash)}`}
-                                    download
-                                  >
-                                    Download
-                                  </a>
-                                )}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </>
-                )}
-
-                {abbr === "asp" && (
-                  <label className="block">
-                    <span className={labelClass} style={{ color: "var(--muted)" }}>Faspex URL</span>
-                    <input
-                      type="text"
-                      value={settingsFaspexUrl}
-                      onChange={(e) => setSettingsFaspexUrl(e.target.value)}
-                      className="mt-1 input w-full"
-                      placeholder="https://faspex.example.com/..."
-                    />
-                  </label>
-                )}
-
-                {abbr === "nbia" && (
-                  <>
-                    <label className="block">
-                      <span className={labelClass} style={{ color: "var(--muted)" }}>Collection</span>
-                      <input
-                        type="text"
-                        value={settingsCollection}
-                        onChange={(e) => setSettingsCollection(e.target.value)}
-                        className="mt-1 input w-full"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className={labelClass} style={{ color: "var(--muted)" }}>Site</span>
-                      <input
-                        type="text"
-                        value={settingsSite}
-                        onChange={(e) => setSettingsSite(e.target.value)}
-                        className="mt-1 input w-full"
-                      />
-                    </label>
-                  </>
-                )}
-
-                {abbr === "wp" && (
-                  <label className="block">
-                    <span className={labelClass} style={{ color: "var(--muted)" }}>Media File ID</span>
-                    <input
-                      type="number"
-                      value={settingsWpMediaFileId}
-                      onChange={(e) => setSettingsWpMediaFileId(e.target.value)}
-                      className="mt-1 input w-full"
-                    />
-                  </label>
-                )}
-
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={settingsPublished}
-                    onChange={(e) => setSettingsPublished(e.target.checked)}
-                    className="checkbox"
-                  />
-                  <span>Published</span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={settingsPublic}
-                    onChange={(e) => setSettingsPublic(e.target.checked)}
-                    className="checkbox"
-                  />
-                  <span>Public</span>
-                </label>
-
-                {settingsSaveError && (
-                  <p className="text-sm text-red-600 dark:text-red-400">{settingsSaveError}</p>
-                )}
-
-                <div>
-                  <Button type="submit" loading={isSavingSettings}>
-                    Save Settings
-                  </Button>
-                </div>
-              </div>
-            </form>
+            <TransferSettingsForm
+              transferId={transfer.dataset_release_transfer_id}
+              destinationAbbr={transfer.destination_abbr}
+              destinationName={transfer.destination_name}
+            />
           </SectionCard>
         </>
       )}
