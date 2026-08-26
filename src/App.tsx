@@ -135,9 +135,21 @@ export default function App() {
           <Route index element={<DatasetsList />} />
           <Route path="create" element={<DatasetCreate />} />
           <Route path=":dataset_id" element={<DatasetById />} />
-          {/* Bare form: an entry point that resolves the latest release and
-              redirects to the pinned URL below. */}
-          <Route path=":dataset_id/cycle" element={<CycleLayout />} />
+          {/* Two forms of the same workspace. The pinned form is canonical --
+              it keeps a shipping release reachable after the next cycle starts.
+              The bare form is the entry point that resolves the latest release
+              and redirects, and it is also where a dataset with *no* release
+              lives: there is nothing to pin to yet, and Setup is where the
+              first cycle gets started. Both need the stage children; keep the
+              two lists in step. */}
+          <Route path=":dataset_id/cycle" element={<CycleLayout />}>
+            <Route path="setup" element={<SetupStage />} />
+            <Route path="assemble" element={<AssembleStage />} />
+            <Route path="verify" element={<VerifyStage />} />
+            <Route path="bundle" element={<BundleStage />} />
+            <Route path="transfer" element={<TransferStage />} />
+            <Route path="disseminate" element={<DisseminateStage />} />
+          </Route>
           <Route
             path=":dataset_id/releases/:release_id/cycle"
             element={<CycleLayout />}

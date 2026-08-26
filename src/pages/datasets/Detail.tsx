@@ -149,6 +149,13 @@ export default function DatasetDetail() {
   const [releasesData, setReleasesData] =
     useState<DatasetReleasesResponse | null>(null);
   const [isLoadingReleases, setIsLoadingReleases] = useState(false);
+  // Link the cycle button straight at the latest release rather than at the
+  // bare /cycle entry point, which would only redirect here anyway. Falls back
+  // to the bare form while the release list is still loading, or when the
+  // dataset has no release yet.
+  const latestRelease = (releasesData?.releases ?? []).reduce<
+    DatasetRelease | null
+  >((best, r) => (best && best.release_number >= r.release_number ? best : r), null);
   const [releasesError, setReleasesError] = useState<string | null>(null);
   const [recordsetsData, setRecordsetsData] =
     useState<DatasetRecordsetsResponse | null>(null);
@@ -317,7 +324,13 @@ export default function DatasetDetail() {
               }}
             />
             <LinkButton
-              href={datasetId ? `/datasets/${datasetId}/cycle` : "/datasets"}
+              href={
+                !datasetId
+                  ? "/datasets"
+                  : latestRelease
+                    ? `/datasets/${datasetId}/releases/${latestRelease.dataset_release_id}/cycle`
+                    : `/datasets/${datasetId}/cycle`
+              }
             >
               Release Cycle
             </LinkButton>
