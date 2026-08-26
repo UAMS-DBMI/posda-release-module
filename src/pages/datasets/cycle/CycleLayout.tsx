@@ -1,4 +1,5 @@
 import {
+  Link,
   Navigate,
   Outlet,
   useLocation,
@@ -57,30 +58,51 @@ function stageFromPath(pathname: string): StageKey | null {
 }
 
 export default function CycleLayout() {
-  const { dataset_id: datasetId } = useParams<{ dataset_id: string }>();
+  const { dataset_id: datasetId, release_id: releaseId } = useParams<{
+    dataset_id: string;
+    release_id: string;
+  }>();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const cycle = useDatasetCycle(datasetId);
+  const cycle = useDatasetCycle(datasetId, releaseId);
 
   const data = cycle.data;
   const activeStage = stageFromPath(pathname);
+
+  // The release this view is pinned to. Unpinned, every redirect below lands on
+  // the latest -- which is what the bare `/cycle` entry point is for.
+  const pinnedId = releaseId ?? data?.dataset_release?.dataset_release_id;
 
   // Old `/cycle?stage=qc` → `/cycle/verify`.
   const legacyStage = searchParams.get("stage");
   if (legacyStage && LEGACY_STAGE[legacyStage]) {
     return (
-      <Navigate to={stagePath(datasetId, LEGACY_STAGE[legacyStage])} replace />
+      <Navigate
+        to={stagePath(datasetId, pinnedId, LEGACY_STAGE[legacyStage])}
+        replace
+      />
     );
   }
 
-  // Bare `/cycle` → open where the cycle actually is. (Overview page: step 8.)
+  // Bare `/cycle` -> open where the cycle actually is, pinned to the release it
+  // resolved to. (Overview page: step 8.)
   if (activeStage === null && data) {
     const summaries = stageSummaries(data);
     return (
-      <Navigate to={stagePath(datasetId, firstUnfinishedStage(summaries))} replace />
+      <Navigate
+        to={stagePath(datasetId, pinnedId, firstUnfinishedStage(summaries))}
+        replace
+      />
     );
   }
+
+  // A dataset with no release at all cannot be pinned; the stages handle the
+  // "start a cycle" state themselves.
+  const viewingOlder =
+    data?.dataset_release != null &&
+    data.latest_dataset_release_id != null &&
+    data.dataset_release.dataset_release_id !== data.latest_dataset_release_id;
 
   const summaries = data ? stageSummaries(data) : null;
   const tabs: TabItem[] = summaries
@@ -89,7 +111,7 @@ export default function CycleLayout() {
         label: STAGE_LABELS[key],
         detail: summaries[key].detail,
         state: summaries[key].state,
-        href: stagePath(datasetId, key),
+        href: stagePath(datasetId, pinnedId, key),
       }))
     : [];
 
@@ -111,8 +133,8 @@ export default function CycleLayout() {
         subtitle={
           data
             ? `${data.dataset_type_name} · ${data.recordsets.length} recordset${data.recordsets.length === 1 ? "" : "s"}` +
-              (data.latest_dataset_release
-                ? ` · v${data.latest_dataset_release.release_number} (${data.latest_dataset_release.release_status})`
+              (data.dataset_release
+                ? ` · v${data.dataset_release.release_number} (${data.dataset_release.release_status})`
                 : " · no release yet")
             : undefined
         }
@@ -139,19 +161,47 @@ export default function CycleLayout() {
         </SectionCard>
       )}
 
+      {viewingOlder && data?.dataset_release && (
+        <SectionCard className="mb-4">
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            ⚠ Viewing release v{data.dataset_release.release_number} (
+            {data.dataset_release.release_status}), which is not the current
+            cycle.{" "}
+            <Link
+              className="underline"
+              to={stagePath(
+                datasetId,
+                data.latest_dataset_release_id ?? undefined,
+                activeStage ?? "setup",
+              )}
+            >
+              Go to the current cycle
+            </Link>
+            .
+          </p>
+          <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+            Bundle, Transfer and Disseminate show this release. Setup, Assemble
+            and Verify show the recordsets&apos; current state — drafts and QC
+            belong to a recordset, not to a past release.
+          </p>
+        </SectionCard>
+      )}
+
       {data && (
         <>
           <CycleNextAction
             cycle={data}
             datasetId={datasetId}
-            onGoToStage={(stage) => navigate(stagePath(datasetId, stage))}
+            onGoToStage={(stage) => navigate(stagePath(datasetId, pinnedId, stage))}
           />
 
           <SectionCard className="mt-4">
             <Tabs
               tabs={tabs}
               active={activeStage ?? "setup"}
-              onChange={(key) => navigate(stagePath(datasetId, key as StageKey))}
+              onChange={(key) =>
+                navigate(stagePath(datasetId, pinnedId, key as StageKey))
+              }
               idPrefix="cycle"
               className="mb-4"
             />

@@ -173,7 +173,7 @@ function TransferContents({
 export default function TransferStage() {
   const { cycle, datasetId } = useCycleContext();
   const { addToast } = useToast();
-  const release = cycle.latest_dataset_release;
+  const release = cycle.dataset_release;
   const releaseId = release?.dataset_release_id;
 
   const destinations = useReleaseDestinations(releaseId);
@@ -212,7 +212,7 @@ export default function TransferStage() {
   // Bundled into this release but routed nowhere -- these files ship to no
   // destination at all, and nothing else on the page would say so.
   const stranded = cycle.recordsets.filter(
-    (r) => r.in_latest_dataset_release && r.destinations.length === 0,
+    (r) => r.in_dataset_release && r.destinations.length === 0,
   );
 
   function createFor(row: DestinationRow) {

@@ -1280,6 +1280,60 @@ release is created, so abandoning a cycle **skips a dataset version number
 today**. If gapless numbering matters, the same nullable-until-publish treatment
 applies — but that is an existing bug, independent of this work.
 
+## Frontend change map — pinning + draft releases *(mapped 2026-08-26)*
+
+Two workstreams. **A is deliverable now and depends on nothing else. B is gated
+on backend work that does not exist yet** — the schema landed but no code writes
+it.
+
+### ✅ A. Pin the cycle to a release — built 2026-08-26
+
+Smaller than it looks, because URL construction is already funnelled through one
+helper.
+
+| # | file | change |
+|---|---|---|
+| 1 | `App.tsx:138` | add `datasets/:dataset_id/releases/:release_id/cycle` wrapping the six stage routes; keep `datasets/:dataset_id/cycle` as a bare entry point |
+| 2 | `useCycle.ts:280` | `stagePath(datasetId, stage)` → `stagePath(datasetId, releaseId, stage)`. **The only place cycle URLs are built** — 5 call sites, all inside `CycleLayout` |
+| 3 | `CycleLayout.tsx` | read `release_id`; when absent, resolve latest and `<Navigate replace>` to the pinned URL. Slots in beside the existing legacy-`?stage=` and bare-`/cycle` redirects, which already do exactly this shape |
+| 4 | `useCycle.ts:108` | `useDatasetCycle(datasetId, releaseId)` → append `?release_id=`; **the query key must include it** or two releases share a cache entry |
+| 5 | everywhere | rename `latest_dataset_release` → `dataset_release` — **23 references across 7 files**. Mechanical, but it is the change that makes the rest honest: once pinnable, the old name lies |
+| 6 | `CycleLayout.tsx` | banner when pinned ≠ latest ("Viewing release 3; the current cycle is release 4") |
+
+**Left alone:** `Detail.tsx:320` links to `/datasets/{id}/cycle` and keeps
+working via the redirect — that is the point of keeping the bare entry point.
+
+✅ **Resolved:** the payload now carries `latest_dataset_release_id` alongside
+the (possibly pinned) `dataset_release`, so "am I looking at the current cycle?"
+is one comparison and no second fetch is needed.
+
+**Also renamed `in_latest_dataset_release` → `in_dataset_release`** (backend SQL
+alias + 7 frontend references). Same lie as the other name: it means "in the
+release this rollup describes", which is no longer necessarily the latest.
+
+⚠ **The banner is unverified.** Every dataset in the fixtures has exactly one
+release, so `pinned ≠ latest` cannot occur — seeing it requires starting a
+second cycle on a dataset.
+
+### B. Draft releases (gated on backend)
+
+The schema exists; nothing writes it. Until the API creates a draft
+`recordset_release` at Assemble and publish finalizes rather than creates, there
+is nothing for the UI to show. **Do not start B before that lands.**
+
+When it does, the frontend work is smaller than the backend work:
+
+- **Assemble** — creating a draft also creates its draft release. UI gain: show
+  the version being worked toward per recordset ("v3, draft") instead of only the
+  draft name. `CycleRecordset` gains the draft release's id and status.
+- **Bundle** — changes meaning more than markup. Membership already exists when
+  the stage opens, so its recordset list goes from *choose what to include* to
+  *review what carried forward and adjust*. The publish action becomes finalize.
+  The add/remove endpoints already exist in `datasetReleaseForm.ts`
+  (`recordsets/add`, `recordsets/remove`), so removal is wiring, not new API.
+- **Removal becomes a visible action**, per the three-fates table above. Today
+  nothing in Bundle drops a recordset from a release.
+
 ## Open question — `data_is_live` vs `page_is_live`
 
 `transfer_wp.published` / `.public` describe the **data objects transferred into

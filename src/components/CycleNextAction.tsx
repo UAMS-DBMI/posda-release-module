@@ -27,7 +27,7 @@ export default function CycleNextAction({
   const { addToast } = useToast();
   const startNextCycle = useStartNextCycle(datasetId);
 
-  const release = cycle.latest_dataset_release;
+  const release = cycle.dataset_release;
 
   async function handleStartNextCycle() {
     try {

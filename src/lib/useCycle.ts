@@ -51,9 +51,9 @@ export type CycleRecordset = {
   qc: CycleQc;
   latest_release: CycleRecordsetRelease | null;
   /** False when the recordset is frozen but not yet bundled — the fan-in signal. */
-  in_latest_dataset_release: boolean;
+  in_dataset_release: boolean;
   /** Highest dataset release number any of this recordset's releases were
-   *  ever bundled into. Distinct from in_latest_dataset_release, which only
+   *  ever bundled into. Distinct from in_dataset_release, which only
    *  checks the dataset's *current* latest release -- can be ahead of or
    *  behind the recordset's own latest_release since recordsets don't move
    *  together (carry-forward). Null if never bundled. */
@@ -94,18 +94,32 @@ export type DatasetCycle = {
   /** Downloads listed on the dataset's WordPress page that aren't the
    *  current download for any recordset here (excludes trashed downloads). */
   orphaned_download_count: number;
-  latest_dataset_release: CycleDatasetRelease | null;
+  /** The release this rollup describes -- the pinned one when the cycle URL
+   *  names a release, otherwise the dataset's latest. */
+  dataset_release: CycleDatasetRelease | null;
+  /** The dataset's latest release, whatever this rollup is pinned to. Lets a
+   *  caller tell "current cycle" from "an older release still being viewed"
+   *  without a second fetch. */
+  latest_dataset_release_id: number | null;
 };
 
 /** Release-cycle rollup for one dataset: every recordset's pipeline position
- *  plus the dataset release they fan into. One call, no per-recordset fetches. */
-export function useDatasetCycle(datasetId: string | undefined) {
+ *  plus the dataset release they fan into. One call, no per-recordset fetches.
+ *
+ *  `releaseId` pins the rollup to a specific release; omitted, the API returns
+ *  the latest. It is part of the query key -- without that, two releases of the
+ *  same dataset would share one cache entry. */
+export function useDatasetCycle(
+  datasetId: string | undefined,
+  releaseId?: string | undefined,
+) {
   return useQuery({
-    queryKey: ["dataset-cycle", datasetId ?? ""],
+    queryKey: ["dataset-cycle", datasetId ?? "", releaseId ?? ""],
     enabled: Boolean(datasetId),
     queryFn: async () => {
       const json = await apiFetch<ItemEnvelope<DatasetCycle>>(
-        `${BASE}/datasets/${datasetId}/cycle`,
+        `${BASE}/datasets/${datasetId}/cycle` +
+          (releaseId ? `?release_id=${releaseId}` : ""),
       );
       return json.data;
     },
@@ -184,7 +198,7 @@ export function useSetDraftStatus(datasetId: string | undefined) {
  *  when false, they show read-only state for the last completed release
  *  instead (started via CycleNextAction's "Start Next Cycle"). */
 export function isCycleActive(cycle: DatasetCycle): boolean {
-  return cycle.latest_dataset_release?.release_status === "draft";
+  return cycle.dataset_release?.release_status === "draft";
 }
 
 /** True while the latest release still has outstanding work -- through
@@ -196,7 +210,7 @@ export function isCycleActive(cycle: DatasetCycle): boolean {
  *  announce "no cycle in progress" while transfers sat unsent. Gate *controls*
  *  on `isCycleActive`; gate *"is there still work?"* on this. */
 export function isCycleInProgress(cycle: DatasetCycle): boolean {
-  const status = cycle.latest_dataset_release?.release_status;
+  const status = cycle.dataset_release?.release_status;
   return status === "draft" || status === "released";
 }
 
@@ -223,9 +237,9 @@ export function frozenThisCycle(
   r: CycleRecordset,
 ): boolean {
   if (r.open_draft || !r.latest_release) return false;
-  const release = cycle.latest_dataset_release;
+  const release = cycle.dataset_release;
   if (!release) return false;
-  if (r.in_latest_dataset_release) return true;
+  if (r.in_dataset_release) return true;
   if (!release.when_created || !r.latest_release.release_date) return false;
   return (
     new Date(r.latest_release.release_date).getTime() >=
@@ -243,7 +257,7 @@ export function cycleRecordsets(cycle: DatasetCycle): CycleRecordset[] {
 /** Recordsets that are frozen but not in the latest dataset release. */
 export function unbundledRecordsets(cycle: DatasetCycle): CycleRecordset[] {
   return cycle.recordsets.filter(
-    (r) => r.latest_release !== null && !r.in_latest_dataset_release,
+    (r) => r.latest_release !== null && !r.in_dataset_release,
   );
 }
 
@@ -276,9 +290,17 @@ export const STAGE_BLURBS: Partial<Record<StageKey, string>> = {
   setup: "Add recordsets, configure their destinations, and link everything to WordPress before starting a cycle.",
 };
 
-/** Route path for a stage, under `/datasets/:id/cycle`. */
-export function stagePath(datasetId: string | undefined, stage: StageKey): string {
-  return `/datasets/${datasetId}/cycle/${stage}`;
+/** Route path for a stage. Pinned to a release when one is known, so a cycle
+ *  URL keeps meaning the same thing after the next cycle starts; the bare
+ *  `/datasets/:id/cycle` form is an entry point that redirects to the latest. */
+export function stagePath(
+  datasetId: string | undefined,
+  releaseId: string | number | undefined,
+  stage: StageKey,
+): string {
+  return releaseId === undefined
+    ? `/datasets/${datasetId}/cycle/${stage}`
+    : `/datasets/${datasetId}/releases/${releaseId}/cycle/${stage}`;
 }
 
 /** Percent of a recordset's sampled series that have been decided. */
@@ -360,7 +382,7 @@ function assembleStage(cycle: DatasetCycle): StageSummary {
   if (unbundled.length > 0) {
     return { state: "done", detail: `${unbundled.length} ready to bundle` };
   }
-  if (cycle.recordsets.some((r) => r.in_latest_dataset_release)) {
+  if (cycle.recordsets.some((r) => r.in_dataset_release)) {
     return { state: "done", detail: "Bundled" };
   }
   return { state: "active", detail: "No drafts" };
@@ -392,7 +414,7 @@ function verifyStage(cycle: DatasetCycle): StageSummary {
 }
 
 function bundleStage(cycle: DatasetCycle): StageSummary {
-  const release = cycle.latest_dataset_release;
+  const release = cycle.dataset_release;
   if (!release) {
     return { state: "pending", detail: "None yet" };
   }
@@ -410,7 +432,7 @@ function bundleStage(cycle: DatasetCycle): StageSummary {
     if (unbundled.length > 0) {
       return { state: "active", detail: `${unbundled.length} to add` };
     }
-    if (cycle.recordsets.some((r) => r.in_latest_dataset_release)) {
+    if (cycle.recordsets.some((r) => r.in_dataset_release)) {
       return { state: "active", detail: `v${release.release_number} finalize` };
     }
     return { state: "pending", detail: "Nothing to bundle yet" };
@@ -424,7 +446,7 @@ function bundleStage(cycle: DatasetCycle): StageSummary {
 }
 
 function transferStage(cycle: DatasetCycle): StageSummary {
-  const release = cycle.latest_dataset_release;
+  const release = cycle.dataset_release;
   if (!release) return { state: "pending", detail: "—" };
   if (release.release_status === "draft") {
     return { state: "pending", detail: "Release is a draft" };
@@ -492,7 +514,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
   const withDraft = cycle.recordsets.filter((r) => r.open_draft !== null);
-  const release = cycle.latest_dataset_release;
+  const release = cycle.dataset_release;
 
   switch (stage) {
     case "setup": {

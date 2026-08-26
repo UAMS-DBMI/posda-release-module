@@ -72,8 +72,8 @@ export default function SetupStage() {
       dataset_id: cycle.dataset_id,
       dataset_name: cycle.dataset_name,
       dataset_type_name: cycle.dataset_type_name,
-      latest: cycle.latest_dataset_release
-        ? `v${cycle.latest_dataset_release.release_number}`
+      latest: cycle.dataset_release
+        ? `v${cycle.dataset_release.release_number}`
         : "never released",
       wp_linked: Boolean(collectionMap),
     },

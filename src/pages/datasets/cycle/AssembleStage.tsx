@@ -67,8 +67,8 @@ export default function AssembleStage() {
       {!cycleActive && (
         <p className="text-sm" style={{ color: "var(--muted)" }}>
           No cycle is currently in progress
-          {cycle.latest_dataset_release
-            ? ` — last release was v${cycle.latest_dataset_release.release_number} (${cycle.latest_dataset_release.release_status})`
+          {cycle.dataset_release
+            ? ` — last release was v${cycle.dataset_release.release_number} (${cycle.dataset_release.release_status})`
             : ""}
           . Start one from the banner above before assembling drafts.
         </p>

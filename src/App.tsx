@@ -135,7 +135,13 @@ export default function App() {
           <Route index element={<DatasetsList />} />
           <Route path="create" element={<DatasetCreate />} />
           <Route path=":dataset_id" element={<DatasetById />} />
-          <Route path=":dataset_id/cycle" element={<CycleLayout />}>
+          {/* Bare form: an entry point that resolves the latest release and
+              redirects to the pinned URL below. */}
+          <Route path=":dataset_id/cycle" element={<CycleLayout />} />
+          <Route
+            path=":dataset_id/releases/:release_id/cycle"
+            element={<CycleLayout />}
+          >
             <Route path="setup" element={<SetupStage />} />
             <Route path="assemble" element={<AssembleStage />} />
             <Route path="verify" element={<VerifyStage />} />

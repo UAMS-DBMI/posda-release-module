@@ -140,7 +140,7 @@ function VersionPicker({
 export default function BundleStage() {
   const { cycle, datasetId } = useCycleContext();
   const { addToast } = useToast();
-  const release = cycle.latest_dataset_release;
+  const release = cycle.dataset_release;
   const releaseId = release?.dataset_release_id;
   const cycleActive = isCycleActive(cycle);
   const unbundled = unbundledRecordsets(cycle);
