@@ -49,6 +49,14 @@ export function usePublishDraft(
       void queryClient.invalidateQueries({
         queryKey: ["dataset-cycle", datasetId ?? ""],
       });
+      // Publishing now finalizes a release the dataset release already carries,
+      // flipping it from draft to released. That endpoint is filtered to
+      // released members, so its result changes here even though membership
+      // does not -- and the finalize modal reads it. Prefix-invalidated: the
+      // release can be carried by more than one dataset release.
+      void queryClient.invalidateQueries({
+        queryKey: ["dataset-release-recordsets"],
+      });
     },
   });
 }
