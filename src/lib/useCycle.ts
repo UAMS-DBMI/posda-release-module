@@ -439,8 +439,16 @@ function bundleStage(cycle: DatasetCycle): StageSummary {
 
   if (release.release_status === "draft") {
     // The draft dataset_release exists from cycle start, so its mere existence
-    // isn't Bundle's turn. Only frozen-and-waiting content (or members already
-    // in, ready to finalize) makes it active; an empty draft waits on Assemble.
+    // isn't Bundle's turn. An empty draft waits on Assemble.
+    //
+    // Publishing happens here, so a draft that has cleared QC is Bundle's work
+    // -- and the first of it. Without this the stage reported "pending" while
+    // holding the only button that could move the cycle on, and nextAction()
+    // (which only sees blocked/active) concluded there was nothing to do.
+    const publishable = cycle.recordsets.filter(isPublishable).length;
+    if (publishable > 0) {
+      return { state: "active", detail: `${publishable} to publish` };
+    }
     if (unbundled.length > 0) {
       return { state: "active", detail: `${unbundled.length} to add` };
     }
@@ -576,6 +584,10 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       return `QC is ${percent}% reviewed — ${plural(pending, "series")} still to decide.`;
     }
     case "bundle": {
+      const publishable = cycle.recordsets.filter(isPublishable).length;
+      if (publishable > 0) {
+        return `${plural(publishable, "draft")} passed QC and can be published into v${release?.release_number ?? "?"}.`;
+      }
       const unbundled = unbundledRecordsets(cycle);
       if (unbundled.length > 0) {
         return `${plural(unbundled.length, "recordset")} frozen and ready to add to v${release?.release_number ?? "?"}.`;
