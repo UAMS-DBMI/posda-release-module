@@ -241,11 +241,14 @@ align with dataset submission to IDC.
   the dataset's recordsets**, with a dataset-level value as the starting point.
   Collapse rule when recordsets disagree is still open (see Open questions).
 
-**Sources.** This manifest draws from **three** places — the implementation
-currently only reads the first:
+**Sources.** This manifest draws from **three** places:
 1. **WordPress / CM** — most fields, via `wp_object_map` → `wp_get`.
-2. **Posda** — `dataset_version_doi` ← `dataset_release.release_doi`; the
-   `license_*` values (derived from recordsets).
+2. **Posda** — ✅ `dataset_version` ← `dataset_release.release_number` and
+   `dataset_version_date` ← `dataset_release.release_date` (implemented
+   2026-08-25; both previously read WordPress, which is not updated until
+   dissemination and so is stale at manifest time). Still to add:
+   `dataset_version_doi` ← `dataset_release.release_doi`, and the `license_*`
+   values (derived from recordsets).
 3. **NBIA API** — `dataset_tooltip`, from
    `https://nbia.cancerimagingarchive.net/nbia-api/services/v4/getCollectionDescriptions?collectionName=<name>`
    (per Bill, 2026-07-22).
@@ -267,8 +270,8 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 | `dataset_short_name` | Collection / Analysis Result short name [^2] | ✅ |
 | `dataset_title` | The dataset title | ✅ |
 | `dataset_status` | Dataset status (blank for analysis results) | ✅ |
-| `dataset_version` | Dataset version number | ✅ |
-| `dataset_version_date` | Current dataset version date | ✅ |
+| `dataset_version` | Dataset version number — **Posda** `dataset_release.release_number` | ✅ |
+| `dataset_version_date` | Current dataset version date — **Posda** `dataset_release.release_date`, `YYYY-MM-DD` | ✅ |
 | `dataset_url` | TCIA collection URL | ✅ |
 | `dataset_tooltip` | Tooltip/short description — from the **NBIA API** (see Sources above) | ❌ needs adding |
 | `cancer_types` | Cancer types represented in dataset | ✅ |

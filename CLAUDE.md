@@ -8,6 +8,9 @@ guidelines. Active feature work, decisions, and checklists live in `notes/`:
   checklists, design decisions, and the full workstream history
 - [notes/TECH_DEBT.md](notes/TECH_DEBT.md) — known shortcuts and deferred cleanup
 - [notes/IDC_TRANSFER.md](notes/IDC_TRANSFER.md) — current IDC transfer focus
+- [notes/TRANSFER_DAEMON.md](notes/TRANSFER_DAEMON.md) — how queued transfers
+  actually move: the IDC Go daemon, whether each destination needs its own,
+  and what the existing daemon needs changed
 - [notes/CYCLE_WIZARD.md](notes/CYCLE_WIZARD.md) — the guided release cycle:
   routes-as-stages, modals-as-actions, shared form modules, step plan
 
@@ -243,9 +246,13 @@ Patterns to follow when adding features:
 Core entities (see SQL migration for full DDL):
 - `dataset` → `dataset_release` → `dataset_release_transfer` → per-destination
   transfer tables (`transfer_idc`, `transfer_nbia`, `transfer_aspera`,
-  `transfer_gc`, `transfer_wp`, `transfer_recordset`). `transfer_idc` also has
-  a per-file child table `transfer_idc_file` (status per file: pending/completed/
-  failed) — see [notes/IDC_TRANSFER.md](notes/IDC_TRANSFER.md).
+  `transfer_gc`, `transfer_wp`, `transfer_recordset`). Per-file progress lives in
+  the single, destination-agnostic **`transfer_file`** (status per file:
+  pending/completed/failed) — the five per-destination file tables were collapsed
+  into it on 2026-07-21. ⚠ Nothing populates it yet, and the IDC daemon still
+  reads the old `transfer_idc_file` — see
+  [notes/TRANSFER_DAEMON.md](notes/TRANSFER_DAEMON.md) and
+  [notes/IDC_TRANSFER.md](notes/IDC_TRANSFER.md).
 - `recordset` → `recordset_release` (+ `recordset_release_file`);
   drafts via `recordset_draft` (+ `recordset_draft_file`)
 - QC: `qc_review` → `qc_series` (+ `qc_series_history`)
