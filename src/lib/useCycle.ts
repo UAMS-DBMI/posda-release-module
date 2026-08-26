@@ -415,8 +415,13 @@ function verifyStage(cycle: DatasetCycle): StageSummary {
     return { state: "active", detail: `${percent}% reviewed` };
   }
 
-  return sum((q) => q.complete) > 0
-    ? { state: "done", detail: "Complete" }
+  if (sum((q) => q.complete) > 0) return { state: "done", detail: "Complete" };
+
+  // A draft waiting on its first review is work to do, not a stage to sit
+  // behind. Reporting `pending` here meant nextAction() found no active stage
+  // anywhere and concluded the cycle was finished -- with drafts still open.
+  return cycle.recordsets.some((r) => r.open_draft !== null)
+    ? { state: "active", detail: "No QC yet" }
     : { state: "pending", detail: "No QC yet" };
 }
 

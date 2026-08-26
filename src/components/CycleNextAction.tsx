@@ -82,7 +82,13 @@ export default function CycleNextAction({
   // isn't modelled yet (step 7), so this is as far as the cycle can be tracked
   // -- carry the Start button here too, or a released cycle would have no way
   // forward at all.
+  //
+  // A *draft* release can also land here with nothing flagged, and it is not
+  // distributed by any reading: it has not even been finalized. Saying so would
+  // be wrong, and offering Start Next Cycle worse -- the API refuses a second
+  // draft release while one exists, so the button could only ever fail.
   if (!action) {
+    const stillComposing = release?.release_status === "draft";
     return (
       <div
         className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md px-4 py-3 text-sm"
@@ -92,11 +98,13 @@ export default function CycleNextAction({
         }}
       >
         <span style={{ color: "var(--muted)" }}>
-          {release
-            ? `v${release.release_number} is distributed — nothing outstanding.`
-            : "Nothing outstanding."}
+          {!release
+            ? "Nothing outstanding."
+            : stillComposing
+              ? `v${release.release_number} is still being composed — nothing flagged right now.`
+              : `v${release.release_number} is distributed — nothing outstanding.`}
         </span>
-        {startButton}
+        {stillComposing ? null : startButton}
       </div>
     );
   }
