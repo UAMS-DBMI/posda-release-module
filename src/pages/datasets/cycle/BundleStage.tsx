@@ -12,7 +12,6 @@ import {
   useBundledRecordsets,
   useExcludeRecordsetRelease,
   useIncludeRecordsetRelease,
-  type BundledRecordset,
 } from "@/lib/datasetReleaseForm";
 import { useRecordsetReleases } from "@/lib/useRecordsetReleases";
 import { useUsers } from "@/lib/useUsers";
@@ -153,9 +152,10 @@ export default function BundleStage() {
   const [publishFor, setPublishFor] = useState<CycleRecordset | null>(null);
   const [showFinalize, setShowFinalize] = useState(false);
 
-  // recordset_id -> the release of it currently in the dataset release.
-  const bundledBy = new Map<number, BundledRecordset>();
-  for (const b of bundled.data ?? []) bundledBy.set(b.recordset_id, b);
+  // `bundled` is released-only, so it is what will actually ship -- right for
+  // the finalize modal, wrong for this table, which has to show a recordset
+  // being drafted as already in the release. That comes from the cycle payload
+  // (`release_in_cycle`), which includes draft members.
 
   const busy = include.isPending || exclude.isPending;
 
@@ -218,9 +218,10 @@ export default function BundleStage() {
       {unbundled.length > 0 && (
         <p className="text-sm text-amber-600 dark:text-amber-400">
           ⚠ {unbundled.length} recordset{unbundled.length === 1 ? " is" : "s are"}{" "}
-          frozen but not bundled
-          {release ? ` into v${release.release_number}` : ""} — include{" "}
-          {unbundled.length === 1 ? "it" : "them"} below to distribute.
+          not in this release
+          {release ? ` (v${release.release_number})` : ""} — include{" "}
+          {unbundled.length === 1 ? "it" : "them"} below if{" "}
+          {unbundled.length === 1 ? "it" : "they"} should ship.
         </p>
       )}
 
@@ -242,21 +243,24 @@ export default function BundleStage() {
         renderExpanded={(r) => (
           <VersionPicker
             recordsetId={r.recordset_id}
-            bundledReleaseId={
-              bundledBy.get(r.recordset_id)?.recordset_release_id ?? null
-            }
+            bundledReleaseId={r.release_in_cycle?.recordset_release_id ?? null}
             disabled={!cycleActive || busy}
             onPick={pick}
           />
         )}
         renderCells={(r) => {
-          const inRelease = bundledBy.get(r.recordset_id) ?? null;
+          const inRelease = r.release_in_cycle;
           const latest = r.latest_release;
           const readyDraft = isPublishable(r) ? r.open_draft : null;
-          // Bundling a version older than the one just frozen is legitimate
-          // (carry-forward), but worth showing rather than hiding.
+          // A draft member has no number yet -- it is claimed at publish.
+          const memberIsDraft = inRelease?.release_status === "draft";
+          // Carrying a version older than the one just frozen is legitimate,
+          // but worth showing rather than hiding. Only meaningful for a
+          // published member: a draft is by definition not one of the versions
+          // `latest` is chosen from.
           const behind =
             inRelease != null &&
+            !memberIsDraft &&
             latest != null &&
             inRelease.recordset_release_id !== latest.recordset_release_id;
 
@@ -271,7 +275,16 @@ export default function BundleStage() {
               <td className="px-2 py-1">
                 {inRelease ? (
                   <span className="flex items-center gap-2">
-                    v{inRelease.release_number}
+                    {memberIsDraft ? "next version" : `v${inRelease.release_number}`}
+                    {memberIsDraft && (
+                      <span
+                        className="text-xs"
+                        style={{ color: "var(--muted)" }}
+                        title="Still a draft -- publish it before finalizing"
+                      >
+                        unpublished
+                      </span>
+                    )}
                     {behind && (
                       <span
                         className="text-xs"
@@ -288,7 +301,11 @@ export default function BundleStage() {
               </td>
               <td className="px-2 py-1">
                 {inRelease ? (
-                  <StatusBadge status="bundled" variant="success" label="Yes" />
+                  <StatusBadge
+                    status="bundled"
+                    variant={memberIsDraft ? "warning" : "success"}
+                    label={memberIsDraft ? "Draft" : "Yes"}
+                  />
                 ) : latest ? (
                   <StatusBadge status="unbundled" variant="warning" label="No" />
                 ) : (

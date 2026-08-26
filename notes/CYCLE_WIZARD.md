@@ -1413,9 +1413,23 @@ That column also partly covers the restore-on-abandon caveat above: the carried
 version is now visible, so a swap from v1 to v2 is at least legible rather than
 silent.
 
-**Still open:** Bundle's copy still reads as *choose what to include*, when
-membership now arrives already populated. Its behaviour is correct — only the
-framing is stale.
+✅ **Bundle updated 2026-08-26** — and it was not only copy. Bundle read the
+released-only `/recordsets` list (B1) plus `in_dataset_release`, so a recordset
+mid-draft looked absent from the release:
+
+- `unbundledRecordsets` flagged it as *"frozen but not bundled"* although its
+  draft version was already the release member. Now keyed on
+  `release_in_cycle === null` — not in the release *at all*.
+- The **Include** button was offered for it, and would have **evicted its draft
+  release** in favour of the last published version.
+
+The table now reads `release_in_cycle`, showing *next version / unpublished* for
+a draft member and a Draft badge, and keeps the released-only list solely for the
+finalize modal — which should show what will actually ship. The stage blurb says
+membership arrives populated and Bundle is review → publish → finalize.
+
+Verified live: with no draft, recordset 8 counts as unbundled; with a draft it
+does not, while `in_dataset_release` correctly stays false.
 
 ### ✅ B2 — cycle start seeds membership (2026-08-26)
 

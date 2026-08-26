@@ -254,10 +254,15 @@ export function cycleRecordsets(cycle: DatasetCycle): CycleRecordset[] {
   );
 }
 
-/** Recordsets that are frozen but not in the latest dataset release. */
+/** Recordsets with a published version that the release does not carry at all.
+ *
+ *  Keyed on `release_in_cycle`, not `in_dataset_release`: the latter is true
+ *  only for a *released* member, so a recordset mid-draft -- which is already in
+ *  the release, as its draft version -- would otherwise be reported as missing
+ *  from it. */
 export function unbundledRecordsets(cycle: DatasetCycle): CycleRecordset[] {
   return cycle.recordsets.filter(
-    (r) => r.latest_release !== null && !r.in_dataset_release,
+    (r) => r.latest_release !== null && r.release_in_cycle === null,
   );
 }
 
@@ -288,6 +293,8 @@ export const STAGE_LABELS: Record<StageKey, string> = {
 /** One-line explanation shown under the tab strip for the active stage. */
 export const STAGE_BLURBS: Partial<Record<StageKey, string>> = {
   setup: "Add recordsets, configure their destinations, and link everything to WordPress before starting a cycle.",
+  bundle:
+    "The release already carries a version of every recordset -- carried forward from the last release, or the one being drafted this cycle. Review what it contains, publish the drafts that are ready, then finalize.",
 };
 
 /** Route path for a stage. Pinned to a release when one is known, so a cycle
