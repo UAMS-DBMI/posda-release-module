@@ -482,7 +482,6 @@ export default function DatasetDetail() {
                 rows={releasesData.releases}
                 hideSummary
                 columns={[
-                  { key: "dataset_release_id", label: "ID" },
                   { key: "release_number", label: "Version" },
                   {
                     key: "release_status",
@@ -491,6 +490,25 @@ export default function DatasetDetail() {
                   },
                   { key: "release_date", label: "Date" },
                   { key: "release_notes", label: "Notes" },
+                  {
+                    // Each release owns a cycle now that the workspace is
+                    // pinned, so this is how an older release still being
+                    // shipped stays reachable. Row click opens the release
+                    // itself, so the button stops propagation.
+                    key: "dataset_release_id",
+                    label: "",
+                    render: (_v, row) => (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <LinkButton
+                          size="sm"
+                          variant="ghost"
+                          href={`/datasets/${datasetId}/releases/${row.dataset_release_id}/cycle`}
+                        >
+                          Cycle
+                        </LinkButton>
+                      </div>
+                    ),
+                  },
                 ]}
                 formatters={{
                   release_date: (value) =>
