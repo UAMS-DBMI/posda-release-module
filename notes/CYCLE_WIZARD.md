@@ -1334,6 +1334,119 @@ When it does, the frontend work is smaller than the backend work:
 - **Removal becomes a visible action**, per the three-fates table above. Today
   nothing in Bundle drops a recordset from a release.
 
+## Workstream B — build order and progress
+
+Schema applied to dev 2026-08-26. Steps, in the order they can safely land:
+
+| step | what | state |
+|---|---|---|
+| **B1** | `release_status = 'released'` filters on every membership reader | ✅ done 2026-08-26 |
+| **B3+B4+B5** | Assemble creates the draft release · publish finalizes · abandon cleans up · `worked_this_cycle` | ✅ done 2026-08-26 |
+| **B2** | cycle start copies membership forward | after B3 |
+| **B6** | UI: Assemble version display + remove action, Bundle as review/adjust | last |
+
+**Why B3/B4/B5 cannot be split:** publish must invert the moment Assemble starts
+creating releases, or every draft yields two. And `DELETE /recordsets/drafts/{id}`
+is a hard delete — without cleanup it orphans the draft release and its
+membership row, and the `ON DELETE RESTRICT` on
+`fk_dataset_release_recordset_recordset_release` turns that into a *failed*
+delete rather than a silent one.
+
+**Why B2 moved after B3:** copying membership forward is what would break the
+old "worked this cycle" test, and the replacement for that test needs B3 to
+exist. Landing B2 first leaves Verify wrong in between.
+
+### ✅ B3+B4+B5 — the draft-release lifecycle (2026-08-26)
+
+- **Create** (`create_recordset_draft`) also inserts a `recordset_release` with
+  `release_status='draft'`, number and date null; links the draft to it; and,
+  when the dataset has a **draft** `dataset_release`, evicts whatever that
+  recordset was contributing and writes the membership row.
+- **Publish** finalizes that same release — assigns `release_number`
+  (`max+1` over released rows), stamps the date, flips the status. A draft with
+  a null `recordset_release_id` (predating this) still takes the old insert
+  path, so no backfill was needed.
+- **Delete** stays a soft delete on the draft, but now drops the membership row,
+  restores the recordset's latest *released* release in its place, and deletes
+  the draft release. Restoring is a reconstruction of carry-forward, not an undo
+  — nothing records what was evicted.
+- **Decisions:** a draft created with no cycle open still gets its release, just
+  no membership row (B2 will adopt those). Abandoning restores the latest
+  released release rather than dropping the recordset from the dataset release.
+
+**Verified end to end against the live API** on dataset 3: create → release 12
+(draft, no number), membership written; publish → same release becomes
+released n2 with **the membership row never rewritten**; a second draft swaps the
+pointer to release 13; abandon deletes 13 and restores 12. Release numbering
+stayed gapless — the two abandoned releases never claimed a number.
+
+#### Two bugs this surfaced
+
+- **`order by release_number desc` puts NULLs FIRST in Postgres**, so all three
+  "latest release" queries would have returned the new draft release. One of
+  them computes `next_number = release_number + 1`, i.e. a 500 on draft
+  creation. All three now filter to `release_status = 'released'`.
+- **The legacy publish path produced a `draft` release**: its insert never named
+  `release_status`, which now defaults to `'draft'`. Caught by testing, not
+  inspection — the row looked right until its status was read.
+
+### ✅ B1 — membership readers filtered (2026-08-26)
+
+Eight sites touch `dataset_release_recordset`. Two are writes and need nothing
+(and the add/replace at ~1455 already contains the "evict any other release of
+the same recordset" logic that B3's pointer swap needs — reuse it). The rest now
+filter to `release_status = 'released'`:
+
+| site | what a leaked draft would have done |
+|---|---|
+| transfer creation's "all recordsets" fallback | **shipped unpublished files** — an upload that cannot be recalled |
+| `get_recordsets_for_dataset_release` (both branches) | same exposure, via the transfer membership picker |
+| transfer drift `expected` CTE | false drift, and "Sync" would *add* the draft release to the transfer |
+| destinations for a release | a not-yet-published recordset contributing destinations |
+| `last_bundled` | a draft inflating "last bundled into vN" |
+| `bundled` CTE → `in_dataset_release` | see below |
+
+Verified in a rolled-back transaction by swapping a draft release into dataset
+release 1's membership: every consumer returned 3 members where the raw table
+held 4.
+
+### ✅ "Worked this cycle" — ask the structure, not the clock
+
+`in_dataset_release` keeps meaning *"a finished version of this recordset is part
+of that release"*. A separate signal answers *"did this cycle work on it"*, which
+is what drives **who appears in Verify** (`frozenThisCycle` → `cycleRecordsets`,
+its only consumer).
+
+The old test had a shortcut (in the membership) plus a date fallback
+(`release_date >= dataset_release.when_created`). Both are being replaced:
+
+- The **shortcut** dies with B2 — once membership is copied forward, everything is
+  in it from day one.
+- The **date fallback** was rejected 2026-08-26. `dataset_release.when_created` is
+  **nullable**, and the helper returns false when it is, so Verify would silently
+  show nothing. And it has no upper bound: with the cycle now pinnable, viewing
+  release 3 counts release 4's work as release 3's, and gets worse with age. It
+  is a time heuristic standing in for a structural question — the same mistake as
+  `recordset_type` standing in for `is_dicom_file`.
+
+**The replacement:** *this recordset has a draft whose `recordset_release_id` is
+in this dataset release's membership.*
+
+| case | result | why |
+|---|---|---|
+| being drafted now | true | draft → draft release → membership row |
+| published this cycle | **still true** | same draft, same release, same row |
+| carried forward | false | membership points at a release no draft here created |
+| removed | false | no membership row |
+
+"Still true after publish" is the entire reason the old helper existed — the
+stage emptied out the moment its work completed.
+
+⚠ **Depends on published drafts sticking around.** Publish sets
+`draft_status = 'published'` and does not delete the draft (verified). If
+anything ever purges published drafts, this signal dies — say so in the SQL.
+⚠ Only true once B3 lands; drafts predating it have a null `recordset_release_id`.
+
 ## Open question — `data_is_live` vs `page_is_live`
 
 `transfer_wp.published` / `.public` describe the **data objects transferred into

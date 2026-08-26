@@ -52,6 +52,11 @@ export type CycleRecordset = {
   latest_release: CycleRecordsetRelease | null;
   /** False when the recordset is frozen but not yet bundled — the fan-in signal. */
   in_dataset_release: boolean;
+  /** Whether this cycle worked on the recordset: a draft was created for a
+   *  release that is in this dataset release's membership. Stays true after the
+   *  draft publishes -- same draft, same release, same membership row -- which
+   *  is what keeps Verify from emptying out the moment its work completes. */
+  worked_this_cycle: boolean;
   /** Highest dataset release number any of this recordset's releases were
    *  ever bundled into. Distinct from in_dataset_release, which only
    *  checks the dataset's *current* latest release -- can be ahead of or
@@ -224,33 +229,18 @@ export function isPublishable(r: CycleRecordset): boolean {
   return qc.complete > 0 && qc.open === 0 && qc.stale === 0;
 }
 
-/** True when this recordset's work was done during the current cycle: either
- *  its frozen release is already in the draft dataset release, or it was frozen
- *  after the cycle started and simply hasn't been included yet.
+/** Recordsets in play this cycle: an open draft to work, or one already
+ *  published during it.
  *
- *  Assemble and Verify key off `open_draft`, which goes null the moment a draft
- *  is published -- so without this, both stages emptied out exactly when their
- *  work completed. A recordset carried forward from an earlier cycle is
- *  correctly excluded: its release predates the cycle and is bundled elsewhere. */
-export function frozenThisCycle(
-  cycle: DatasetCycle,
-  r: CycleRecordset,
-): boolean {
-  if (r.open_draft || !r.latest_release) return false;
-  const release = cycle.dataset_release;
-  if (!release) return false;
-  if (r.in_dataset_release) return true;
-  if (!release.when_created || !r.latest_release.release_date) return false;
-  return (
-    new Date(r.latest_release.release_date).getTime() >=
-    new Date(release.when_created).getTime()
-  );
-}
-
-/** Recordsets in play this cycle: an open draft to work, or already frozen. */
+ *  `worked_this_cycle` comes from the API and is structural -- a draft exists
+ *  for a release in this dataset release's membership. It replaced a test that
+ *  compared the release date against the cycle's start: that had no upper bound
+ *  (once the cycle can be pinned, viewing an older release counted newer work as
+ *  its own) and silently returned false whenever `when_created` was null, which
+ *  is nullable. */
 export function cycleRecordsets(cycle: DatasetCycle): CycleRecordset[] {
   return cycle.recordsets.filter(
-    (r) => r.open_draft !== null || frozenThisCycle(cycle, r),
+    (r) => r.open_draft !== null || r.worked_this_cycle,
   );
 }
 
