@@ -1093,6 +1093,193 @@ with step 8's Overview.
       write them against this document's stated rules, not against the
       implementation.
 
+## Planned — pin the cycle to a dataset release *(proposed 2026-08-26)*
+
+**Not built. Design settled, including the Assemble wrinkle (see below) --
+which is separate work and should not hold up the pinning.**
+
+### The problem this solves
+
+Every stage resolves `latest_dataset_release` from the dataset-scoped
+`GET /datasets/{id}/cycle` payload. So the instant cycle N+1 starts, release N's
+Bundle / Transfer / Disseminate state becomes **unreachable — while it is still
+shipping**. Transfers take days; the next cycle can easily begin first. This is
+the concern parked during step 6 ("we'll address your last concern in a bit").
+
+Secondary benefit: cycle URLs become stable. `/datasets/5/cycle/transfer` means
+something different next month; a pinned URL is shareable and bookmarkable.
+
+### Shape
+
+```
+datasets/:dataset_id/releases/:release_id/cycle/:stage    <- the real route
+datasets/:dataset_id/cycle                                <- entry point, redirects
+```
+
+- The bare `/cycle` entry point resolves the dataset's latest release and
+  **redirects with `replace`** to the pinned URL. That keeps "most current is the
+  default" without any stage component guessing, and existing menu/dashboard
+  links keep working. When the dataset has no release at all, it shows the
+  start-a-cycle state as today.
+- Backend: `GET /datasets/{id}/cycle?release_id=` — optional, defaults to
+  latest. Small change; the release half of the payload is already a single
+  lookup on `latest_release`.
+- **Rename `latest_dataset_release` → `dataset_release`** in that payload at the
+  same time. Once it can be pinned, the old name is simply false. Mechanical
+  rename across `useCycle.ts` and the stage components.
+- **`isCycleInProgress` and `CycleNextAction` stay dataset-scoped.** They answer
+  "what should I do next", which is about the *current* cycle. If they followed
+  the pinned release, opening release 2 would start telling you to do work on a
+  release that shipped a year ago.
+- "Start Next Cycle" navigates to the new release's pinned URL.
+
+### ⚠ The wrinkle: the six stages are not equally release-scoped
+
+- **Bundle / Transfer / Disseminate** genuinely belong to a `dataset_release`.
+  Pinning makes them historically accurate. This is where all the value is.
+- **Setup / Assemble / Verify** operate on **recordset drafts and QC**, which
+  hang off `recordset`, not off any dataset release. Nothing in the schema ties
+  a draft to the cycle it is being prepared for. So viewing release 1's cycle at
+  Assemble shows *today's* open drafts — which probably belong to the release 2
+  cycle. Pinning does not make those stages historical; there is no history there
+  to show.
+
+**Interim handling (agreed):** a banner when pinned ≠ latest — *"Viewing release
+3; the current cycle is release 4"* — with the early stages plainly labeled as
+showing current recordset state. Cheap and honest. Rejected alternatives:
+disabling the early stages (loses the ability to look, and there is nothing to
+reconstruct anyway) and ignoring it (Assemble would silently show the wrong
+cycle's work).
+
+### ✅ Fixing the wrinkle — tie Assemble to the dataset release *(designed 2026-08-26)*
+
+**Design settled; not built, and deliberately not a blocker for the pinning
+above.** The banner handles the wrinkle honestly until this lands.
+
+Three entities, easy to conflate — the whole design turns on keeping them apart:
+
+| | what it is |
+|---|---|
+| `dataset_release` | the cycle's output. One per cycle. draft → released → live |
+| `recordset_release` | one version of one recordset. Many per dataset release |
+| `dataset_release_recordset` | which recordset versions this dataset version ships |
+
+**The flow:**
+
+1. **Cycle start** — create the draft `dataset_release`, and copy the previous
+   dataset release's `dataset_release_recordset` **rows** across to it.
+   ⚠ This creates **no recordset releases**. It copies only the link rows, which
+   keep pointing at the *same already-published* `recordset_release` rows the
+   previous dataset release shipped. The new dataset release simply starts out
+   shipping exactly what the last one shipped.
+2. **Assemble** — for each recordset being worked, create a `recordset_draft`
+   *and* a draft `recordset_release` (`release_number` null), tie the draft to it,
+   and **swap that one link row's pointer** from the old published release to the
+   new draft one. Recordsets never touched keep pointing at their existing
+   release — that is the carry-forward, and it needs no click.
+3. **Bundle** — publish flips those same `recordset_release` rows to `released`,
+   assigns `release_number`, stamps `release_date`, writes
+   `recordset_release_file`. Bundle becomes review-and-finalize rather than
+   assembly.
+
+✅ **Confirmed 2026-08-26.** Starting from the previous dataset release's
+membership is the intended behaviour: the cycle opens with last release's
+recordset releases in place, and each is then left alone, replaced, or removed.
+(The alternative considered and dropped: start empty and require an explicit
+"include this unchanged recordset" action per carry-forward at Bundle.)
+
+Once seeded, a membership row supports exactly three fates during the cycle:
+
+| | how | result |
+|---|---|---|
+| **carry forward** | do nothing — no draft is created | keeps pointing at the previously published `recordset_release` |
+| **update** | create a draft + draft release at Assemble | pointer swaps to the new draft release, which Bundle publishes |
+| **remove** | drop the link row | the recordset ships in the previous dataset release but not this one |
+
+Removal is a real case, not an edge one — a recordset can leave a dataset
+release without being retracted from the ones that already shipped it.
+
+**Why the link is written at Assemble, not Bundle:** the membership row is then
+written **once and never rewritten**. It already points at the right
+`recordset_release`; publishing mutates the row it points at, not the link. It
+also means Assemble and Verify are scopeable by dataset release immediately,
+which is the entire point — `qc_review.recordset_draft_id` → draft →
+`recordset_release` → `dataset_release_recordset` → `dataset_release`.
+
+### Schema changes — written 2026-08-26, not yet applied
+
+✅ In the DDL scripts (`add_dataset_module_tables.sql` and the test data), and
+synced into the DbSchema model. The drop script needed no change —
+`recordset_draft` already drops before `recordset_release`, with CASCADE.
+No migration script: a drop-and-reseed is the intended path for now.
+⚠ **The application code does not use any of it yet** — nothing creates a draft
+`recordset_release`, and publish still creates rather than finalizes one.
+
+- **`recordset_release.release_status`** — new, presumably the `dataset_release`
+  vocabulary (`draft | released | live | retracted`). Without it there is no way
+  to tell a draft release from a real one.
+- **`recordset_release.release_date`** — currently `NOT NULL`; must become
+  nullable, mirroring `dataset_release.release_date` ("set when release_status
+  transitions to released -- null while draft").
+- **`recordset_release.release_number`** — currently `NOT NULL`; must become
+  nullable and be **assigned at publish, not at creation**. This is what keeps
+  numbering gapless: an abandoned draft never claimed a number. The unique index
+  on `(recordset_id, release_number)` tolerates it — Postgres allows multiple
+  NULLs in a unique index.
+- **`recordset_draft.recordset_release_id`** — new FK to the draft release it is
+  filling, alongside the existing `cloned_from_release_id` (which points the
+  other way, at the release it was cloned *from*).
+
+Per [CLAUDE.md](../CLAUDE.md) all of this lands in the DbSchema model first, with
+the drop and test-data scripts moving alongside.
+
+### ⚠ Consequences to handle
+
+- **`dataset_release_recordset` will hold unpublished members.** It is a bare
+  join table with no status of its own, and it will now carry a mix: draft
+  releases for recordsets being worked, published ones carried forward. **Every
+  query reading it needs auditing for a `release_status = 'released'` filter.**
+  This is the largest ripple and the one most likely to bite quietly. It is the
+  accepted cost of writing the link at Assemble.
+- **Publish inverts.** `POST /recordsets/drafts/{id}/publish` currently *creates*
+  the release, assigning `release_number` as `coalesce($2, max+1)`. It becomes
+  "finalize the release that already exists". The number assignment moves here
+  rather than disappearing.
+- **Abandoning a draft needs a cleanup path** — its draft `recordset_release` and
+  its `dataset_release_recordset` row both have to go, and
+  `fk_dataset_release_recordset_recordset_release` is **`ON DELETE RESTRICT`**,
+  so the membership row must be deleted first. Nothing does this today because
+  there is nothing to clean up. Note the carry-forward row it replaced should
+  presumably be restored.
+### ✅ Settled: recordset drafts stay a separate table
+
+Asked 2026-08-26 whether `recordset_draft` is still needed once
+`recordset_release` can be draft. **Keep it.**
+
+*The case for merging* is real: one table instead of two, no
+`recordset_draft_file` / `recordset_release_file` split, no publish conversion —
+just a status flip. It kills a class of draft-vs-release divergence bugs.
+
+*The case for keeping* wins on one point: **immutability stops being structural
+and becomes a convention.** Today a published `recordset_release` cannot be
+edited by the draft endpoints — not because anyone remembered to check, but
+because they operate on a different table. Merge them and every mutating
+endpoint needs a status guard; the first one anybody forgets silently rewrites a
+release that a shipped dataset release and a completed transfer already point
+at. That is unrecoverable.
+
+Secondary: `draft_status` (open/ready/invalid/published/deleted) is work state a
+release has no business carrying; abandonment is free with a draft and messy with
+a release row; and the diff / carry-forward machinery depends on the draft and
+its base release being two distinct things to compare.
+
+### ⚠ Pre-existing: dataset release numbers can already gap
+
+`dataset_release.release_number` is `NOT NULL` and assigned when the draft
+release is created, so abandoning a cycle **skips a dataset version number
+today**. If gapless numbering matters, the same nullable-until-publish treatment
+applies — but that is an existing bug, independent of this work.
+
 ## Open question — `data_is_live` vs `page_is_live`
 
 `transfer_wp.published` / `.public` describe the **data objects transferred into
