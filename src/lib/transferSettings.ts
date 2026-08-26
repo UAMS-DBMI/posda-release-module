@@ -43,11 +43,17 @@ export type TransferSettings = {
   site?: string | null;
   wp_media_file_id?: number | null;
   /** IDC only. Which manifests this transfer needs, derived from what it
-   *  actually carries (dataset always; imaging when it has Radiology Images
-   *  DICOM; clinical when it has non-DICOM files), and which are still
+   *  actually carries (dataset always; imaging when it has DICOM; clinical when
+   *  it has files from a Clinical Data recordset), and which are still
    *  ungenerated. The API refuses to queue while any are missing. */
   required_manifests?: IdcManifestType[];
   missing_manifests?: IdcManifestType[];
+  /** IDC only. Files that are neither DICOM nor Clinical Data, so no manifest
+   *  can list them. They are skipped by the transfer rather than uploaded --
+   *  IDC cannot interpret an object with no manifest row, and the upload cannot
+   *  be recalled. Reported so the skip is visible before queueing. */
+  unlistable_files?: number;
+  unlistable_recordsets?: string[];
 };
 
 /** Form state. Kept as strings so the inputs stay controlled; converted on save. */

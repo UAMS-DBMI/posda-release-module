@@ -369,8 +369,10 @@ imaging-manifest/generate`):
   `md5(string_agg(... ORDER BY ...))`: `series_hash` ← instance `digest`s;
   `study_hash` ← `series_hash`es; `patient_hash` ← `study_hash`es;
   `dataset_hash` ← `patient_hash`es. `instance_hash` = `file.digest`.
-- **Scope filter:** only `recordset_type_name = 'Radiology Images'` and
-  `f.is_dicom_file = true`.
+- **Scope filter:** `IDC_IMAGING_PREDICATE`, i.e. **any DICOM**, whatever
+  recordset type holds it *(changed 2026-08-25 — was
+  `recordset_type_name = 'Radiology Images' and f.is_dicom_file = true`)*. See
+  [TRANSFER_DAEMON.md](TRANSFER_DAEMON.md) → *IDC content predicates*.
 - **Persistence:** writes the CSV to file storage, upserts a `file` +
   `downloadable_file`, and sets `transfer_idc.imaging_manifest_file_id`.
 
@@ -851,12 +853,18 @@ _(running log)_
 Pick back up here (nothing in flight, no half-done edits):
 1. ~~**Imaging manifest generator fixes**~~ — ✅ **done 2026-08-24**, with one
    correction and one addition:
-   - The hardcoded `'Radiology Images'` filter is **not a bug**. It is the IDC
-     scope rule: IDC is only assigned imaging it can house plus clinical data it
-     parses; histopathology goes to Aspera, and DICOM SEG/RTSTRUCT annotations
-     are bundled *inside* Radiology Images recordsets rather than living in an
-     `Image Annotations` recordset. Per-recordset destination assignment is the
-     real control. **Leave the filter alone.**
+   - The hardcoded `'Radiology Images'` filter was **not a bug** at the time: it
+     encoded the IDC scope rule — IDC is assigned only imaging it can house plus
+     clinical data it parses; histopathology goes to Aspera, and DICOM
+     SEG/RTSTRUCT annotations are bundled *inside* Radiology Images recordsets
+     rather than living in an `Image Annotations` recordset. Per-recordset
+     destination assignment is the real control.
+     - ⚠ **Superseded 2026-08-25.** A use case came up where **DICOM files can
+       be pathology slides**, which breaks the assumption that "Radiology Images
+       recordset" is a usable stand-in for "DICOM". The filter is now
+       `is_dicom_file` alone, and clinical narrowed to Clinical Data recordsets
+       to match. The scope rule itself is unchanged — it is just expressed as
+       the file property instead of a proxy for it.
    - The **INNER joins** on `file_patient`/`file_study`/`file_series`/
      `file_sop_common` were real, and worse than "drops files": the hash chain is
      computed over the same CTE, so a dropped file changes `dataset_hash` for the

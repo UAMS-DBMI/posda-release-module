@@ -129,11 +129,14 @@ should read `transfer_idc.base_gcs_url` directly.
 **`clinical/`** folder under `<dataset>/<version>/`. Both the daemon and the
 fan-out compute `<base_path>/<md5>` with no subfolder.
 
-**8. The fan-out does not separate imaging from clinical.**
-`transfer_preparation.sql` selects every file in the transfer's recordsets with
-no `is_dicom_file` split, so clinical and imaging files would land together in
-one flat namespace. It also predates non-DICOM files shipping at all
-(2026-07-30 reversed the earlier "links only" decision for clinical).
+**8. ✅ The fan-out does not separate imaging from clinical — replaced
+2026-08-25.** `transfer_preparation.sql` selects every file in the transfer's
+recordsets with no `is_dicom_file` split, so clinical and imaging files would
+land together in one flat namespace. It also predates non-DICOM files shipping
+at all (2026-07-30 reversed the earlier "links only" decision for clinical).
+Posda now runs its own equivalent, `_fan_out_transfer_files`, against
+`transfer_file` — see *IDC content predicates* below. The daemon's copy is dead
+and should be deleted along with its `transfer_idc_file` DDL (item 3).
 
 **9. ✅ Object paths and `relative_file_url` — settled 2026-08-25.** These had to
 be designed together or IDC gets manifests pointing at paths that do not exist.
@@ -166,9 +169,16 @@ row per file from `transfer_recordset -> recordset_release_file`, with
 `ON CONFLICT DO NOTHING` so it is re-runnable, and the daemon deliberately never
 writes those rows.
 
-So the design intent matches the suggestion below; **Posda simply never calls
-it.** The remaining work is to run it (retargeted at `transfer_file`, and split
-by `is_dicom_file` per item 8) inside the queue transition. Two options:
+So the design intent matches the suggestion below; **Posda simply never called
+it.** ✅ **Done 2026-08-25:** `_fan_out_transfer_files` runs inside the queue
+transition, in the same transaction as the status flip — the daemon reads a
+queued transfer with zero completed files as *failed*, so a crash between the
+two would look like a real failure rather than a retry. It is IDC-only, writes
+`status = 'pending'` explicitly (Posda's column has no default, and the daemon's
+producer filters on `pending`), and keeps `ON CONFLICT DO NOTHING` so a re-queue
+leaves the daemon's own `failed -> pending` reset in charge of what is retried.
+
+The options below are kept for the record; the first is what was built.
 
 - **Posda expands at queue time** — the `queued` transition also inserts
   `transfer_file` rows. Keeps the daemon dumb; makes the queue transition
@@ -321,10 +331,15 @@ is generated:
 IDC_TRANSFER_BUCKET = os.getenv("IDC_TRANSFER_BUCKET", "posda_submit")
 ```
 
-The default matches the daemon's existing convention. Note there is **no env
-documentation file in `oneposda`** — `FILE_STORAGE_PATH` and
-`FILE_STORAGE_ROOT_ID` are documented nowhere either, so this follows the
-existing convention rather than inventing a file.
+The default matches the daemon's existing convention.
+
+**Where an operator would set it:** `oneposda/api.env`, the env_file the
+`posda-api` compose service loads (alongside `database.env`, `common.env`,
+`posda.env`). It is **untracked** — local deploy config, not in git — and today
+holds only `API_WORKERS` and `API_PORT`. `FILE_STORAGE_PATH` and
+`FILE_STORAGE_ROOT_ID` are not in it either; they run on their code defaults. So
+there is no committed file to document the new variable in, and none was
+invented; a deploy that needs a non-default bucket adds a line to `api.env`.
 
 ⚠ **It does not by itself keep dev out of the production bucket** — an earlier
 draft of this note claimed it did, which is wrong. The bucket is *written into*
@@ -388,6 +403,79 @@ someone can blank it, and every path the daemon uploads is relative to it.
 visible before the click — but only once the manifests exist, since until then
 the missing manifest is the real cause and `base_gcs_url` is empty as a
 consequence, not a separate problem.
+
+## ✅ IDC content predicates — settled 2026-08-25
+
+What IDC can house, stated as file properties instead of as a proxy for them.
+Both live as module-level constants in `distribution.py` and drive **six** call
+sites, so the manifests, the queue gate and the fan-out cannot drift apart:
+
+```python
+IDC_IMAGING_PREDICATE  = "f.is_dicom_file is true"
+IDC_CLINICAL_PREDICATE = "f.is_dicom_file is not true and rt.recordset_type_name = 'Clinical Data'"
+```
+
+**What changed and why.** Imaging was `recordset_type_name = 'Radiology Images'
+AND is_dicom_file`; clinical was every non-DICOM file.
+
+- **Imaging is now any DICOM.** DICOM can be a pathology slide (raised
+  2026-08-25) or a SEG/RT annotation, not only radiology. The recordset type was
+  only ever standing in for "is it DICOM", and pathology DICOM breaks that
+  proxy. IDC ingests DICOM whatever it depicts.
+- **Clinical is now Clinical Data recordsets only.** "Not DICOM" was the same
+  kind of proxy in reverse, and it swept in anything non-DICOM that is not
+  clinical at all — a histopathology bundle bound for Aspera, say.
+- Both are null-safe (`is true` / `is not true`), so a file with a null
+  `is_dicom_file` cannot fall out of every count.
+
+**The third group.** The predicates are deliberately *not* complementary:
+together they partition a transfer's files into imaging, clinical, and
+**neither**. A file in the third group is a routing mistake, not a category — a
+non-DICOM file in a Histopathology / Image Annotations / Other recordset that
+someone pointed at IDC.
+
+**Decided: warn, do not block; skip, do not ship** *(2026-08-25)*. Queueing is
+still allowed — the rest of the transfer is valid, and the fix is to correct the
+recordset's destinations, not something to do mid-queue. But the fan-out skips
+those files rather than uploading them: IDC cannot interpret an object with no
+manifest row, and the upload cannot be recalled, whereas a skip is recoverable
+by fixing the routing and re-queueing. `_idc_manifest_state` returns
+`unlistable_files` and `unlistable_recordsets`, which `QueueTransferModal`
+surfaces so the skip is visible before the click.
+
+**The six sites**, all now reading the constants:
+
+| site | was |
+|---|---|
+| imaging manifest preflight | Radiology Images + DICOM |
+| imaging manifest files CTE | Radiology Images + DICOM |
+| `_idc_manifest_state` (which manifests are required) | both old predicates |
+| clinical manifest files query | any non-DICOM |
+| `_wp_precedence_block` | any non-DICOM — could block on a file the clinical manifest no longer carries |
+| `_fan_out_transfer_files` | new |
+
+The clinical manifest query and `_wp_precedence_block` had to gain a
+`recordset_type` join to use the predicate.
+
+**Verified** against the live DB in rolled-back transactions: the fan-out writes
+well-formed relative paths with `status = 'pending'`, a re-run inserts 0 rows,
+imaging + clinical + unlistable equals the file total on every IDC transfer, and
+— with an unlistable file forced onto a transfer, since the fixtures contain
+none — it is counted, named, and left without a `transfer_file` row.
+
+⚠ **Nothing transfers yet.** The daemon still reads `transfer_idc_file` and
+still treats the URL as absolute (change-list items 3, 6, 7), so these rows sit
+unused until those land.
+
+⚠ **Open: the cycle Transfer stage still groups by recordset type.**
+`manifestGroups()` in `TransferStage.tsx` labels rows Imaging / Clinical / "Not
+manifested for IDC" from `recordset_type_name` alone, which now contradicts the
+rule — a DICOM histopathology recordset feeds the imaging manifest but would be
+shown as not manifested. The UI cannot tell: `TransferRecordset` carries no
+DICOM counts. Fixing it properly means returning per-recordset DICOM /
+non-DICOM counts from the transfer-recordsets endpoint and grouping on those
+(a recordset can hold both, so the current one-group-per-recordset shape is an
+approximation regardless).
 
 ## The main question: one daemon or one per destination?
 

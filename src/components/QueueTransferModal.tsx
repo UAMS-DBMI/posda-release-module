@@ -47,6 +47,13 @@ export default function QueueTransferModal({
   const noBaseUrl =
     isIdc && !!settings.data && missing.length === 0 && !settings.data.base_gcs_url;
 
+  // Files that are neither DICOM nor Clinical Data cannot appear in any
+  // manifest, so they are skipped rather than shipped. Warn but do not block:
+  // the rest of the transfer is still valid, and the fix is to correct the
+  // recordset's destinations, which is not something to do mid-queue.
+  const unlistable = isIdc ? (settings.data?.unlistable_files ?? 0) : 0;
+  const unlistableFrom = settings.data?.unlistable_recordsets ?? [];
+
   const drifted = transfer?.membership_drifted ?? false;
   const waiting = isIdc && settings.isLoading;
   const blocked = drifted || missing.length > 0 || noBaseUrl || waiting;
@@ -135,6 +142,16 @@ export default function QueueTransferModal({
             </p>
           )}
         </div>
+      )}
+
+      {unlistable > 0 && (
+        <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+          ⚠ {unlistable} file{unlistable === 1 ? "" : "s"} in this transfer
+          {unlistableFrom.length > 0 ? ` (${unlistableFrom.join(", ")})` : ""} are
+          neither DICOM nor Clinical Data, so no manifest can list them.{" "}
+          <strong>They will not be sent.</strong> If they belong at IDC, fix the
+          recordset&apos;s destinations first.
+        </p>
       )}
 
       {!drifted && noBaseUrl && (
