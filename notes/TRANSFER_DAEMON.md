@@ -467,15 +467,22 @@ none — it is counted, named, and left without a `transfer_file` row.
 still treats the URL as absolute (change-list items 3, 6, 7), so these rows sit
 unused until those land.
 
-⚠ **Open: the cycle Transfer stage still groups by recordset type.**
-`manifestGroups()` in `TransferStage.tsx` labels rows Imaging / Clinical / "Not
-manifested for IDC" from `recordset_type_name` alone, which now contradicts the
-rule — a DICOM histopathology recordset feeds the imaging manifest but would be
-shown as not manifested. The UI cannot tell: `TransferRecordset` carries no
-DICOM counts. Fixing it properly means returning per-recordset DICOM /
-non-DICOM counts from the transfer-recordsets endpoint and grouping on those
-(a recordset can hold both, so the current one-group-per-recordset shape is an
-approximation regardless).
+✅ **The cycle Transfer stage groups by file counts — fixed 2026-08-26.**
+`manifestGroups()` used to label rows from `recordset_type_name` alone, which
+contradicted the rule: a DICOM histopathology recordset feeds the imaging
+manifest but was shown as "Not manifested for IDC".
+`GET /transfers/{id}/recordsets` now returns `imaging_files`,
+`clinical_files` and `unlistable_files` per recordset, computed from the same
+shared predicates, and the stage groups on those — showing what each recordset
+contributes to each manifest.
+
+A recordset carrying both DICOM and clinical files now appears in **both**
+groups, which the old one-group-per-recordset shape could not express.
+
+Verified live: transfer 3's *Image Annotations* recordset reports 5 imaging
+files (previously "not manifested"), and transfer 1's *Clinical Data* recordset
+reports 1 imaging file — it holds a DICOM file, so it feeds the imaging
+manifest, not the clinical one.
 
 ## The main question: one daemon or one per destination?
 

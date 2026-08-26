@@ -48,14 +48,23 @@ export type ReleaseTransfer = {
   membership_drifted: boolean;
 };
 
-/** One recordset release carried by a transfer. `recordset_type_name` is what
- *  the stage groups by to show which manifest each recordset feeds. */
+/** One recordset release carried by a transfer. The file counts come from the
+ *  API's IDC predicates, and are what the stage groups by -- a recordset can
+ *  feed both the imaging and clinical manifests, so this is not a category. */
 export type TransferRecordset = {
   recordset_release_id: number;
   recordset_id: number;
   recordset_name: string;
   release_number: number;
   recordset_type_name: string;
+  /** DICOM files, whatever the recordset type -- IDC ingests DICOM whether it
+   *  depicts radiology, pathology or an annotation. */
+  imaging_files: number;
+  /** Non-DICOM files in a Clinical Data recordset. */
+  clinical_files: number;
+  /** Files matching neither predicate: no manifest can list them, so the
+   *  transfer skips them. A routing mistake rather than a category. */
+  unlistable_files: number;
   retriever_manifest_file_id: number | null;
   downloadable_file_id: number | null;
   security_hash: string | null;

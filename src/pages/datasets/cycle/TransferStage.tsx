@@ -62,39 +62,56 @@ type ManifestGroup = {
   label: string;
   note?: string;
   rows: TransferRecordset[];
+  /** Files this recordset contributes to *this* group. */
+  count: (r: TransferRecordset) => number;
 };
 
 /** Which manifest each recordset feeds. IDC's manifests are **dataset-level** --
- *  one imaging manifest per transfer spanning every Radiology Images recordset,
- *  not one per recordset -- so the contents group by manifest rather than
- *  listing a target per row. Other destinations ship their recordsets directly.
- *  Keyed on `destination_abbr`, matching `transfers/Detail.tsx`. */
+ *  one imaging manifest per transfer spanning every recordset that carries
+ *  DICOM, not one per recordset -- so the contents group by manifest rather
+ *  than listing a target per row. Other destinations ship their recordsets
+ *  directly. Keyed on `destination_abbr`, matching `transfers/Detail.tsx`.
+ *
+ *  Grouped by the API's file counts, not by `recordset_type_name`. The type was
+ *  only ever a proxy for "is it DICOM", and pathology DICOM broke it -- a
+ *  histopathology recordset holding DICOM feeds the imaging manifest. A
+ *  recordset carrying both DICOM and clinical files feeds both manifests, so it
+ *  appears in both groups; the count says what it contributes to each. */
 function manifestGroups(
   rows: TransferRecordset[],
   destinationAbbr: string,
 ): ManifestGroup[] {
   if (destinationAbbr !== "idc") {
-    return rows.length > 0 ? [{ label: "Recordsets", rows }] : [];
+    return rows.length > 0
+      ? [{ label: "Recordsets", rows, count: (r) => r.imaging_files + r.clinical_files }]
+      : [];
   }
-
-  const imaging = rows.filter((r) => r.recordset_type_name === "Radiology Images");
-  const clinical = rows.filter((r) => r.recordset_type_name === "Clinical Data");
-  const rest = rows.filter(
-    (r) =>
-      r.recordset_type_name !== "Radiology Images" &&
-      r.recordset_type_name !== "Clinical Data",
-  );
 
   const groups: ManifestGroup[] = [];
-  if (imaging.length > 0) groups.push({ label: "Imaging manifest", rows: imaging });
-  if (clinical.length > 0) {
-    groups.push({ label: "Clinical manifest", rows: clinical });
+  const imaging = rows.filter((r) => r.imaging_files > 0);
+  const clinical = rows.filter((r) => r.clinical_files > 0);
+  const unlistable = rows.filter((r) => r.unlistable_files > 0);
+
+  if (imaging.length > 0) {
+    groups.push({
+      label: "Imaging manifest",
+      rows: imaging,
+      count: (r) => r.imaging_files,
+    });
   }
-  if (rest.length > 0) {
+  if (clinical.length > 0) {
+    groups.push({
+      label: "Clinical manifest",
+      rows: clinical,
+      count: (r) => r.clinical_files,
+    });
+  }
+  if (unlistable.length > 0) {
     groups.push({
       label: "Not manifested for IDC",
-      note: "check this recordset's destinations",
-      rows: rest,
+      note: "no manifest can list these, so they will not be sent — check this recordset's destinations",
+      rows: unlistable,
+      count: (r) => r.unlistable_files,
     });
   }
   return groups;
@@ -159,7 +176,9 @@ function TransferContents({
               >
                 <RecordsetLink id={r.recordset_id} name={r.recordset_name} />
                 <span className="shrink-0 text-xs" style={{ color: "var(--muted)" }}>
-                  v{r.release_number} · {r.recordset_type_name}
+                  v{r.release_number} · {r.recordset_type_name} ·{" "}
+                  {group.count(r).toLocaleString()} file
+                  {group.count(r) === 1 ? "" : "s"}
                 </span>
               </li>
             ))}
