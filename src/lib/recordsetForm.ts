@@ -420,7 +420,9 @@ export function recordsetEditPayload(values: RecordsetEditFormValues) {
     recordset_name: values.recordset_name.trim(),
     recordset_type_id: Number(values.recordset_type_id),
     license_id: Number(values.license_id),
-    ...(values.recordset_doi.trim() ? { recordset_doi: values.recordset_doi.trim() } : {}),
+    // Always sent, null when blank. Omitting it read as "leave the DOI alone",
+    // so clearing the field silently kept the old value.
+    recordset_doi: values.recordset_doi.trim() || null,
     active: values.active,
   };
 }
