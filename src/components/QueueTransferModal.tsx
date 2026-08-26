@@ -40,13 +40,21 @@ export default function QueueTransferModal({
   );
   const missing = isIdc ? (settings.data?.missing_manifests ?? []) : [];
 
+  // base_gcs_url is filled automatically when the dataset manifest is generated,
+  // but it stays editable so a package can be relocated -- and an edit can blank
+  // it. Every path the daemon uploads is relative to it. Only surfaced once the
+  // manifests exist, because before that the missing manifest is the real cause.
+  const noBaseUrl =
+    isIdc && !!settings.data && missing.length === 0 && !settings.data.base_gcs_url;
+
   const drifted = transfer?.membership_drifted ?? false;
   const waiting = isIdc && settings.isLoading;
-  const blocked = drifted || missing.length > 0 || waiting;
+  const blocked = drifted || missing.length > 0 || noBaseUrl || waiting;
 
   function blockedReason(): string | undefined {
     if (drifted) return "Sync this transfer's recordsets first";
     if (missing.length > 0) return "Generate this transfer's manifests first";
+    if (noBaseUrl) return "Set this transfer's bucket path first";
     return undefined;
   }
 
@@ -127,6 +135,14 @@ export default function QueueTransferModal({
             </p>
           )}
         </div>
+      )}
+
+      {!drifted && noBaseUrl && (
+        <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+          ⚠ This transfer has no destination bucket path. Set it under Manage
+          before queueing — every file the daemon uploads is written relative to
+          it.
+        </p>
       )}
     </Modal>
   );

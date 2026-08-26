@@ -312,10 +312,19 @@ move into `imaging/`.
     collection DOI, and the per-release one is the separate `dataset_version_doi`
     field still marked *needs adding*.
 
-### `IDC_TRANSFER_BUCKET`
+### `IDC_TRANSFER_BUCKET` — implemented 2026-08-25
 
-A new **Posda-side** environment variable supplying the bucket when
-`base_gcs_url` is generated.
+A **Posda-side** environment variable supplying the bucket when `base_gcs_url`
+is generated:
+
+```python
+IDC_TRANSFER_BUCKET = os.getenv("IDC_TRANSFER_BUCKET", "posda_submit")
+```
+
+The default matches the daemon's existing convention. Note there is **no env
+documentation file in `oneposda`** — `FILE_STORAGE_PATH` and
+`FILE_STORAGE_ROOT_ID` are documented nowhere either, so this follows the
+existing convention rather than inventing a file.
 
 ⚠ **It does not by itself keep dev out of the production bucket** — an earlier
 draft of this note claimed it did, which is wrong. The bucket is *written into*
@@ -350,12 +359,35 @@ Not in the repo. It is a **path** to a service-account JSON key:
 `main.go` also warns on the near-miss `GCS_KEY`, which suggests that has bitten
 someone.
 
-### When `base_gcs_url` is generated
+### ✅ When `base_gcs_url` is generated — implemented 2026-08-25
 
-**Suggestion: at transfer creation**, auto-filled rather than typed, and still
-editable in the Manage modal — the relocation case is the reason the field exists.
-The queue gate then only has to check it is present, alongside the manifest check
-`_idc_manifest_state` already does.
+**In `generate_idc_dataset_manifest`, not at transfer creation** — this reverses
+this note's original suggestion. The reason: the slug exists only in WordPress,
+so generating at creation would add a live WP fetch to a route that has none,
+and a WP outage would start failing IDC transfer *creation*. The dataset-manifest
+generator **already fetches that WP item and already writes `transfer_idc`**, and
+it now also has `release_number` in hand — so this costs no new call and adds no
+new failure mode. Ordering is guaranteed for free: `_idc_manifest_state` makes
+the dataset manifest required for every IDC transfer, so it always runs before
+queueing.
+
+```python
+slug = manifest_row["dataset_slug"]
+base_gcs_url = f"gs://{IDC_TRANSFER_BUCKET}/{slug}/v{release_number}" if slug else None
+```
+
+The upsert uses `coalesce(transfer_idc.base_gcs_url, excluded.base_gcs_url)` —
+**the existing value wins**, so it only ever fills a null and a relocation edited
+in the Manage modal survives a manifest regeneration.
+
+**Queue gate.** Queueing an IDC transfer now 422s `BASE_URL_REQUIRED` when
+`base_gcs_url` is empty, beside the existing `MANIFESTS_REQUIRED` check. This is
+not defensive padding: the field stays editable in `TransferSettingsForm`, so
+someone can blank it, and every path the daemon uploads is relative to it.
+`QueueTransferModal` blocks its button on the same condition so the failure is
+visible before the click — but only once the manifests exist, since until then
+the missing manifest is the real cause and `base_gcs_url` is empty as a
+consequence, not a separate problem.
 
 ## The main question: one daemon or one per destination?
 
