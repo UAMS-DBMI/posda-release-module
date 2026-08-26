@@ -10,6 +10,10 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { isCycleActive, useSetDraftStatus } from "@/lib/useCycle";
+import {
+  useExcludeRecordsetRelease,
+  useIncludeRecordsetRelease,
+} from "@/lib/datasetReleaseForm";
 import { useCycleContext } from "./CycleLayout";
 
 
@@ -29,6 +33,29 @@ export default function AssembleStage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const setStatus = useSetDraftStatus(datasetId);
+
+  // Membership is written here, at Assemble, rather than at Bundle -- so this
+  // is where a recordset is taken out of the release or put back. Carrying
+  // forward is the default and needs no action; removing is the exception.
+  const cycleReleaseId = cycle.dataset_release?.dataset_release_id;
+  const exclude = useExcludeRecordsetRelease(cycleReleaseId, datasetId);
+  const include = useIncludeRecordsetRelease(cycleReleaseId, datasetId);
+
+  function excludeFromRelease(releaseId: number, name: string) {
+    exclude.mutate(releaseId, {
+      onSuccess: () => toastSuccess(addToast, `${name} removed from this release.`),
+      onError: (e) =>
+        toastError(addToast, e instanceof Error ? e.message : "Could not remove it."),
+    });
+  }
+
+  function includeInRelease(releaseId: number, name: string) {
+    include.mutate(releaseId, {
+      onSuccess: () => toastSuccess(addToast, `${name} added back to this release.`),
+      onError: (e) =>
+        toastError(addToast, e instanceof Error ? e.message : "Could not add it."),
+    });
+  }
 
   function setDraftStatus(draftId: number, status: "ready" | "open") {
     setStatus.mutate(
@@ -75,7 +102,7 @@ export default function AssembleStage() {
       )}
 
       <ExpandableTable
-        headers={["Recordset", "Draft", "Status", "Files", "Frozen At", ""]}
+        headers={["Recordset", "Draft", "Status", "Files", "Frozen At", "In Release", ""]}
         rows={cycle.recordsets}
         getRowKey={(r) => r.recordset_id}
         canExpand={(r) => r.open_draft?.recordset_draft_id != null}
@@ -96,6 +123,10 @@ export default function AssembleStage() {
               const neverReleased = r.latest_release === null;
               const isReady = status === "ready";
               const hasFiles = (fileCount ?? 0) > 0;
+              const member = r.release_in_cycle;
+              // A draft member has no release_number yet -- it is claimed at
+              // publish, so an abandoned draft leaves no gap in the numbering.
+              const memberIsDraft = member?.release_status === "draft";
 
               function openManage(tab: ManageTab) {
                 if (draftId == null) return;
@@ -138,6 +169,24 @@ export default function AssembleStage() {
                       )}
                     </td>
                     <td className="px-2 py-1">
+                      {!cycleActive ? (
+                        "\u2014"
+                      ) : member ? (
+                        <div>
+                          <div>{memberIsDraft ? "next version" : `v${member.release_number}`}</div>
+                          {!memberIsDraft && (
+                            <div className="text-xs" style={{ color: "var(--muted)" }}>
+                              carried forward
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-amber-600 dark:text-amber-400">
+                          not in this release
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1">
                       {draftId != null ? (
                         <div className="flex items-center justify-end gap-2">
                           {isReady ? (
@@ -165,7 +214,44 @@ export default function AssembleStage() {
                           </Button>
                         </div>
                       ) : cycleActive ? (
-                        <div className="flex justify-end">
+                        <div className="flex items-center justify-end gap-2">
+                          {member ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Ship this release without this recordset"
+                              onClick={() =>
+                                excludeFromRelease(
+                                  member.recordset_release_id,
+                                  r.recordset_name,
+                                )
+                              }
+                              loading={
+                                exclude.isPending &&
+                                exclude.variables === member.recordset_release_id
+                              }
+                            >
+                              Remove
+                            </Button>
+                          ) : r.latest_release ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title={`Carry v${r.latest_release.release_number} forward into this release`}
+                              onClick={() =>
+                                includeInRelease(
+                                  r.latest_release!.recordset_release_id,
+                                  r.recordset_name,
+                                )
+                              }
+                              loading={
+                                include.isPending &&
+                                include.variables === r.latest_release.recordset_release_id
+                              }
+                            >
+                              Add Back
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             onClick={() =>

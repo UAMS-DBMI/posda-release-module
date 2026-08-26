@@ -57,6 +57,16 @@ export type CycleRecordset = {
    *  draft publishes -- same draft, same release, same membership row -- which
    *  is what keeps Verify from emptying out the moment its work completes. */
   worked_this_cycle: boolean;
+  /** The version of this recordset the dataset release currently carries --
+   *  the draft release while it is being worked, the carried-forward published
+   *  one otherwise, and null when the recordset is not in the release at all.
+   *  Distinct from `in_dataset_release`, which only says whether a *finished*
+   *  version is in. */
+  release_in_cycle: {
+    recordset_release_id: number;
+    release_number: number | null;
+    release_status: string;
+  } | null;
   /** Highest dataset release number any of this recordset's releases were
    *  ever bundled into. Distinct from in_dataset_release, which only
    *  checks the dataset's *current* latest release -- can be ahead of or

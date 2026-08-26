@@ -1342,8 +1342,8 @@ Schema applied to dev 2026-08-26. Steps, in the order they can safely land:
 |---|---|---|
 | **B1** | `release_status = 'released'` filters on every membership reader | ✅ done 2026-08-26 |
 | **B3+B4+B5** | Assemble creates the draft release · publish finalizes · abandon cleans up · `worked_this_cycle` | ✅ done 2026-08-26 |
-| **B2** | cycle start copies membership forward | after B3 |
-| **B6** | UI: Assemble version display + remove action, Bundle as review/adjust | last |
+| **B2** | cycle start copies membership forward | ✅ done 2026-08-26 |
+| **B6** | UI: Assemble version display + remove action | ✅ done 2026-08-26 (Bundle copy still to revisit) |
 
 **Why B3/B4/B5 cannot be split:** publish must invert the moment Assemble starts
 creating releases, or every draft yields two. And `DELETE /recordsets/drafts/{id}`
@@ -1389,6 +1389,57 @@ stayed gapless — the two abandoned releases never claimed a number.
 - **The legacy publish path produced a `draft` release**: its insert never named
   `release_status`, which now defaults to `'draft'`. Caught by testing, not
   inspection — the row looked right until its status was read.
+
+### ✅ B6 — membership is managed at Assemble (2026-08-26)
+
+The cycle payload gained **`release_in_cycle`** per recordset: which version the
+dataset release actually carries, draft or released, or null when the recordset
+is in no version at all. `in_dataset_release` stays a boolean about *finished*
+versions, and B1 made the Bundle list released-only — so neither could answer
+"what is this recordset contributing right now".
+
+⚠ The CTE uses `distinct on (recordset_id)`: the membership PK is on
+`(dataset_release_id, recordset_release_id)`, so nothing structurally prevents
+two versions of one recordset being in a release, and a second row would
+duplicate the recordset in the payload.
+
+Assemble now shows an **In Release** column — *next version* for a draft member,
+*vN / carried forward* for a released one, *not in this release* when absent —
+and offers **Remove** / **Add Back**, reusing the existing
+`recordsets/add` and `recordsets/remove` endpoints. Verified live: removing a
+member emptied `release_in_cycle`, adding it back restored it.
+
+That column also partly covers the restore-on-abandon caveat above: the carried
+version is now visible, so a swap from v1 to v2 is at least legible rather than
+silent.
+
+**Still open:** Bundle's copy still reads as *choose what to include*, when
+membership now arrives already populated. Its behaviour is correct — only the
+framing is stale.
+
+### ✅ B2 — cycle start seeds membership (2026-08-26)
+
+`create_dataset_release` does two extra things, **only when creating a draft**
+(a release created directly as `released` is not a cycle opening):
+
+1. **Copies the previous release's link rows** — highest-numbered non-retracted
+   release, released members only. No `recordset_release` is created; the rows
+   point at the same published releases. Carry-forward therefore costs no action.
+2. **Adopts orphan draft releases** — any recordset in the dataset with an open
+   draft whose release is still `draft` and belongs to no dataset release.
+   Those come from drafts started on the recordset page with no cycle open.
+   Evicts the carried-forward row for that recordset first.
+
+**Verified live** on dataset 1: a draft created on recordset 3 with no cycle open
+landed in no membership; opening a cycle then carried rs1/rs2/rs4 forward and
+replaced rs3's row with the adopted draft release.
+
+⚠ **Restore-on-abandon picks the latest released version, which need not be the
+one that was evicted.** In the same test, abandoning restored recordset 3 to its
+**v2**, while the cycle had carried forward its **v1**. That follows from the
+decision (nothing records what was displaced, so restore means "latest
+released"), but it can leave a cycle on a *newer* version than it opened with —
+worth surfacing in the UI rather than leaving it to be discovered.
 
 ### ✅ B1 — membership readers filtered (2026-08-26)
 
