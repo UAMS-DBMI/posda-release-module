@@ -57,6 +57,16 @@ export type CycleRecordset = {
    *  draft publishes -- same draft, same release, same membership row -- which
    *  is what keeps Verify from emptying out the moment its work completes. */
   worked_this_cycle: boolean;
+  /** The draft this cycle published into the release's version, once it has
+   *  been published. `open_draft` goes null at that moment -- a lot of logic
+   *  reads that as "nothing left to work on" -- so this carries the work that
+   *  was done, for display only. */
+  published_draft: {
+    recordset_draft_id: number;
+    draft_name: string;
+    draft_status: string;
+    file_count: number;
+  } | null;
   /** The version of this recordset the dataset release currently carries --
    *  the draft release while it is being worked, the carried-forward published
    *  one otherwise, and null when the recordset is not in the release at all.

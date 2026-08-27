@@ -9,7 +9,11 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
-import { isCycleActive, useSetDraftStatus } from "@/lib/useCycle";
+import {
+  isCycleActive,
+  isCycleInProgress,
+  useSetDraftStatus,
+} from "@/lib/useCycle";
 import {
   useExcludeRecordsetRelease,
   useIncludeRecordsetRelease,
@@ -88,21 +92,30 @@ export default function AssembleStage() {
   }
 
   const cycleActive = isCycleActive(cycle);
+  // "Active" means the release is still a draft, i.e. composition is open.
+  // A released cycle is still in progress -- it just cannot take new drafts.
+  const cycleInProgress = isCycleInProgress(cycle);
+  // The release this page is pinned to -- what "last bundled" is compared
+  // against, so the line describes this release rather than the dataset's
+  // history in general.
+  const viewedRelease = cycle.dataset_release?.release_number ?? null;
 
   return (
     <div className="space-y-3">
       {!cycleActive && (
         <p className="text-sm" style={{ color: "var(--muted)" }}>
-          No cycle is currently in progress
-          {cycle.dataset_release
-            ? ` — last release was v${cycle.dataset_release.release_number} (${cycle.dataset_release.release_status})`
-            : ""}
-          . Start one from the banner above before assembling drafts.
+          {cycleInProgress && cycle.dataset_release
+            ? `v${cycle.dataset_release.release_number} is ${cycle.dataset_release.release_status} — its contents are fixed. Start the next cycle to assemble new drafts.`
+            : `No cycle is currently in progress${
+                cycle.dataset_release
+                  ? ` — last release was v${cycle.dataset_release.release_number} (${cycle.dataset_release.release_status})`
+                  : ""
+              }. Start one from the banner above before assembling drafts.`}
         </p>
       )}
 
       <ExpandableTable
-        headers={["Recordset", "Draft", "Status", "Files", "Frozen At", "In Release", ""]}
+        headers={["Recordset", "Draft", "Status", "Files", "Version", ""]}
         rows={cycle.recordsets}
         getRowKey={(r) => r.recordset_id}
         canExpand={(r) => r.open_draft?.recordset_draft_id != null}
@@ -117,13 +130,20 @@ export default function AssembleStage() {
         renderCells={(r) => {
               const draft = r.open_draft;
               const draftId = draft?.recordset_draft_id ?? null;
-              const status = draft?.draft_status ?? null;
-              const fileCount = draft?.file_count ?? null;
+              // Status and files describe the work, which outlives the open
+              // draft: once published, open_draft is null but the draft row --
+              // and its file list -- are still there. Actions stay keyed on
+              // draftId, so a published draft displays without becoming
+              // actionable.
+              const shown = draft ?? r.published_draft;
+              const status = shown?.draft_status ?? null;
+              const fileCount = shown?.file_count ?? null;
               const frozen = r.latest_release ? `v${r.latest_release.release_number}` : null;
               const neverReleased = r.latest_release === null;
               const isReady = status === "ready";
               const hasFiles = (fileCount ?? 0) > 0;
               const member = r.release_in_cycle;
+              const latestReleaseId = r.latest_release?.recordset_release_id ?? null;
               // A draft member has no release_number yet -- it is claimed at
               // publish, so an abandoned draft leaves no gap in the numbering.
               const memberIsDraft = member?.release_status === "draft";
@@ -141,6 +161,17 @@ export default function AssembleStage() {
                     <td className="px-2 py-1">
                       {draft?.draft_name ? (
                         draft.draft_name
+                      ) : r.published_draft ? (
+                        <div>
+                          <div>{r.published_draft.draft_name}</div>
+                          <div className="text-xs" style={{ color: "var(--muted)" }}>
+                            published this cycle
+                          </div>
+                        </div>
+                      ) : r.worked_this_cycle ? (
+                        <span className="text-xs" style={{ color: "var(--muted)" }}>
+                          published this cycle
+                        </span>
                       ) : neverReleased ? (
                         <div>
                           <StatusBadge status="never-released" label="Never released" variant="warning" />
@@ -160,31 +191,46 @@ export default function AssembleStage() {
                     <td className="px-2 py-1">
                       {fileCount == null ? "—" : fileCount.toLocaleString()}
                     </td>
+                    {/* The recordset's latest published version, plus a note
+                        only when the release disagrees with it. What the
+                        release carries is otherwise derivable -- a draft means
+                        the next version, no draft means carrying this one
+                        forward -- so stating it every row was restatement. The
+                        two cases that are not derivable get a line. */}
                     <td className="px-2 py-1">
                       <div>{frozen ?? "—"}</div>
+                      {/* Read against the release being viewed. The raw value
+                          is the highest dataset release holding any published
+                          version of this recordset, so on a pinned older
+                          release it can name a *newer* one -- which reads as
+                          history unless it says otherwise. */}
                       {r.last_bundled_dataset_release_number != null && (
                         <div className="text-xs" style={{ color: "var(--muted)" }}>
-                          last bundled: dataset v{r.last_bundled_dataset_release_number}
+                          {viewedRelease != null &&
+                          r.last_bundled_dataset_release_number === viewedRelease
+                            ? "in this release"
+                            : viewedRelease != null &&
+                                r.last_bundled_dataset_release_number > viewedRelease
+                              ? `also in dataset v${r.last_bundled_dataset_release_number}`
+                              : `last bundled: dataset v${r.last_bundled_dataset_release_number}`}
                         </div>
                       )}
-                    </td>
-                    <td className="px-2 py-1">
-                      {!cycleActive ? (
-                        "\u2014"
-                      ) : member ? (
-                        <div>
-                          <div>{memberIsDraft ? "next version" : `v${member.release_number}`}</div>
-                          {!memberIsDraft && (
-                            <div className="text-xs" style={{ color: "var(--muted)" }}>
-                              carried forward
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-amber-600 dark:text-amber-400">
+                      {!member && (
+                        <div className="text-xs text-amber-600 dark:text-amber-400">
                           not in this release
-                        </span>
+                        </div>
                       )}
+                      {/* A draft member is the expected case -- it becomes the
+                          next version. Only a *published* version that is not
+                          the latest is worth calling out. */}
+                      {member &&
+                        !memberIsDraft &&
+                        latestReleaseId !== null &&
+                        member.recordset_release_id !== latestReleaseId && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400">
+                            release carries v{member.release_number}
+                          </div>
+                        )}
                     </td>
                     <td className="px-2 py-1">
                       {draftId != null ? (
