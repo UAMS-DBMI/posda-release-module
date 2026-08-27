@@ -75,6 +75,13 @@ export default function VerifyStage() {
               const draftId = draft?.recordset_draft_id ?? null;
               const qc = r.qc;
               const hasReviews = qc.reviews_total > 0;
+              // A review samples the draft's files, so it cannot be drawn until
+              // that list is settled. The API refuses outright; disable here so
+              // it reads as a sequence rather than a rejection.
+              const draftReady = draft?.draft_status === "ready";
+              const notReadyReason = draftReady
+                ? undefined
+                : "Mark this draft ready in Assemble first — QC samples its files";
               // No DICOM series to sample -> "Add Review" creates a non_dicom review.
               const nonDicomOnly =
                 !!draft?.has_non_dicom && !draft?.has_dicom;
@@ -123,6 +130,8 @@ export default function VerifyStage() {
                             <Button
                               size="sm"
                               variant="ghost"
+                              disabled={!draftReady}
+                              title={notReadyReason}
                               onClick={() =>
                                 setCreateFor({
                                   draftId,
@@ -136,6 +145,8 @@ export default function VerifyStage() {
                           ) : (
                             <Button
                               size="sm"
+                              disabled={!draftReady}
+                              title={notReadyReason}
                               onClick={() =>
                                 setCreateFor({
                                   draftId,

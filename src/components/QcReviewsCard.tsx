@@ -12,10 +12,15 @@ import { CardHeader, CardTitle } from "@/components/ui/Card";
 export default function QcReviewsCard({
   draftId,
   datasetId,
+  draftStatus,
 }: {
   draftId: string | undefined;
   datasetId: string | undefined;
+  /** The draft's status. A review samples its files, so one can only be
+   *  created once the list is settled -- the API refuses otherwise. */
+  draftStatus?: string;
 }) {
+  const draftReady = draftStatus === "ready";
   const [showCreate, setShowCreate] = useState(false);
   const [manageReviewId, setManageReviewId] = useState<number | null>(null);
 
@@ -23,7 +28,16 @@ export default function QcReviewsCard({
     <>
       <CardHeader className="mt-6">
         <CardTitle>QC Reviews</CardTitle>
-        <Button size="sm" onClick={() => setShowCreate(true)} disabled={!draftId}>
+        <Button
+          size="sm"
+          onClick={() => setShowCreate(true)}
+          disabled={!draftId || !draftReady}
+          title={
+            draftReady
+              ? undefined
+              : "Mark this draft ready first — QC samples its files"
+          }
+        >
           New Review
         </Button>
       </CardHeader>

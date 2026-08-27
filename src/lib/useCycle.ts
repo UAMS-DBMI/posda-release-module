@@ -430,7 +430,12 @@ function verifyStage(cycle: DatasetCycle): StageSummary {
   // A draft waiting on its first review is work to do, not a stage to sit
   // behind. Reporting `pending` here meant nextAction() found no active stage
   // anywhere and concluded the cycle was finished -- with drafts still open.
-  return cycle.recordsets.some((r) => r.open_draft !== null)
+  //
+  // But only once a draft is *ready*: QC samples the file list, so it cannot
+  // start while the draft is still being assembled -- and the API refuses. The
+  // stage state and the gate read the same condition, so Verify never claims to
+  // be underway while its only action is disabled.
+  return cycle.recordsets.some((r) => r.open_draft?.draft_status === "ready")
     ? { state: "active", detail: "No QC yet" }
     : { state: "pending", detail: "No QC yet" };
 }
