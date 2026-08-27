@@ -138,6 +138,10 @@ export function useCreateQcReview(draftId: string | undefined) {
       // A new review creates its initial assignment; refresh the slice queue
       // (the Verify expand's inline assignments) too.
       void queryClient.invalidateQueries({ queryKey: ["qc-assignments"] });
+      // The cycle payload embeds a QC rollup per recordset, which drives the
+      // Verify summary, the publish gate and the next-action banner. Any change
+      // to a review or its units moves those numbers.
+      void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
     },
   });
 }
@@ -165,6 +169,10 @@ export function useUpdateQcReview(reviewId: string | undefined) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["qc-review"] });
       void queryClient.invalidateQueries({ queryKey: ["qc-reviews"] });
+      // The cycle payload embeds a QC rollup per recordset, which drives the
+      // Verify summary, the publish gate and the next-action banner. Any change
+      // to a review or its units moves those numbers.
+      void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
     },
   });
 }
@@ -181,6 +189,10 @@ export function useCancelQcReview(reviewId: string | undefined) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["qc-review"] });
       void queryClient.invalidateQueries({ queryKey: ["qc-reviews"] });
+      // The cycle payload embeds a QC rollup per recordset, which drives the
+      // Verify summary, the publish gate and the next-action banner. Any change
+      // to a review or its units moves those numbers.
+      void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
     },
   });
 }
@@ -196,6 +208,10 @@ export function useCloneQcReview(reviewId: string | undefined) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["qc-reviews"] });
+      // The cycle payload embeds a QC rollup per recordset, which drives the
+      // Verify summary, the publish gate and the next-action banner. Any change
+      // to a review or its units moves those numbers.
+      void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
     },
   });
 }
@@ -207,6 +223,9 @@ function useReviewInvalidation(reviewId: string | undefined) {
   return () => {
     void queryClient.invalidateQueries({ queryKey: qcKeys.review(reviewId ?? "") });
     void queryClient.invalidateQueries({ queryKey: ["qc-assignments"] });
+    // Approving or releasing units moves the cycle's QC rollup, which the
+    // Verify summary, the publish gate and the banner all read.
+    void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
   };
 }
 

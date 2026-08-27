@@ -62,6 +62,13 @@ export function useSaveRecordsetDestination(recordsetId: string | number | undef
       // each recordset's destinations, so it goes stale too. Invalidate every
       // dataset-cycle query rather than threading datasetId through here.
       void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
+      // A release's destinations are aggregated from its recordsets' config,
+      // and transfer drift detection joins recordset_destination to work out
+      // what a transfer *should* carry -- so both go stale the moment this
+      // changes. Without these, the Transfer stage keeps showing pre-edit
+      // destinations and drift warnings until the page is reloaded.
+      void queryClient.invalidateQueries({ queryKey: ["release-destinations"] });
+      void queryClient.invalidateQueries({ queryKey: ["release-transfers"] });
     },
   });
 }
@@ -90,6 +97,13 @@ export function useDeleteRecordsetDestination() {
         queryKey: ["recordset-destinations", recordsetId],
       });
       void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
+      // A release's destinations are aggregated from its recordsets' config,
+      // and transfer drift detection joins recordset_destination to work out
+      // what a transfer *should* carry -- so both go stale the moment this
+      // changes. Without these, the Transfer stage keeps showing pre-edit
+      // destinations and drift warnings until the page is reloaded.
+      void queryClient.invalidateQueries({ queryKey: ["release-destinations"] });
+      void queryClient.invalidateQueries({ queryKey: ["release-transfers"] });
     },
   });
 }
