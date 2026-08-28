@@ -17,6 +17,7 @@ import { useRecordsetReleases } from "@/lib/useRecordsetReleases";
 import { useUsers } from "@/lib/useUsers";
 import {
   isCycleActive,
+  isCycleInProgress,
   isPublishable,
   unbundledRecordsets,
   type CycleRecordset,
@@ -142,6 +143,9 @@ export default function BundleStage() {
   const release = cycle.dataset_release;
   const releaseId = release?.dataset_release_id;
   const cycleActive = isCycleActive(cycle);
+  // "Active" means the release is still a draft. A released one is still
+  // mid-cycle -- it just cannot be composed any further.
+  const cycleInProgress = isCycleInProgress(cycle);
   const unbundled = unbundledRecordsets(cycle);
 
   const bundled = useBundledRecordsets(releaseId);
@@ -210,8 +214,9 @@ export default function BundleStage() {
 
       {!cycleActive && (
         <p className="text-sm" style={{ color: "var(--muted)" }}>
-          No cycle in progress — start one from the banner above to compose a
-          release.
+          {cycleInProgress && release
+            ? `v${release.release_number} is ${release.release_status} — its contents are fixed. Start the next cycle to compose another release.`
+            : "No cycle in progress — start one from the banner above to compose a release."}
         </p>
       )}
 
@@ -232,7 +237,7 @@ export default function BundleStage() {
       )}
 
       <ExpandableTable
-        headers={["Recordset", "Frozen At", "Contributing", "In Release", ""]}
+        headers={["Recordset", "In Release", ""]}
         rows={cycle.recordsets}
         getRowKey={(r) => r.recordset_id}
         expandLabel="versions"
@@ -269,47 +274,32 @@ export default function BundleStage() {
               <td className="px-2 py-1">
                 <RecordsetLink id={r.recordset_id} name={r.recordset_name} />
               </td>
-              <td className="px-2 py-1">
-                {latest ? `v${latest.release_number}` : "—"}
-              </td>
+              {/* Bundle is about the contents of the release, so lead with the
+                  version it will ship. The recordset's own latest is only worth
+                  naming when it differs -- that is the prompt to open the
+                  version picker. A separate Yes/No column said nothing this one
+                  does not: "Yes" was exactly "this cell has a version". */}
               <td className="px-2 py-1">
                 {inRelease ? (
-                  <span className="flex items-center gap-2">
-                    {memberIsDraft ? "next version" : `v${inRelease.release_number}`}
+                  <div>
+                    <div>
+                      {memberIsDraft ? "next version" : `v${inRelease.release_number}`}
+                    </div>
                     {memberIsDraft && (
-                      <span
-                        className="text-xs"
-                        style={{ color: "var(--muted)" }}
-                        title="Still a draft -- publish it before finalizing"
-                      >
-                        unpublished
-                      </span>
+                      <div className="text-xs text-amber-600 dark:text-amber-400">
+                        unpublished — publish before finalizing
+                      </div>
                     )}
-                    {behind && (
-                      <span
-                        className="text-xs"
-                        style={{ color: "var(--muted)" }}
-                        title="An older version than this recordset's latest release"
-                      >
-                        carried forward
-                      </span>
+                    {behind && latest && (
+                      <div className="text-xs" style={{ color: "var(--muted)" }}>
+                        carried forward — latest is v{latest.release_number}
+                      </div>
                     )}
+                  </div>
+                ) : (
+                  <span className="text-xs text-amber-600 dark:text-amber-400">
+                    not included
                   </span>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td className="px-2 py-1">
-                {inRelease ? (
-                  <StatusBadge
-                    status="bundled"
-                    variant={memberIsDraft ? "warning" : "success"}
-                    label={memberIsDraft ? "Draft" : "Yes"}
-                  />
-                ) : latest ? (
-                  <StatusBadge status="unbundled" variant="warning" label="No" />
-                ) : (
-                  <span style={{ color: "var(--muted)" }}>—</span>
                 )}
               </td>
               <td className="px-2 py-1">
