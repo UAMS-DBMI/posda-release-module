@@ -115,18 +115,18 @@ It is a thin client over the PAPI (FastAPI) backend that lives in the sibling
 
 ### ⭐ Main data-model DDL script
 
-**`../oneposda/database/migrations/posda_files/add_dataset_module_tables.sql`**
+**`../oneposda/database/migrations/posda_files/0047_add_dataset_module_tables.sql`**
 is the **canonical / source-of-truth DDL** for this module's data model. When
 planning features or reasoning about entities, columns, FKs, enums, or status
 values, consult this script first. Keep it in sync — new tables/columns for this
 module land here.
 
 Its companion teardown script is
-**`../oneposda/database/migrations/posda_files/drop_dataset_module_tables.sql`**,
+**`../oneposda/database/migrations/posda_files/manual/drop_dataset_module_tables.sql`**,
 which `DROP TABLE ... CASCADE`s every table in the model in FK-safe order.
 
 Seed/test data lives in
-**`../oneposda/database/migrations/posda_files/create_dataset_module_test_data.sql`**
+**`../oneposda/database/migrations/posda_files/manual/create_dataset_module_test_data.sql`**
 — a single `BEGIN;` transaction that populates lookups then sample
 datasets/recordsets/releases/etc., and `setval`s each identity sequence after
 explicit-id inserts. Use it to stand up a working dataset for local dev.

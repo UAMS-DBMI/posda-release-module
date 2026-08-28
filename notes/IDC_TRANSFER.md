@@ -84,7 +84,7 @@ by hand.
   `transfer_idc` (siblings: `transfer_nbia`, `transfer_aspera`, `transfer_gc`,
   `transfer_wp`, `transfer_recordset`), plus the shared `transfer_file` for
   per-file progress. DDL source of truth:
-  `../oneposda/database/migrations/posda_files/add_dataset_module_tables.sql`.
+  `../oneposda/database/migrations/posda_files/0047_add_dataset_module_tables.sql`.
 - Backend: `../oneposda/posda/fastapi/app/papi/routes/distribution.py` —
   `transfers/{id}` CRUD + per-destination subresources, including `idc`, plus
   manifest-generation endpoints.
