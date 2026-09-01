@@ -375,7 +375,31 @@ export default function TransferStage() {
                 )}
               </td>
               <td className="px-2 py-1">
-                {t ? <StatusBadge status={t.transfer_status} /> : "—"}
+                {t ? (
+                  <div>
+                    <StatusBadge status={t.transfer_status} />
+                    {t.file_count > 0 && (
+                      <div
+                        className="mt-0.5 text-xs"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        {/* Once every file is done the ratio is noise, so show
+                            the total alone. While work is outstanding the split
+                            is the whole point. */}
+                        {t.completed_file_count === t.file_count
+                          ? `${t.file_count.toLocaleString()} files`
+                          : `${t.completed_file_count.toLocaleString()} / ${t.file_count.toLocaleString()} files`}
+                      </div>
+                    )}
+                    {t.failed_file_count > 0 && (
+                      <div className="text-xs text-red-600 dark:text-red-400">
+                        {t.failed_file_count.toLocaleString()} failed
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  "—"
+                )}
               </td>
               <td className="px-2 py-1">
                 <div className="flex items-center justify-end gap-2">

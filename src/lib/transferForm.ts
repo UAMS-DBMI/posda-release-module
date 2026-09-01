@@ -46,6 +46,11 @@ export type ReleaseTransfer = {
    *  version of a recordset is bundled leaves both counts equal while pointing
    *  the transfer at a superseded release. `useSyncTransferRecordsets` repairs it. */
   membership_drifted: boolean;
+  /** Files the transfer will move, materialized at the queue transition. A
+   *  draft transfer has none yet, so all three are 0 until it is queued. */
+  file_count: number;
+  completed_file_count: number;
+  failed_file_count: number;
 };
 
 /** One recordset release carried by a transfer. The file counts come from the
@@ -97,6 +102,12 @@ export function useReleaseDestinations(releaseId: number | undefined) {
   });
 }
 
+/** How often to re-poll while the daemon is working. Long enough that the file
+ *  counts — which aggregate over `transfer_file`, potentially ~500k rows for a
+ *  large transfer — are not recounted more often than the daemon flushes them,
+ *  which it does in batches rather than per file. */
+const TRANSFER_POLL_MS = 5000;
+
 /** Transfers that actually exist for the release. Fetched separately from the
  *  cycle payload, whose `CycleTransfer` has no `destination_id` — which the
  *  stage needs to line transfers up against the destination rows. */
@@ -110,6 +121,17 @@ export function useReleaseTransfers(releaseId: number | undefined) {
       );
       return json.data;
     },
+    // Poll only while something is actually in flight, and stop on its own once
+    // everything reaches a terminal status. `queued` counts as in flight: the
+    // daemon may not have claimed it yet, and the claim is precisely what we
+    // are waiting to see. A page of drafts never polls at all.
+    refetchInterval: (query) =>
+      query.state.data?.some(
+        (t) =>
+          t.transfer_status === "queued" || t.transfer_status === "in_progress",
+      )
+        ? TRANSFER_POLL_MS
+        : false,
   });
 }
 

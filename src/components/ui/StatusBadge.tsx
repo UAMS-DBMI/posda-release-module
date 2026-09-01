@@ -49,6 +49,12 @@ const statusVariant: Record<string, BadgeVariant> = {
   released: "info",
   live: "success",
   retracted: "danger",
+  // transfer lifecycle. `draft` and `in_progress` are already covered above;
+  // without these three a finished transfer rendered grey, the same as a
+  // draft -- the one status you most want to tell apart at a glance.
+  queued: "info",
+  success: "success",
+  failed: "danger",
 };
 
 type StatusBadgeProps = {
