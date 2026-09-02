@@ -37,12 +37,11 @@ export default function RecordsetCreate() {
     emptyRecordsetForm(),
   );
 
-  const { recordsetTypes, licenses, isLoading: isLoadingLookups } =
-    useRecordsetLookups();
+  const { recordsetTypes, isLoading: isLoadingLookups } = useRecordsetLookups();
   const { datasets, isLoading: isLoadingDatasets } = useDatasetOptions();
   const isLoadingOptions = isLoadingLookups || isLoadingDatasets;
 
-  const fields = recordsetFormFields({ recordsetTypes, licenses, datasets });
+  const fields = recordsetFormFields({ recordsetTypes, datasets });
 
   useEffect(() => {
     const datasetIdFromQuery = searchParams.get("dataset_id");
@@ -121,13 +120,7 @@ export default function RecordsetCreate() {
       <SectionCard>
         {isLoadingOptions && (
           <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">
-            Loading dataset and license options...
-          </p>
-        )}
-
-        {!isLoadingOptions && licenses.length === 0 && (
-          <p className="mb-4 text-sm text-red-600 dark:text-red-400">
-            Could not load licenses from the database.
+            Loading dataset and type options...
           </p>
         )}
 

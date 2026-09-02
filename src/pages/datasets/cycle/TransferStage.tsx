@@ -49,8 +49,6 @@ function buildRows(
       destination_id: t.destination_id,
       destination_name: t.destination_name,
       destination_abbr: t.destination_abbr,
-      transfer_mode_id: t.transfer_mode_id,
-      transfer_mode_name: t.transfer_mode_name,
       transfer: t,
       configured: false,
     });

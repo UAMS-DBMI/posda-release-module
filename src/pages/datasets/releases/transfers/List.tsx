@@ -15,7 +15,6 @@ type Transfer = {
   destination_name: string;
   destination_abbr: string;
   transfer_name: string;
-  transfer_mode_name: string;
   transfer_status: string;
   transfer_notes: string | null;
 };
@@ -24,8 +23,6 @@ type Destination = {
   destination_id: number;
   destination_name: string;
   destination_abbr: string;
-  transfer_mode_id: number;
-  transfer_mode_name: string;
 };
 
 type DatasetRelease = {
@@ -149,7 +146,6 @@ export default function DatasetReleaseTransfersList() {
               body: JSON.stringify({
                 destination_id: dest.destination_id,
                 transfer_name: `${dataset?.dataset_name ?? `Dataset ${release.dataset_id}`} v${release.release_number} — ${dest.destination_abbr}`,
-                transfer_mode_id: dest.transfer_mode_id,
                 transfer_status: "draft",
                 recordset_release_ids: expectedRecordsets.length > 0 ? [...expectedIds] : null,
               }),

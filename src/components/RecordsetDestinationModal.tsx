@@ -4,10 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/Spinner";
 import { useToast } from "@/components/Toast";
 import { toastSuccess } from "@/components/toastHelpers";
-import {
-  transferModeIdForDestination,
-  useDestinationLookups,
-} from "@/lib/recordsetForm";
+import { useDestinationLookups } from "@/lib/recordsetForm";
 import {
   useRecordsetDestinations,
   useSaveRecordsetDestination,
@@ -33,8 +30,7 @@ export default function RecordsetDestinationModal({
   editingDestinationId,
 }: RecordsetDestinationModalProps) {
   const { addToast } = useToast();
-  const { destinations, transferModes, isLoading: lookupsLoading } =
-    useDestinationLookups();
+  const { destinations, isLoading: lookupsLoading } = useDestinationLookups();
   const { data: configured, isLoading: configuredLoading } =
     useRecordsetDestinations(recordsetId);
   const save = useSaveRecordsetDestination(recordsetId);
@@ -74,22 +70,13 @@ export default function RecordsetDestinationModal({
     (d) => !configuredIds.has(d.destination_id),
   );
 
-  // Transfer mode is hidden from the user — each destination is hardcoded to
-  // one mode (see transferModeIdForDestination).
-  const selectedDestination =
-    destinations.find((d) => d.destination_id === destinationId) ?? null;
-  const transferModeId = selectedDestination
-    ? transferModeIdForDestination(selectedDestination.destination_abbr, transferModes)
-    : null;
-
   async function handleSave() {
-    if (!destinationId || !transferModeId) return;
+    if (!destinationId) return;
     setError(null);
     try {
       await save.mutateAsync({
         destination_id: destinationId,
         default_display: defaultDisplay,
-        default_transfer_mode_id: transferModeId,
       });
       toastSuccess(
         addToast,
@@ -114,7 +101,7 @@ export default function RecordsetDestinationModal({
           <Button
             onClick={() => void handleSave()}
             loading={save.isPending}
-            disabled={!destinationId || !transferModeId}
+            disabled={!destinationId}
           >
             Save
           </Button>

@@ -15,9 +15,6 @@ type Recordset = {
   recordset_doi: string | null;
   dataset_id: number;
   dataset_name?: string;
-  license_id: number;
-  license_label?: string;
-  license_url?: string;
   is_public_access?: boolean;
   recordset_type_id: number;
   recordset_type_name?: string;
@@ -303,7 +300,6 @@ export default function RecordsetsList() {
               columns={[
                 { key: "recordset_id", label: "ID" },
                 { key: "dataset_name", label: "Dataset" },
-                { key: "license_label", label: "License" },
                 { key: "recordset_type_name", label: "Type" },
                 { key: "recordset_name", label: "Name" },
                 { key: "active", label: "Active" },

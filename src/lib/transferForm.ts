@@ -13,19 +13,11 @@ const BASE = "/papi/v1/distribution";
 
 /** A destination configured on at least one recordset bundled into the release.
  *  The endpoint derives these *from* the release's recordsets, so every entry is
- *  backed by at least one recordset.
- *
- *  `transfer_mode_*` is **internal plumbing, never displayed** — the concept was
- *  hidden from curators on 2026-07-24 because each destination always uses the
- *  same mode, so there was no real choice to make. It is carried here only
- *  because `dataset_release_transfer.transfer_mode_id` is NOT NULL. Do not
- *  surface it. */
+ *  backed by at least one recordset. */
 export type ReleaseDestination = {
   destination_id: number;
   destination_name: string;
   destination_abbr: string;
-  transfer_mode_id: number;
-  transfer_mode_name: string;
 };
 
 export type ReleaseTransfer = {
@@ -34,8 +26,6 @@ export type ReleaseTransfer = {
   destination_name: string;
   destination_abbr: string;
   transfer_name: string;
-  transfer_mode_id: number;
-  transfer_mode_name: string;
   transfer_status: string;
   transfer_notes: string | null;
   /** How many recordset releases the transfer currently carries. */
@@ -222,7 +212,6 @@ export function useCreateTransfer(
               releaseNumber,
               destination.destination_abbr,
             ),
-            transfer_mode_id: destination.transfer_mode_id,
             transfer_status: "draft",
             recordset_release_ids: recordsetReleaseIds,
           }),

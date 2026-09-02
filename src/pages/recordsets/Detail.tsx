@@ -343,7 +343,6 @@ export default function RecordsetDetail() {
         `#${recordset.recordset_id}`,
         recordset.recordset_doi,
         recordset.recordset_type_name,
-        recordset.license_label,
         `updated ${new Date(recordset.when_updated).toLocaleDateString()}`,
       ]
         .filter(Boolean)

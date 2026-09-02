@@ -38,8 +38,6 @@ type DatasetRecordset = {
   recordset_id: number;
   recordset_doi: string | null;
   dataset_id: number;
-  license_id: number;
-  license_label: string;
   recordset_type_id: number;
   recordset_type_name: string;
   recordset_name: string;
@@ -435,7 +433,6 @@ export default function DatasetDetail() {
                         ),
                       },
                       { key: "recordset_type_name", label: "Type" },
-                      { key: "license_label", label: "License" },
                       { key: "recordset_doi", label: "DOI" },
                       { key: "active", label: "Active" },
                       { key: "when_updated", label: "Updated" },

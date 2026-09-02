@@ -13,8 +13,6 @@ export type RecordsetDestination = {
   destination_name: string;
   destination_abbr: string;
   default_display: boolean;
-  transfer_mode_id: number;
-  transfer_mode_name: string;
 };
 
 export function useRecordsetDestinations(recordsetId: string | number | undefined) {
@@ -34,7 +32,6 @@ export function useRecordsetDestinations(recordsetId: string | number | undefine
 export type SaveRecordsetDestinationInput = {
   destination_id: number;
   default_display: boolean;
-  default_transfer_mode_id: number;
 };
 
 /** Upserts one destination via the existing `PUT .../destinations/{id}`. */
@@ -48,7 +45,6 @@ export function useSaveRecordsetDestination(recordsetId: string | number | undef
           method: "PUT",
           body: JSON.stringify({
             default_display: input.default_display,
-            default_transfer_mode_id: input.default_transfer_mode_id,
           }),
         },
       );

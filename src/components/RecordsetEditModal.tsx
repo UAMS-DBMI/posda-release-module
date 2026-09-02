@@ -28,7 +28,6 @@ type RecordsetEditModalProps = {
 const EMPTY: RecordsetEditFormValues = {
   dataset_id: "",
   recordset_doi: "",
-  license_id: "",
   recordset_name: "",
   recordset_type_id: "",
   active: true,
@@ -48,7 +47,7 @@ export default function RecordsetEditModal({
   const { data: recordset, isLoading: isLoadingRecordset } = useRecordset(
     open ? recordsetId : undefined,
   );
-  const { recordsetTypes, licenses, isLoading: isLoadingLookups } = useRecordsetLookups();
+  const { recordsetTypes, isLoading: isLoadingLookups } = useRecordsetLookups();
   const { datasets, isLoading: isLoadingDatasets } = useDatasetOptions(open);
   const save = useSaveRecordset(recordsetId);
 
@@ -103,7 +102,7 @@ export default function RecordsetEditModal({
             setValues(next);
             setErrors({});
           }}
-          fields={recordsetEditFormFields({ recordsetTypes, licenses, datasets })}
+          fields={recordsetEditFormFields({ recordsetTypes, datasets })}
           className="mt-4 grid grid-cols-2 gap-3"
           errors={errors}
         />

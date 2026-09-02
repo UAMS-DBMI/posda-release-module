@@ -17,8 +17,6 @@ type Transfer = {
   destination_name: string;
   destination_abbr: string;
   transfer_name: string;
-  transfer_mode_id: number;
-  transfer_mode_name: string;
   transfer_status: string;
   transfer_notes: string | null;
   when_created: string;

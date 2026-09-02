@@ -46,8 +46,8 @@ export default function CreateRecordsetModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
-  const { recordsetTypes, licenses, isLoading } = useRecordsetLookups();
-  const fields = recordsetFormFields({ recordsetTypes, licenses });
+  const { recordsetTypes, isLoading } = useRecordsetLookups();
+  const fields = recordsetFormFields({ recordsetTypes });
 
   const create = useMutation({
     mutationFn: async () => {
