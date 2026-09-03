@@ -1,7 +1,7 @@
 import { useState } from "react";
 import WpLinkModal from "@/components/WpLinkModal";
 import { Button, ExternalLinkButton } from "@/components/ui/Button";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { StatusBadge, type BadgeVariant } from "@/components/ui/StatusBadge";
 import { EditIcon, ExternalLinkIcon, LinkIcon } from "@/components/icons";
 import {
   useWpMap,
@@ -63,6 +63,55 @@ export function WpBadge({
       status={linked ? "linked" : "not_linked"}
       label={badge.label}
       variant={badge.variant}
+    />
+  );
+}
+
+/** WordPress post statuses, mapped to a label and colour. `publish` is the only
+ *  one that means the public can see the page — everything else is a reason it
+ *  cannot, so nothing but `publish` gets a success variant. */
+const WP_POST_STATUS: Record<string, { label: string; variant: BadgeVariant }> = {
+  publish: { label: "Published", variant: "success" },
+  draft: { label: "Draft", variant: "warning" },
+  pending: { label: "Pending Review", variant: "warning" },
+  future: { label: "Scheduled", variant: "info" },
+  private: { label: "Private", variant: "neutral" },
+  trash: { label: "Trashed", variant: "danger" },
+};
+
+/** Live publication status of a linked WordPress post.
+ *
+ *  Reads through `useWpObject`, the same query `WpBadge` uses — so rendering
+ *  both for one object costs a single fetch, not two. Separate from `WpBadge`
+ *  because they answer different questions: that one is "is it linked, and to
+ *  what", this one is "can the public see it". */
+export function WpPostStatusBadge({
+  posdaObjectType,
+  posdaObjectId,
+  linked,
+}: {
+  posdaObjectType: PosdaObjectType;
+  posdaObjectId: number | undefined;
+  linked: boolean;
+}) {
+  const { data, isLoading, isError } = useWpObject(
+    posdaObjectType,
+    posdaObjectId,
+    linked,
+  );
+  if (!linked) {
+    return <span className="text-xs" style={{ color: "var(--muted)" }}>—</span>;
+  }
+  if (isLoading) return <WpBadgeSkeleton />;
+  if (isError || !data) {
+    return <StatusBadge status="unknown" label="Unknown" variant="danger" />;
+  }
+  const known = WP_POST_STATUS[data.status];
+  return (
+    <StatusBadge
+      status={data.status}
+      label={known?.label ?? data.status}
+      variant={known?.variant ?? "neutral"}
     />
   );
 }

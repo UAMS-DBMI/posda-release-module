@@ -1014,66 +1014,73 @@ cycle view, since every stage reads `latest_dataset_release`. Pre-existing, and
 more likely to be hit now that a released cycle stays visible. Worth resolving
 with step 8's Overview.
 
-- [ ] **7 — Disseminate.** The go-live stage — **per-release** WordPress objects
-      and publishing. Setup (step 2) already created the dataset's `collection`
-      and per-recordset `download` pages; this stage adds the `version` and
-      `version_download` pages for the release just frozen, and flips the whole
-      set live.
-      - Per-release mapping: dataset_release → `version`; recordset_release →
-        `version_download`. (Collection/download mapping lives in Setup.)
-      - Lists every WP object for the dataset and this release, which are
-        **missing**, and each one's current post status (read live from
-        WordPress — `wp_object_map` stores no status). Actions: create a missing
-        version page, and a **bulk go-live switch** flipping the set from draft
-        to published at once.
-      - **Created as `draft`.** Posda supplies title, slug, and DOI — a correctly
-        named stub. Abstract, cancer types, species, citations stay curator work
-        in Collection Manager.
-      - **Search before create.** Every WP list route already accepts `?slug=`
-        and `?search=`, so offer to link an existing post rather than creating a
-        duplicate public page. `wp_object_map` enforces one-to-one both ways.
-      - **Go-live flips WordPress post status only** — nothing in Posda changes
-        (see the open question below).
-      - Reuses `lib/wpObjectForm.ts` and the `manager.py` WP routes built in
-        step 2. Write plumbing already exists: `util/wp.py` has `wp_post` /
-        `wp_patch` / `wp_delete` authenticated via `POSDA_WP_USER` /
-        `POSDA_WP_PASSWORD`. The routes to add:
-        `POST /manager/wp-objects`,
-        `PUT /manager/wp-objects/{id}/status`,
-        `POST /manager/posda/dataset/{id}/wp/publish`.
+- [x] **7 — Disseminate.** *(built 2026-09-02 — see log; attach and go-live
+      not yet exercised against WordPress)* The go-live stage. Publishes the
+      WordPress pages
+      Setup already created and linked, then marks the release live.
+      - **Scope narrowed 2026-09-02.** `version` / `version_download` pages are
+        **deferred** — WordPress needs changes to accommodate the versioning
+        process, plus a function to update WP between versions. Until then this
+        stage works on the dataset's `collection` / `analysis_result` page and
+        each member recordset's `download` page.
+      - **Gate:** release is `released` **and** every transfer on it is
+        `success`. Publishing a download page whose bytes have not landed points
+        the public at nothing.
+      - **Go-live sets `dataset_release.release_status = 'live'`** *(decided
+        2026-09-02, replacing "nothing in Posda changes")*. `live` was already a
+        legal status nothing ever set, and it is the only value
+        `isCycleInProgress()` reads as finished — without it a released cycle
+        never ends. Only a clean sweep flips it; a partial publish stays
+        `released` so the work stays visible.
+      - **Routes.** `POST /manager/wp-objects` and
+        `PUT /manager/wp-objects/{map_id}/status` already existed from step 2.
+        Added `POST /datasets/releases/{id}/publish` — in `distribution.py`, not
+        `manager.py`, since it is release-scoped and mutates release status.
       - **Retriever manifests belong to this stage, not Transfer**
-        *(settled 2026-08-24 while planning step 6).* There are **two distinct
-        manifest families**, and they were being conflated:
+        *(settled 2026-08-24; format worked out 2026-09-02).*
 
         | Family | Scope | Stored on | Consumer |
         |---|---|---|---|
         | dataset / imaging / clinical | per **transfer**, dataset-level | `transfer_idc.*_manifest_file_id` | IDC submission |
-        | **retriever** | per **recordset**, per transfer | `transfer_recordset.retriever_manifest_file_id` | TCIA Data Retriever |
+        | **retriever** | per **recordset**, per transfer | `transfer_recordset.retriever_manifest_file_id` | the destination's own downloader |
 
-        The retriever manifest is a per-recordset **series-UID CSV** used by the
-        Data Retriever app to pull files from whichever destination holds them,
-        and it gets **attached to the recordset's WordPress `version_download`
-        page** — which is why it is dissemination work, not transfer work.
-        - **Already implemented:**
-          `POST /transfers/{id}/recordsets/{rrid}/manifest/generate` builds and
-          stores it. Nothing new is needed to *generate* one; this stage needs
-          to trigger it per recordset release and attach the resulting
-          `downloadable_file` to the WP page.
-        - ⚠ **Stale comment:** that route is commented "Generate (or replace) an
-          **IDC** download manifest CSV". It is not IDC's — same naming lag as
-          the `file_manifest` → `imaging_manifest` rename. The column name
-          (`retriever_manifest_file_id`) is correct; fix the comment.
-        - ⚠ **Keying question to resolve here.** It is keyed
-          `(dataset_release_transfer_id, recordset_release_id)`, so a recordset
-          release shipped to two destinations gets two rows. Today the payload is
-          a bare series-UID list, so both are byte-identical and content-addressed
-          storage collapses them to a single `file` — harmless. **But** if the
-          manifest ever needs a `downloadServerUrl` (the real `.tcia` format
-          carries one), per-destination keying stops being incidental and becomes
-          load-bearing — and "which destination's manifest goes on the WP page?"
-          becomes a real question. Decide before the WP attachment depends on it.
-        - ⚠ **Silent empty:** the generator joins `file_series`, so a non-DICOM
-          recordset produces a **header-only CSV** and still returns 200.
+      - **Each destination has its own manifest format** — so the
+        `(transfer, recordset_release)` keying is **load-bearing, not
+        incidental**. The earlier note that both rows are "byte-identical and
+        collapse to a single file — harmless" was wrong.
+        - `nbia` → real `.tcia`: five header lines, `ListOfSeriesToDownload=`,
+          one UID per line. Verified byte-for-byte against a production
+          manifest. `mime_type` is `text/plain`.
+        - `idc`, `gc` → the general series-UID list as a **placeholder**, with
+          TODOs. A destination may end up handing *us* its manifest to host, in
+          which case it arrives as an upload rather than through `build_manifest`.
+        - `wp` → **no manifest.** The download links the media file the transfer
+          uploaded; that linking belongs to Transfer. Disseminate only publishes
+          these rows. Both `generate` and `attach` 422 for `wp`.
+      - **Which destination's manifest goes on the page:** the one flagged
+        `recordset_destination.default_display` — it already marks where the
+        public download points.
+      - **`databasketId` is derived from the recordset release, not a
+        timestamp.** Real NBIA baskets use epoch-ms; copying that would change
+        the digest on every regeneration, giving a new `file_id` and a fresh
+        WordPress upload each time. The Data Retriever ignores the field.
+      - **Uploads dedup through `wp_object_map`** as
+        `('file', file_id) → ('media', wp_id)`. `file.digest` is UNIQUE, so
+        `file_id` *is* content identity — no hashing against WordPress needed.
+        Its two unique constraints make the mapping one-to-one, which is exactly
+        true. A map hit re-verifies the attachment still exists (a 404 drops the
+        row and re-uploads). `posda_object_type` now also carries `file`; the
+        column COMMENT in `0047` was updated to match.
+      - **These are Pods fields, not ACF.** `download_file` **reads** as the full
+        attachment post with its ID as a *string* (`{"ID": "6589", ...}`) and
+        **writes** as a bare int — confirmed against the wiki-migration tooling
+        (`wp_tools/run_cleanup.py`), which sets `download_metadata` the same way.
+        Compare these as text; int-vs-string never matches.
+      - ⚠ **Media paging is broken in WP** — `X-WP-TotalPages` is only correct on
+        page 1 (noted in `wp_tools.py`). The map-by-id approach never lists or
+        searches media, so it sidesteps this.
+      - ⚠ **Silent empty:** the generator joins `file_series`, so a non-DICOM
+        recordset yields a header-only manifest and still returns 200. Open.
 - [ ] **8 — Overview page.** Per-stage summary cards plus a recordset × stage
       matrix (rows = recordsets, columns = Setup / Assemble / Verify / Frozen), then
       fan-in, transfer, and landing-page rows.
@@ -1522,10 +1529,11 @@ facts, either true without the other:
   and IDC's happens on IDC's schedule.
 - **page is live** — the Collection Manager post is published.
 
-`dataset_release.release_status = 'live'` currently blurs these. Resolving it
-likely means separate flags, which is a schema change and its own decision — so
-this plan **stores neither**: go-live flips WP post status, and Disseminate reads
-page state from WordPress. Revisit before anything depends on a stored answer.
+`dataset_release.release_status = 'live'` currently blurs these, and as of
+2026-09-02 go-live **does** set it — so the stored answer means "pages are
+published", not "data is live". `transfer_wp.published` / `.public` remain
+unpopulated. Separate flags are still the right long-term answer; revisit before
+anything reads `live` as a statement about data availability.
 
 ## Risks
 
@@ -1608,6 +1616,68 @@ dataset 4 (bare):
 7. `npm run build` clean at every step.
 
 ## Log
+
+**2026-09-02 — Disseminate built (step 7), narrowed scope.** The last unbuilt
+stage. `version` / `version_download` pages are **deferred** — WordPress needs
+versioning changes first — so this publishes the pages Setup already created:
+the dataset's collection page and each member recordset's download page, then
+sets `dataset_release.release_status = 'live'`.
+
+- **Backend.** `wp_upload_media()` in `util/wp.py` (raw bytes +
+  `Content-Disposition`, since `/wp/v2/media` takes neither JSON nor multipart).
+  `POST /datasets/releases/{id}/publish` — gated on `released` **and** every
+  transfer `success`, refusing with a specific reason per failed condition;
+  publishes best-effort per page and only flips to `live` on a clean sweep, so a
+  partial run leaves the work visible. `POST
+  /transfers/{id}/recordsets/{rrid}/manifest/attach`. The cycle payload gained
+  `map_id` / `wp_view_url` for the dataset and each recordset — the status route
+  is keyed on the mapping, not the WP post.
+- **Manifests are per-destination**, which retires the old "byte-identical, so
+  harmless" note. `MANIFEST_FORMATS` + `build_manifest()`: `nbia` emits real
+  `.tcia`, `wp` refuses outright (its download links the media file the transfer
+  uploaded), and `idc` / `gc` fall through to the general series-UID list as a
+  **placeholder with TODOs**. `databasketId` is derived from the recordset
+  release rather than the epoch-ms real baskets carry — a timestamp would change
+  the digest on every regeneration and defeat the dedup below.
+- **Upload dedup through `wp_object_map`** as `('file', file_id) → ('media', id)`.
+  `file.digest` is UNIQUE, so `file_id` *is* content identity and nothing needs
+  hashing against WordPress; the table's two unique constraints make it
+  one-to-one, which is exactly true. A map hit re-verifies the attachment still
+  exists (404 → drop the row, re-upload). `posda_object_type` now also carries
+  `file`; the `0047` column COMMENT was updated to match.
+- **These are Pods fields, not ACF** — settled against the wiki-migration tooling
+  (`wp_tools/`), which writes them in production. `download_file` **reads** as the
+  whole attachment post with its ID as a *string* (`{"ID": "6589", …}`) and
+  **writes** as a bare int. That asymmetry was a live bug: comparing int to string
+  meant the "already attached" skip could never fire and every call re-PATCHed.
+- **Frontend.** Real `disseminateStage()` replacing the hardcoded `pending`,
+  `lib/dissemination.ts` (three mutations; the reads already existed), and the
+  stage itself. Columns: Recordset · Type · Version · WordPress · Publication ·
+  Default · Manifest, with a new `WpPostStatusBadge` sharing `useWpObject`'s
+  query so both badges on a row cost one fetch. Manifest actions are icon-only
+  (generate / **download** / upload); the download is a plain `<a download>` on
+  `/papi/v1/download/file/{id}/{hash}`, matching `transfers/Detail.tsx` — worth
+  having between generate and upload, since it is the only way to see what was
+  built before it reaches a public page.
+- **Readiness is per row, not global.** A manifest needs only *its own*
+  destination's transfer to have landed; only go-live waits for all of them.
+  Disseminate reports `active` on partial delivery — but only when a member
+  recordset's `default_display` destination has actually delivered and isn't
+  `wp`, since a delivered WordPress transfer or a delivered destination nobody
+  points at leaves nothing to do.
+- **Bug found in `transferStage()`:** "N to queue" used `transfers.length`, so one
+  delivered destination out of three still read "3 to queue" while the banner
+  (which counted drafts) said 2. Now counts drafts.
+
+⚠ **Verified vs not.** Every SQL literal `PREPARE`s untyped against live
+`posda_files`; the `.tcia` builder matches a production manifest byte-for-byte
+apart from `databasketId`; TS types were diffed against both the live cycle
+payload and the Python return dicts. But **nothing has been written to
+WordPress** — attach and go-live have never run. Generate has: it produced two
+manifests for dataset 1's IDC recordsets, in the **general placeholder format**,
+which is very likely not what IDC wants. Do not attach a placeholder to a public
+download page.
+
 
 **2026-08-06 — Verify stage completed (step 4): non-DICOM through the same UI.**
 The last piece of Verify — non-DICOM content — now flows through the *identical*

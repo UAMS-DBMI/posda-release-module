@@ -85,15 +85,23 @@ export type CycleRecordset = {
   last_bundled_dataset_release_number: number | null;
   destinations: CycleRecordsetDestination[];
   wp_linked: boolean;
+  /** wp_object_map row id for the download page -- what the publish and status
+   *  routes are keyed on. Null when the recordset has no page linked. */
+  wp_map_id: number | null;
   wp_edit_url: string | null;
+  wp_view_url: string | null;
   wp_download_object_id: number | null;
 };
 
 export type DatasetReleaseStatus = "draft" | "released" | "live" | "retracted";
 
-/** The chip's fields plus the transfer's name, which the cycle payload carries. */
+/** The chip's fields plus the transfer's name and destination id, both of
+ *  which the cycle payload carries. `destination_id` is what matches a transfer
+ *  to a recordset's configured destination -- the abbr would work too, but the
+ *  id is the actual key on both sides. */
 export type CycleTransfer = TransferChipTransfer & {
   transfer_name: string;
+  destination_id: number;
 };
 
 export type CycleDatasetRelease = {
@@ -116,6 +124,11 @@ export type DatasetCycle = {
   recordsets: CycleRecordset[];
   /** Whether the dataset has a WordPress page linked. */
   dataset_wp_linked: boolean;
+  /** The dataset's collection / analysis-result page. Disseminate publishes it
+   *  alongside the recordset download pages. Null when nothing is linked. */
+  dataset_wp_map_id: number | null;
+  dataset_wp_edit_url: string | null;
+  dataset_wp_view_url: string | null;
   /** Downloads listed on the dataset's WordPress page that aren't the
    *  current download for any recordset here (excludes trashed downloads). */
   orphaned_download_count: number;
@@ -326,6 +339,23 @@ export function qcPercent(qc: CycleQc): number {
   return Math.round(((qc.series_total - qc.series_pending) / qc.series_total) * 100);
 }
 
+/** The recordsets whose pages this release publishes: the ones it actually
+ *  carries a version of. Keyed on `release_in_cycle` rather than
+ *  `in_dataset_release` for the same reason `unbundledRecordsets` is -- the
+ *  latter is true only of a *released* member. */
+export function disseminationRecordsets(cycle: DatasetCycle): CycleRecordset[] {
+  return cycle.recordsets.filter((r) => r.release_in_cycle !== null);
+}
+
+/** Members of the release with no WordPress download page. Publishing refuses
+ *  outright when any exist -- a half-published release is worse than an
+ *  unpublished one -- so this is a hard gate, not a warning. */
+export function unlinkedDisseminationRecordsets(
+  cycle: DatasetCycle,
+): CycleRecordset[] {
+  return disseminationRecordsets(cycle).filter((r) => !r.wp_linked);
+}
+
 /** Recordsets missing a WordPress download link. */
 export function unlinkedRecordsets(cycle: DatasetCycle): CycleRecordset[] {
   return cycle.recordsets.filter((r) => !r.wp_linked);
@@ -501,15 +531,77 @@ function transferStage(cycle: DatasetCycle): StageSummary {
   ).length;
   if (running > 0) return { state: "active", detail: `${running} in flight` };
 
-  return transfers.every((t) => t.transfer_status === "success")
+  // Count the drafts, not every transfer: with one destination delivered and
+  // two still unsent, `transfers.length` claimed 3 to queue while the banner
+  // (which always counted drafts) said 2. Nothing else can reach this branch --
+  // failed and in-flight are handled above -- so a non-success transfer here is
+  // a draft by elimination; filtering on it says so rather than implying it.
+  const drafts = transfers.filter((t) => t.transfer_status === "draft").length;
+  return drafts === 0
     ? { state: "done", detail: "Delivered" }
-    : { state: "active", detail: `${transfers.length} to queue` };
+    : { state: "active", detail: `${drafts} to queue` };
 }
 
-// Placeholder until step 7 wires WordPress state into the cycle payload. Stays
-// `pending` so it never hijacks the next-action banner before it's built.
-function disseminateStage(_cycle: DatasetCycle): StageSummary {
-  return { state: "pending", detail: "—" };
+// Publishing the release's WordPress pages, then marking it live.
+//
+// Reports *readiness*, not per-page state: live post status is fetched per row
+// by the stage itself (WpBadge -> useWpObject), and this must stay a pure
+// function of the cycle payload. So "N to publish" is not something it can
+// know -- the stage UI shows that, the tab shows whether the work can start.
+function disseminateStage(cycle: DatasetCycle): StageSummary {
+  const release = cycle.dataset_release;
+  if (!release) return { state: "pending", detail: "—" };
+  if (release.release_status === "retracted") {
+    return { state: "blocked", detail: "Retracted" };
+  }
+  if (release.release_status === "live") {
+    return { state: "done", detail: `v${release.release_number} live` };
+  }
+  if (release.release_status === "draft") {
+    return { state: "pending", detail: "Release is a draft" };
+  }
+
+  // Transfers first, and `pending` rather than `active`: Transfer is already
+  // reporting this work, and nextAction() surfaces the earliest active/blocked
+  // stage -- two stages claiming the same thing would just be noise.
+  const transfers = release.transfers;
+  if (transfers.length === 0) return { state: "pending", detail: "No transfers" };
+
+  const delivered = transfers.filter((t) => t.transfer_status === "success");
+  if (delivered.length < transfers.length) {
+    // Not a count: "1 of 3 delivered" sits beside a table of 4 recordsets, and
+    // reads as though the 3 were recordsets. The state carries the rest of the
+    // meaning -- `active` says work is available despite the wait.
+    const detail = "Awaiting transfers";
+    // Partial delivery is still workable: a manifest needs only its own
+    // destination to have landed. But only for a recordset that actually points
+    // at a delivered destination, and never for `wp` -- which has no manifest at
+    // all, so a delivered WordPress transfer leaves nothing to do here.
+    //
+    // The detail stays a delivery count rather than "N manifests ready": this is
+    // pure over the cycle payload, which carries no manifest state, so it cannot
+    // know which have already been generated and would keep saying "ready".
+    const deliveredIds = new Set(delivered.map((t) => t.destination_id));
+    const workable = disseminationRecordsets(cycle).some((r) =>
+      r.destinations.some(
+        (d) =>
+          d.default_display &&
+          d.destination_abbr !== "wp" &&
+          deliveredIds.has(d.destination_id),
+      ),
+    );
+    return { state: workable ? "active" : "pending", detail };
+  }
+
+  const unlinked = unlinkedDisseminationRecordsets(cycle);
+  if (unlinked.length > 0) {
+    return { state: "blocked", detail: `${unlinked.length} not linked` };
+  }
+  if (!cycle.dataset_wp_linked) {
+    return { state: "blocked", detail: "Collection not linked" };
+  }
+
+  return { state: "active", detail: "Ready to publish" };
 }
 
 /** Per-stage rollups across every recordset, in pipeline order. */
@@ -633,8 +725,43 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       }
       return "All transfers delivered.";
     }
-    case "disseminate":
-      return "Publish the landing pages when the release is ready.";
+    case "disseminate": {
+      if (!release) return "Nothing to publish until a dataset release exists.";
+      if (release.release_status === "retracted") {
+        return `v${release.release_number} was retracted and cannot be published.`;
+      }
+      if (release.release_status === "live") {
+        return `v${release.release_number} is live.`;
+      }
+      if (release.release_status === "draft") {
+        return `v${release.release_number} is still a draft — finalize it in Bundle first.`;
+      }
+      if (release.transfers.length === 0) {
+        return `v${release.release_number} has not been sent anywhere yet.`;
+      }
+      const undelivered = release.transfers.filter(
+        (t) => t.transfer_status !== "success",
+      );
+      if (undelivered.length > 0) {
+        const landed = release.transfers
+          .filter((t) => t.transfer_status === "success")
+          .map((t) => t.destination_abbr);
+        const waiting = `${plural(undelivered.length, "transfer")} still to land (${undelivered
+          .map((t) => t.destination_abbr)
+          .join(", ")}) — the pages cannot go public until the data is in place.`;
+        return landed.length > 0
+          ? `${landed.join(", ")} delivered — those recordsets' manifests can be generated now. ${waiting}`
+          : waiting;
+      }
+      const unlinked = unlinkedDisseminationRecordsets(cycle);
+      if (unlinked.length > 0) {
+        return `${plural(unlinked.length, "recordset")} in this release has no WordPress download page — link ${unlinked.length === 1 ? "it" : "them"} in Setup.`;
+      }
+      if (!cycle.dataset_wp_linked) {
+        return "The dataset has no WordPress page linked yet.";
+      }
+      return `v${release.release_number} is ready to go live — publish its pages.`;
+    }
   }
 }
 
