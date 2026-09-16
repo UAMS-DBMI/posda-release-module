@@ -44,8 +44,10 @@ The module is built (see the DDL section below for exact columns):
   labels). Carries `dataset_doi` (NOT NULL, UNIQUE).
 - **`recordset`** hangs off a dataset (`recordset.dataset_id`), typed by
   `recordset_type` (e.g. `Radiology Images`) and carrying its own
-  `recordset_doi` and — importantly — its **`license_id`** → `recordset_license`.
-  License lives here, not on the dataset.
+  `recordset_doi`. ⚠ It also carried **`license_id`** → `recordset_license`
+  until **2026-09-01, when both were dropped** — licensing is WordPress's to
+  own. There is no license column anywhere in Posda now. → *Dataset manifest →
+  Licensing*
 - **Both levels are versioned into releases:** `dataset_release` and
   `recordset_release`, each with `release_number` (unique per parent),
   `release_date`, `release_notes`, and its own **`release_doi`**. So datasets
@@ -235,23 +237,74 @@ align with dataset submission to IDC.
 - **Delivery:** a **Go daemon** (Quasar's) polls for queued items and pushes
   accordingly, kicked off by the `notify_transfer_queued()` trigger when
   `transfer_status` goes to `queued`.
-- **Licensing:** license is modeled at the **recordset** level
-  (`recordset.license_id` → `recordset_license`); there is no dataset-level
-  license column. The manifest's `license_*` values are therefore **derived from
-  the dataset's recordsets**, with a dataset-level value as the starting point.
-  Collapse rule when recordsets disagree is still open (see Open questions).
+- **Licensing:** ⚠ **superseded 2026-09-09.** License *was* modeled at the
+  recordset level (`recordset.license_id` → `recordset_license`), but that table
+  was **dropped 2026-09-01 — licensing is WordPress's to own**. There is no
+  license column in Posda at all any more. See *Licensing* below for what
+  replaced it.
 
-**Sources.** This manifest draws from **three** places:
-1. **WordPress / CM** — most fields, via `wp_object_map` → `wp_get`.
-2. **Posda** — ✅ `dataset_version` ← `dataset_release.release_number` and
-   `dataset_version_date` ← `dataset_release.release_date` (implemented
-   2026-08-25; both previously read WordPress, which is not updated until
-   dissemination and so is stale at manifest time). Still to add:
-   `dataset_version_doi` ← `dataset_release.release_doi`, and the `license_*`
-   values (derived from recordsets).
-3. **NBIA API** — `dataset_tooltip`, from
-   `https://nbia.cancerimagingarchive.net/nbia-api/services/v4/getCollectionDescriptions?collectionName=<name>`
-   (per Bill, 2026-07-22).
+**Sources.** This manifest draws from **two** places (NBIA was a third; see
+`dataset_tooltip` below):
+1. **WordPress / CM** — most fields, via `wp_object_map` → `wp_get`. This now
+   includes the `license_*` triple.
+2. **Posda** — ✅ `dataset_version` ← `dataset_release.release_number`,
+   `dataset_version_date` ← `dataset_release.release_date` (both implemented
+   2026-08-25; they previously read WordPress, which is not updated until
+   dissemination and so is stale at manifest time), and ✅ `dataset_version_doi`
+   ← `dataset_release.release_doi` (2026-09-09).
+
+### Licensing — resolved 2026-09-09
+
+`recordset_license` is gone, so the three `license_*` fields are sourced from
+WordPress like the rest of the manifest. WP carries license **per download**, as
+`data_license` — and it is a **plain string** (`"CC BY 4.0"`), not a post
+relation, so it has to be matched against the License post list by title.
+
+The chain, implemented as `_transfer_licenses()` in `distribution.py`:
+
+```
+transfer_recordset → recordset_release → recordset
+  → wp_object_map ('recordset' → 'download')
+  → download.data_license  (a string)
+  → License post (matched on title)
+```
+
+**Scoped to the transfer's recordsets**, not to every `collection_downloads`
+entry on the mapped collection — so the manifest reports the licensing of what
+this package actually ships. This keeps the spirit of the original
+"derive from the recordsets" decision (2026-07-17) while sourcing the values
+from WordPress. Every recordset is 1:1 WP-download-mapped today; a recordset
+that is not yet mapped contributes no license rather than failing generation,
+matching the clinical manifest's best-effort CM lookups.
+
+**Field mapping** — a WP License post carries `title`, `slug`, `license_label`
+and `license_url`:
+
+| Manifest field | WP source | Note |
+|---|---|---|
+| `license_short_name` | License post `title` | also the match key for `data_license` |
+| `license_long_name` | License post `license_label` | the coarser policy name |
+| `license_url` | License post `license_url` | |
+
+⚠ `license_label` is **not** unique — five of the nine licenses share
+`"NIH Controlled Data Access Policy"` — which is exactly why it is the long name
+and never the match key. WordPress has no true long-form license name (there is
+no "Creative Commons Attribution 4.0 International" anywhere), so for the CC
+licenses short and long come out identical; for `tcia-limited` they differ
+usefully (`TCIA Limited` / `NIH Controlled Data Access Policy`).
+
+**Match reliability — surveyed 2026-09-09 against all 925 CM downloads.** Ten
+distinct `data_license` values exist; **nine match a License post title exactly**
+(901 downloads). The tenth is the literal string `"False"` on 24 downloads —
+WordPress serializing an unset ACF field, i.e. *no license chosen*, not a
+license named "False". The generator filters it, or it would ship to IDC as one.
+
+**Multi-license collapse rule (settled 2026-09-09):** distinct licenses are
+**pipe-joined and index-aligned** across all three fields, matching how
+`cancer_types` / `species` / `program` already handle multi-value. Sorted, since
+the CSV is content-addressed by MD5 and an unstable order would fork the file on
+every regeneration. An unmatched `data_license` string still populates
+`license_short_name`; only the fields that genuinely need the WP post are blank.
 
 **Reading these sources live is fine**, because manifests are generated at
 **transfer initialization** — before the Go daemon is ever involved. Posda does
@@ -266,14 +319,14 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 | `dataset_slug` | WordPress slug | ✅ |
 | `dataset_type` | WordPress post type | ✅ |
 | `dataset_doi` | TCIA collection DOI | ✅ |
-| `dataset_version_doi` | DOI for this specific dataset version [^1] | ❌ needs adding |
+| `dataset_version_doi` | DOI for this specific dataset version [^1] — **Posda** `dataset_release.release_doi` | ✅ 2026-09-09 |
 | `dataset_short_name` | Collection / Analysis Result short name [^2] | ✅ |
 | `dataset_title` | The dataset title | ✅ |
 | `dataset_status` | Dataset status (blank for analysis results) | ✅ |
 | `dataset_version` | Dataset version number — **Posda** `dataset_release.release_number` | ✅ |
 | `dataset_version_date` | Current dataset version date — **Posda** `dataset_release.release_date`, `YYYY-MM-DD` | ✅ |
 | `dataset_url` | TCIA collection URL | ✅ |
-| `dataset_tooltip` | Tooltip/short description — from the **NBIA API** (see Sources above) | ❌ needs adding |
+| `dataset_tooltip` | Tooltip/short description — source TBD [^3] | ❌ needs adding (column emitted empty) |
 | `cancer_types` | Cancer types represented in dataset | ✅ |
 | `supporting_data` | Supporting data found in dataset | ✅ |
 | `species` | Species represented in dataset | ✅ |
@@ -281,9 +334,9 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 | `program` | Program (community, etc.) | ✅ |
 | `abstract` | NBIA short description | ✅ |
 | `citation` | TCIA collection version citation (Data Citation only) | ✅ |
-| `license_url` | License URL | ❌ needs adding |
-| `license_long_name` | License long name | ❌ needs adding |
-| `license_short_name` | License short name | ❌ needs adding |
+| `license_url` | License URL — **WP** License post `license_url` | ✅ 2026-09-09 |
+| `license_long_name` | License long name — **WP** License post `license_label` | ✅ 2026-09-09 |
+| `license_short_name` | License short name — **WP** License post `title` | ✅ 2026-09-09 |
 
 [^1]: **TCIA's DOI for TCIA-sourced datasets, IDC's own DOI for IDC-sourced
     datasets** — TCIA to provide versioned DOIs going forward (2026-07-30
@@ -291,6 +344,14 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 [^2]: **⚠ Pending confirmation (2026-07-30 meeting):** whether this correctly
     maps to the public-facing TCIA collection short name — Michael to verify
     against real examples.
+[^3]: **Blocked on a source (2026-09-09).** The tooltip's only source was the
+    NBIA API (`getCollectionDescriptions?collectionName=<collection_short_title>`,
+    per Bill 2026-07-22), and **we are eliminating our use of NBIA**. The field
+    has not been rehomed anywhere else yet, so the generator emits the column
+    **empty** rather than omitting it — IDC parses a fixed header, so a missing
+    column is a breaking change where an empty cell is not. Verified the NBIA
+    endpoint does still answer for `Pseudo-PHI-DICOM-Data`; it is the dependency
+    we are dropping, not the data.
 
 **As implemented (2026-07-16)** — from `generate_idc_dataset_manifest`
 (`../oneposda/.../routes/distribution.py`, `POST /transfers/{id}/idc/
@@ -299,15 +360,23 @@ dataset-manifest/generate`):
 - **Format:** CSV (via `csv.DictWriter`), **one row**.
 - **Source:** the **WordPress object** mapped to the dataset via `wp_object_map`
   (`posda_object_type = 'dataset'` → `collection` or `analysis_result`), fetched
-  live with `wp_get`. Not sourced from Posda tables. Fails 422 if no WP object is
+  live with `wp_get`. Fails 422 if no WP object is
   mapped. Multi-value fields (cancer types, species, etc.) are pipe-joined;
   `citation` keeps only `citation_type = 'Data Citation'` entries.
 - **Persistence:** writes the CSV to file storage, upserts a `file` +
   `downloadable_file`, and sets `transfer_idc.dataset_manifest_file_id`.
 
+**Updated 2026-09-09** — the generator now also reads Posda (`release_doi`) and
+resolves licensing through `wp_object_map` → downloads → License posts. Two
+columns were added to the CSV (`dataset_version_doi`, `dataset_tooltip`) plus
+the three `license_*` fields. ⚠ **This changes the manifest header IDC parses** —
+tell Bill before the next submission.
+
 **Open questions specific to this manifest:**
-- Add the ❌ fields to the generated manifest — this means extending the
-  generator beyond WordPress to also read Posda and the NBIA API.
+- `dataset_tooltip` needs a non-NBIA source before it carries anything. [^3]
+- Confirm the `license_short_name` / `license_long_name` mapping with IDC —
+  WordPress has no true long-form license name, so for the CC licenses both
+  fields come out identical.
 
 ---
 
@@ -555,7 +624,7 @@ relative scheme.
 - **Resubmission to an already-published version folder:** still open whether
   the software should delete-and-recreate that folder, or just reset its
   `status.json` (see *Bucket sync & status file*) back to
-  `"ready for processing"`.
+  `"Ready for processing"`.
 
 **Deferred / out of scope for now:**
 - **YAML / IDC Comet PR workflow** — the team will *not* commit to updating IDC
@@ -600,18 +669,54 @@ Posda:  (on Errored) fix the flagged items → status = "Ready for processing"
 **No full state-transition diagram drawn yet** — Bill flagged this as still
 needed, not done.
 
-**Mutex mechanism (untested):** GCS conditional-write lock — create a lock
-object with `if_generation_match=0` (atomic create-if-absent, retried with
-backoff if held), release by deleting conditioned on the held generation
-(`if_generation_match=<generation>`) to avoid deleting a newer lock out from
-under a timed-out holder. Bill shared Python/gcloud-CLI/bash reference
-implementations (AI-generated via Gemini) — **neither side has tried this
-yet**, it's a starting point, not a decision.
+⚠ The status values above are **exact, case-sensitive JSON literals** — IDC
+string-compares them. `"Ready for processing"`, not `"ready to process"`.
+
+**Mutex mechanism — corrected 2026-09-08.** GCS conditional-write lock, one
+object per dataset version. ⚠ **The release described here previously was
+wrong**: it said "delete conditioned on the held generation," which reads as if
+the generation is snapshotted at acquire time and omits the ownership check
+entirely. Bill re-inspected the original Gemini-generated code, confirmed
+`release_gcs_mutex` was bogus, and shared corrected functions plus a test. The
+contract is:
+
+- **Acquire** — `upload_from_string(f"Locked by {worker_id}",
+  if_generation_match=0)`: atomic create-if-absent. `PreconditionFailed` means
+  someone holds it. Retry loop with exponential backoff (`0.5 * 2**attempt`) up
+  to `max_retries`, returns bool. No internal timeout.
+- **Release** — the order is the whole point:
+  1. `download_as_text()` — this also snapshots `blob.generation` locally.
+  2. **Verify ownership**: content must equal `Locked by {worker_id}`. If not,
+     abort and return False. *This step is the fix* — without it a worker can
+     delete a lock it does not hold.
+  3. `delete(if_generation_match=blob.generation)` — guarded against the blob
+     having changed between the read and the delete.
+
+**Semantics his test pins down** (behavioral spec, worth treating as such):
+- A second worker cannot acquire a held lock.
+- A non-owner's release is refused — no lock stealing.
+- After the owner releases, acquire succeeds again.
+- **Re-acquiring a lock you already own fails.** The mutex is *not* reentrant;
+  callers must not read "already mine" as success.
+- If a third party force-deletes the lock blob and re-acquires, the original
+  owner's release fails on the ownership check rather than deleting the new
+  holder's lock — the intended safe outcome.
 
 **Open items from this thread:**
 - Finalize the state list + actually draw the transition diagram (including
   the `Errored` path).
-- Verify the mutex approach works as intended (untried code).
+- **No lease / TTL.** A crashed holder holds the lock forever; nothing expires
+  it or takes it over. Same class of problem as the daemon's missing lease —
+  see [TRANSFER_DAEMON.md](TRANSFER_DAEMON.md) *Model gaps* — and one answer
+  should serve both. Who breaks a stale lock, after how long, by what
+  mechanism? Currently nobody, ever.
+- **Ownership is a content-string compare**, so `worker_id` must be unique per
+  holder and stable across a process's lifetime. See
+  [TRANSFER_DAEMON.md](TRANSFER_DAEMON.md) *`status.json` and the bucket mutex*
+  for what Posda uses.
+- **The reference implementation is Python; our holder is Go.** The transfer
+  daemon is Posda's only bucket writer, so Bill's code is a spec to port, not
+  code we adopt.
 - Confirm whether "draft next version while current version is ready/being
   processed" is a real scenario worth the per-version (vs. per-dataset)
   granularity — motivated the per-version choice but isn't confirmed as
@@ -619,19 +724,22 @@ yet**, it's a starting point, not a decision.
 
 ## Open questions / things to figure out
 
-- **Bucket sync/concurrency:** now has a proposed mechanism — see *Bucket sync
-  & status file* above (`status.json` per dataset version + a GCS conditional-
-  write mutex) — but it's unverified/untested by either side, not yet decided.
+- **Bucket sync/concurrency:** mechanism settled — `status.json` per dataset
+  version + a GCS conditional-write mutex, with the corrected acquire/release
+  contract (see *Bucket sync & status file*). What remains open is the
+  **stale-lock policy** (no TTL, nobody breaks an abandoned lock) and the
+  Posda-side implementation, designed in
+  [TRANSFER_DAEMON.md](TRANSFER_DAEMON.md) *`status.json` and the bucket mutex*
+  and not yet built.
 - Test datasets for use cases 3/4/7/8 (analysis-result cases) — still need
   real examples, not yet picked.
 - **Where does the Go daemon live?** Not yet located in the repos — need the
   source location, and confirmation of whether it filters queued transfers by
   destination (the trigger doesn't) and whether one daemon covers all three
   manifests plus the per-file uploads.
-- **Multi-license collapse rule:** licensing is derived from recordsets
-  (Decisions), but two *public* recordsets under one dataset can carry different
-  licenses (e.g. CC 3.0 vs 4.0). What does the manifest emit then — most
-  permissive, blank, or a list?
+- ~~**Multi-license collapse rule**~~ ✅ **settled 2026-09-09:** distinct
+  licenses are pipe-joined and index-aligned across the three `license_*`
+  fields. → *Dataset manifest → Licensing*
 - **Per-file progress/retry UI** — nothing built on `transfer_file`, and no API
   either. One generic surface now covers all destinations.
 - **Single-version-per-release-cycle assumption** — needs curator sign-off
@@ -644,7 +752,7 @@ yet**, it's a starting point, not a decision.
   finalized. → *Bucket layout & versioning*
 - **Resubmission to an already-published version folder (2026-07-30
   meeting):** delete-and-recreate the folder, or reset its `status.json` to
-  `"ready to process"`? Not decided. → *Bucket layout & versioning*
+  `"Ready for processing"`? Not decided. → *Bucket layout & versioning*
 - **`dataset_short_name` mapping (2026-07-30 meeting):** needs verification
   against real collection examples that it correctly maps to the public-facing
   TCIA collection short name. → *Dataset manifest*
@@ -684,6 +792,9 @@ record, not the reference.
   files are now dropped into the bucket like imaging files, not just linked.
 - License is **derived from the recordsets** (no dataset-level license column),
   dataset-level value as the starting point. → *Dataset manifest*
+  — **⚠ superseded 2026-09-01/09:** `recordset_license` was dropped and
+  licensing moved to WordPress. The *scoping* survives (still per-recordset);
+  only the source changed. → *Dataset manifest → Licensing*
 
 **2026-07-21**
 - The five identical per-destination file tables are **collapsed into one
@@ -786,6 +897,26 @@ record, not the reference.
   `file_manifest.csv` → `imaging_manifest.csv`. → *Imaging manifest*, *DDL as
   of 2026-07-21*, *Bucket layout & versioning*
 
+**2026-09-08 (from Bill, Slack)**
+- **Corrected GCS mutex.** The `release_gcs_mutex()` shared on 2026-07-31 was
+  bogus — Bill confirmed it on inspection. The corrected release **verifies
+  ownership by content before the guarded delete**; that check supersedes the
+  earlier "delete conditioned on the held generation" description. With a test
+  script exercising it, the mechanism is no longer untried. → *Bucket sync &
+  status file*
+- Status values are **exact, case-sensitive literals** — our own notes had
+  spelled the ready state three ways. → *Bucket sync & status file*
+
+**2026-09-09**
+- **Dataset manifest gaps filled.** `dataset_version_doi` ←
+  `dataset_release.release_doi`; the `license_*` triple ← WordPress, scoped to
+  the transfer's recordsets via `wp_object_map` → download `data_license` →
+  License post, pipe-joined when they disagree. `dataset_tooltip` stays empty
+  pending a non-NBIA source. → *Dataset manifest*
+- **Licensing is WordPress's**, confirming the 2026-07-16 meeting and reversing
+  the 2026-07-17 "derived from `recordset.license_id`" decision —
+  `recordset_license` was dropped 2026-09-01. → *Dataset manifest → Licensing*
+
 ## Action items
 
 **2026-07-16 (meeting)**
@@ -794,9 +925,10 @@ record, not the reference.
 - **Michael:** add `file_manifest_url` and `dataset_version_doi` fields to the
   dataset manifest. (`tumor_locations` from the meeting turned out to be a
   duplicate of the existing `cancer_locations` field — dropped.)
-- **Michael:** add licensing info to the manifest. ⚠ The meeting said "pulled
-  from the WordPress DB," but we since established license lives on
-  `recordset.license_id` in **Posda** — derive it from the recordsets instead.
+- ~~**Michael:** add licensing info to the manifest.~~ ✅ done 2026-09-09. The
+  meeting's "pulled from the WordPress DB" turned out to be right after all:
+  the intervening `recordset.license_id` answer was dropped with
+  `recordset_license` on 2026-09-01. → *Dataset manifest → Licensing*
 - **Michael:** push the first test case to the Google bucket for end-to-end
   validation.
 - **Michael:** confirm the single-version-per-release-cycle assumption with Kirk
