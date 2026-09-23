@@ -53,6 +53,10 @@ The module is built (see the DDL section below for exact columns):
   `release_date`, `release_notes`, and its own **`release_doi`**. So datasets
   *and* recordsets both get per-version DOIs — this is the "subcollection"
   concept realized.
+  - ⚠ **Capability, not practice.** The columns exist and are plumbed through
+    the API, but no release DOI is minted or used, and neither is
+    `recordset.recordset_doi`. Adoption of recordset- and release-level DOIs
+    needs coordination with TCIA and IDC before it is final.
 - **Recordset releases are built from drafts:** `recordset_draft` (+
   `recordset_draft_file`) is the mutable working set; publishing snapshots it
   into `recordset_release` (+ `recordset_release_file`).
@@ -339,8 +343,9 @@ all the sourcing at generation time and writes a static CSV; the daemon only
 | `license_short_name` | License short name — **WP** License post `title` | ✅ 2026-09-09 |
 
 [^1]: **TCIA's DOI for TCIA-sourced datasets, IDC's own DOI for IDC-sourced
-    datasets** — TCIA to provide versioned DOIs going forward (2026-07-30
-    meeting).
+    datasets**. ⚠ TCIA has not worked out the logistics of *generating*
+    versioned DOIs — the capability is there, the process is not, and IDC uses
+    TCIA's dataset-level DOI today. → *Current model*, release-DOI caveat.
 [^2]: **⚠ Pending confirmation (2026-07-30 meeting):** whether this correctly
     maps to the public-facing TCIA collection short name — Michael to verify
     against real examples.
@@ -488,12 +493,26 @@ linked on WordPress; they're now handled **the same way as imaging files**:
 - **✅ Timing risk resolved 2026-08-25 — WordPress takes precedence.** The
   original worry was that CM might not be live at generation time. The sharper
   version, raised in review: the Posda clinical file is often an **update** of
-  what CM already holds. Since the manifest gives IDC a **`download_url` into
-  CM** rather than a copy of the file, generating before the WordPress transfer
-  refreshes CM makes IDC resolve the **previous version** — and the manifest
-  looks entirely valid, so nothing downstream can detect it.
-  - Checking that the CM download merely *has a file attached* is **not
+  what CM already holds.
+  - **The content is safe either way.** Clinical files are deposited in the
+    bucket and the manifest carries `relative_file_url` + `file_hash`, so the
+    file IDC ingests is correct whatever state CM is in.
+  - **What the gate protects is the CM-sourced *metadata* columns** —
+    `download_slug`, `download_id`, `date_updated`, `download_title`,
+    `download_type`, `download_url` are read live from CM at generation time.
+    Generating before CM is refreshed ships a *current file described by the
+    previous version's metadata*: a stale `date_updated`, and a `download_url`
+    resolving to a file that does not match the accompanying `file_hash`.
+    Nothing in the manifest looks wrong, which is what makes it worth gating.
+    Checking that the CM download merely *has a file attached* is **not
     sufficient**: the stale file is attached too.
+  - ⚠ **The gate is therefore a provenance guarantee, not a data-correctness
+    one**, and it is worth revisiting whether that justifies blocking the IDC
+    transfer on the WordPress one. `download_url` is the odd field out: every
+    other column either describes the deposited file or identifies the CM
+    record, while `download_url` points at a *different copy* that can drift.
+    **If IDC does not use it, dropping the field removes the mismatch and most
+    of the reason for the gate** — needs an answer from Bill.
   - **The gate is the WordPress transfer for the same dataset release having
     `transfer_status = 'success'`** — WordPress is `default_display` for these
     recordsets, so the file reaches CM first and the manifest is then generated
@@ -514,9 +533,10 @@ linked on WordPress; they're now handled **the same way as imaging files**:
     IDC scoping the **WordPress transfer blocked on itself**, which made the gate
     impossible to satisfy (caught in testing, fixed).
 - **Clinical-only changes:** per-dataset scoping means a release where only
-  clinical data changed can ship with the file and dataset manifests unchanged
-  from the prior version — only the clinical manifest (and its new/changed
-  files) is regenerated/dropped.
+  clinical data changed ships the **dataset manifest plus** the clinical
+  manifest and its new/changed files; the imaging manifest is absent. The
+  dataset manifest goes along because it is what identifies the version folder
+  — see *Bucket layout & versioning*.
 - **Dataset-level identification is derived from the dataset manifest** in the
   same version folder — consistent with how the imaging manifest already works —
   so no redundant dataset-identifying fields are needed on the clinical
@@ -608,9 +628,27 @@ references, moving the package across buckets/projects during ETL means updating
 relative scheme.
 
 **Versioning:**
-- **No sub-versioning within a release cycle.** All changes pushed *before* IDC
-  ingestion **overwrite the prior submission** in place. A new version number is
-  only needed **post-release**, once IDC has ingested/gone live with a version.
+- **No sub-versioning within a release cycle.** While a version folder is still
+  `Draft`, corrections **overwrite it in place** — there is no `1.1`/`1.2`
+  staging sequence. Once the folder is marked `Ready for processing` **and
+  ingested by IDC**, a further change requires a new version number.
+  - The boundary is **ingestion**, not "marked ready" — a correction to a folder
+    that is `Ready for processing` but not yet picked up is still an in-place
+    overwrite. ⚠ What that leaves undecided is the mechanics
+    (delete-and-recreate vs. reset `status.json`) and how the overwrite
+    interacts with the per-version mutex, since Posda has released the lock by
+    then. → *Pending confirmation*, below.
+- **The dataset manifest ships in every version**, even when byte-identical to
+  the prior version's. It is the version folder's **identity record**: the
+  imaging and clinical manifests deliberately carry no dataset-identifying
+  fields and rely on it, so a folder without it leaves IDC inferring identity
+  from the bucket path — exactly what the relative-URL scheme exists to avoid.
+  "Absent means nothing changed" therefore applies to the **imaging and clinical
+  manifests only**.
+  - ⚠ This makes byte-stable regeneration load-bearing: an unchanged dataset
+    manifest must regenerate to a **byte-identical** CSV, or the
+    content-addressed `file` row forks on every version. The sorted,
+    index-aligned `license_*` fields are what deliver that.
 - **Metadata-only changes** (e.g. species, cancer type) ship via the **dataset
   manifest alone** — no file *or* clinical manifest needed if those are
   unchanged (2026-07-30 meeting — extends the original file-manifest-only
@@ -916,6 +954,44 @@ record, not the reference.
 - **Licensing is WordPress's**, confirming the 2026-07-16 meeting and reversing
   the 2026-07-17 "derived from `recordset.license_id`" decision —
   `recordset_license` was dropped 2026-09-01. → *Dataset manifest → Licensing*
+
+**2026-09-17 (writing the IDC coordination doc)**
+
+Decided while drafting *TCIA-to-IDC Submission* for the IDC team; several came
+out of contradictions the draft exposed in these notes.
+
+- **Recordset and release DOIs are a capability, not practice.** The columns and
+  API plumbing exist, but nothing mints or uses them, and adoption needs
+  TCIA/IDC coordination first. Walks back the 2026-07-21 framing, which read as
+  settled and in use. → *Current model*
+- **Versioned DOI generation is unresolved on TCIA's side** — the 2026-07-30
+  "TCIA to provide versioned DOIs going forward" holds as intent, but the
+  process for minting them does not exist and IDC uses the dataset-level DOI
+  today. → *Dataset manifest*, footnote 1
+- **The overwrite boundary is `Draft` → ingestion, not "before IDC ingestion."**
+  Corrections overwrite in place while the folder is `Draft`, and a folder that
+  is `Ready for processing` but not yet picked up may still be overwritten; a
+  new version number is required only once IDC has ingested. The old wording
+  contradicted *Manifest generation*, which has several TCIA releases queueing
+  un-ingested at once. Mechanics of the ready-but-not-ingested overwrite, and
+  its interaction with the per-version mutex, stay open. → *Bucket layout &
+  versioning*
+- **The dataset manifest ships in every version**, byte-identical or not. It is
+  the version folder's identity record — the imaging and clinical manifests
+  carry no dataset-identifying fields by design — so "absent means nothing
+  changed" now applies to those two only. This reverses the 2026-07-30 reading
+  that a clinical-only release leaves the dataset manifest behind in the prior
+  version, which would have left a version folder with nothing identifying its
+  dataset. Makes byte-stable regeneration load-bearing. → *Bucket layout &
+  versioning*, *Clinical manifest*
+- **The WordPress-precedence gate protects metadata, not content.** Since
+  clinical files started being deposited in the bucket (2026-07-30) with
+  `relative_file_url` + `file_hash`, the file IDC ingests is correct regardless
+  of CM state; what can go stale are the CM-sourced columns. The gate's stated
+  rationale had not been updated and still described IDC resolving the previous
+  version of the *file*. The gate is now a provenance guarantee, weak enough to
+  be worth revisiting — and dropping `download_url`, if IDC does not use it,
+  would remove most of its purpose. → *Clinical manifest*
 
 ## Action items
 
