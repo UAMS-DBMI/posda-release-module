@@ -1598,6 +1598,14 @@ Recorded so they aren't rediscovered late.
   inferred from everything being distributed. Fine for now, but the Overview and
   the next-action banner both have to decide what to say when nothing is
   outstanding.
+- **Assemble: keep the row expand after bundling.** *(raised 2026-09-24)* Once a
+  recordset has been bundled, its Assemble row should still expand to show the
+  details, not lose them.
+- **Disseminate waits on an emptied destination.** *(raised 2026-09-24)* When a
+  destination is reduced to 0 recordsets, Transfer shows it as "no longer
+  configured", but Disseminate still looks as if it is waiting on that
+  destination, even though it has nothing to transfer. Disseminate should treat
+  it the way Transfer does.
 
 ## Verification
 
