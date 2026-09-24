@@ -750,13 +750,11 @@ Rough shape of what each adapter has to do. Not researched in depth.
 | **NBIA** (`nbia`) | NBIA submission | `collection` / `site` recorded | mechanism not investigated; NBIA is being retired as the storage component, so confirm this is still needed |
 | **GC** (`gc`) | General Commons | — | mechanism not investigated |
 
-## WordPress transfer — schema done, transfer not built *(2026-09-02, extended 2026-09-16)*
+## WordPress transfer — built *(2026-09-02, extended 2026-09-16, built 2026-09-24)*
 
-Stopped before implementing: the model needed a schema change to hold this
-properly and there was no time to do it right. **Schema and renames done
-2026-09-23** (see *Migration checklist*); the transfer itself — the
-per-recordset helper, the transfer-level action, and the `wp` branch in the
-queue transition — **is not built**.
+Schema and renames done 2026-09-23 (see *Migration checklist*); the transfer
+itself built and run against dataset 1 on 2026-09-24 — see *Built* below. The
+sections in between are the design as worked out, kept for the reasoning.
 
 The 2026-09-16 pass read the code rather than reasoning from the model, which
 changed three things: the `wp_object_map` "workaround" turns out to be the
@@ -957,6 +955,48 @@ The queue transition already gates on the release not being a draft, and fires
 transfer needs its own branch there: in-process execution (decision 1) means it
 should *do the work* in that transition rather than NOTIFY a listener that does
 not exist.
+
+### ✅ Built 2026-09-24
+
+All in `distribution.py`, next to `manifest/attach`:
+
+- **`deliver_wp_recordset()`** — the per-recordset helper. Refuses non-`wp`
+  transfers, any file count other than 1 (decision 2), and a recordset with no
+  linked download page. Uploads under the file's **original name** via
+  `ensure_wp_media`, sets `transfer_recordset.download_file_id`, and PATCHes
+  `download_file` / `download_size` / `download_size_unit` only where they
+  differ. Sizes come from `wp_download_size()`, checked to match `convert_bytes`
+  exactly (decision 3).
+- **`POST /transfers/{id}/recordsets/{rid}/wp/deliver`** — retry one recordset;
+  leaves `transfer_status` alone.
+- **`run_wp_transfer()`** — attempts every recordset even after a failure, then
+  sets `transfer_status` to `success` or `failed`. `success` is what releases
+  `_wp_precedence_block`.
+- **Queue branch** — queueing a `wp` transfer runs `run_wp_transfer()` after the
+  status-update transaction commits (no transaction held across WordPress
+  calls) and returns the settled row plus a `wp_delivery` per-recordset result
+  list. `_fan_out_transfer_files` was already IDC-only; the NOTIFY still fires
+  but the daemon only claims `idc`.
+
+Deliberate differences from the plan:
+
+- **No failure note.** `transfer_notes` is curator-typed; writing into it would
+  clobber them. Per-recordset errors are in `wp_delivery` instead.
+- **Only API errors are caught per recordset.** Anything unexpected surfaces as
+  a 500 and leaves the transfer `queued`, which can be re-queued.
+
+Dataset 1's hand-uploaded media were pre-mapped (`wp_object_map` rows
+`file` → `media` 6595 / 6593) before the first run, so it attached the existing
+attachments instead of uploading duplicates.
+
+Still open:
+
+- ⚠ **Streaming.** Unchanged — `ensure_wp_media` still reads the whole file into
+  memory.
+- `ensure_wp_media`'s unreadable-file message still says "manifest …
+  regenerate it", which is wrong for a data file.
+- The queue toast says "Transfer queued." even though a WP transfer has already
+  finished (or failed) by the time it returns.
 
 ## Open questions
 
