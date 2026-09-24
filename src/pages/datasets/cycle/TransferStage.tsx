@@ -81,7 +81,13 @@ function manifestGroups(
 ): ManifestGroup[] {
   if (destinationAbbr !== "idc") {
     return rows.length > 0
-      ? [{ label: "Recordsets", rows, count: (r) => r.imaging_files + r.clinical_files }]
+      ? [
+          {
+            label: "Recordsets",
+            rows,
+            count: (r) => r.imaging_files + r.clinical_files + r.unlistable_files,
+          },
+        ]
       : [];
   }
 
