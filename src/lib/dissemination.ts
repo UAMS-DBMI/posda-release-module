@@ -9,7 +9,7 @@ import { wpObjectQueryKey } from "@/lib/wpObjectMap";
  *
  * Reads come from hooks that already exist — the cycle payload carries the
  * pages and their `wp_map_id`, `useWpObject` carries live post status, and
- * `useTransferRecordsets` carries `retriever_manifest_file_id`. Only the writes
+ * `useTransferRecordsets` carries `download_file_id`. Only the writes
  * are new. Toasts stay at the call site, as with the other hooks here.
  */
 
@@ -107,7 +107,7 @@ export function useGenerateRetrieverManifest() {
       return json.data;
     },
     onSuccess: (_result, { transferId }) => {
-      // retriever_manifest_file_id lives on the transfer's recordset list,
+      // download_file_id lives on the transfer's recordset list,
       // which is what the stage reads to decide Generate vs Attach.
       void queryClient.invalidateQueries({
         queryKey: transferRecordsetsKey(transferId),

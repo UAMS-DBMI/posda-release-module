@@ -3,7 +3,7 @@ import { apiFetch, type ItemEnvelope } from "@/lib/apiFetch";
 
 /**
  * Per-destination transfer settings (`transfer_idc` / `_gc` / `_aspera` /
- * `_nbia` / `_wp`) and IDC manifest generation. Shared by the cycle's Transfer
+ * `_nbia`) and IDC manifest generation. Shared by the cycle's Transfer
  * stage Manage modal and `transfers/Detail.tsx`, so the two can't drift.
  */
 
@@ -14,7 +14,6 @@ const BASE = "/papi/v1/distribution";
 export const SETTINGS_ENDPOINT: Record<string, string> = {
   idc: "idc",
   gc: "gc",
-  wp: "wp",
   asp: "aspera",
   nbia: "nbia",
 };
@@ -41,7 +40,6 @@ export type TransferSettings = {
   faspex_url?: string | null;
   collection?: string | null;
   site?: string | null;
-  wp_media_file_id?: number | null;
   /** IDC only. Which manifests this transfer needs, derived from what it
    *  actually carries (dataset always; imaging when it has DICOM; clinical when
    *  it has files from a Clinical Data recordset), and which are still
@@ -64,7 +62,6 @@ export type TransferSettingsValues = {
   faspex_url: string;
   collection: string;
   site: string;
-  wp_media_file_id: string;
 };
 
 export const emptyTransferSettings: TransferSettingsValues = {
@@ -74,7 +71,6 @@ export const emptyTransferSettings: TransferSettingsValues = {
   faspex_url: "",
   collection: "",
   site: "",
-  wp_media_file_id: "",
 };
 
 export function settingsToValues(
@@ -88,8 +84,6 @@ export function settingsToValues(
     faspex_url: s.faspex_url ?? "",
     collection: s.collection ?? "",
     site: s.site ?? "",
-    wp_media_file_id:
-      s.wp_media_file_id != null ? String(s.wp_media_file_id) : "",
   };
 }
 
@@ -110,13 +104,6 @@ export function settingsPayload(
         ...shared,
         collection: v.collection.trim() || null,
         site: v.site.trim() || null,
-      };
-    case "wp":
-      return {
-        ...shared,
-        wp_media_file_id: v.wp_media_file_id.trim()
-          ? Number.parseInt(v.wp_media_file_id, 10)
-          : null,
       };
     default:
       return shared;

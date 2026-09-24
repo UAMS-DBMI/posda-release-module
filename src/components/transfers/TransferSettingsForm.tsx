@@ -151,20 +151,6 @@ export default function TransferSettingsForm({
         </>
       )}
 
-      {destinationAbbr === "wp" && (
-        <label className="block">
-          <span className={LABEL} style={{ color: "var(--muted)" }}>
-            Media File ID
-          </span>
-          <input
-            type="number"
-            value={values.wp_media_file_id}
-            onChange={(e) => set("wp_media_file_id", e.target.value)}
-            className="input mt-1 w-full"
-          />
-        </label>
-      )}
-
       {destinationAbbr === "idc" && (
         <div>
           <span className={LABEL} style={{ color: "var(--muted)" }}>

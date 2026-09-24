@@ -29,7 +29,7 @@ type RecordsetRelease = {
   recordset_name: string;
   recordset_type_name: string;
   release_number: number;
-  retriever_manifest_file_id: number | null;
+  download_file_id: number | null;
   downloadable_file_id: number | null;
   security_hash: string | null;
 };
@@ -125,7 +125,7 @@ export default function TransferDetail() {
           rs.recordset_release_id === r.recordset_release_id
             ? {
                 ...rs,
-                retriever_manifest_file_id: json.data.file_id,
+                download_file_id: json.data.file_id,
                 downloadable_file_id: json.data.downloadable_file_id,
                 security_hash: json.data.security_hash,
               }
@@ -244,7 +244,7 @@ export default function TransferDetail() {
         {!isLoading && recordsets.length > 0 && (
           <ul className="divide-y text-sm" style={{ borderColor: "var(--border-strong)" }}>
             {recordsets.map((r) => {
-              const hasManifest = r.retriever_manifest_file_id !== null;
+              const hasManifest = r.download_file_id !== null;
               const isGenerating = generatingManifestId === r.recordset_release_id;
               const isRadiology = r.recordset_type_name === "Radiology Images";
               return (

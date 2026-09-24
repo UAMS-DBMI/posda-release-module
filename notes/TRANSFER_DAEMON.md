@@ -750,11 +750,13 @@ Rough shape of what each adapter has to do. Not researched in depth.
 | **NBIA** (`nbia`) | NBIA submission | `collection` / `site` recorded | mechanism not investigated; NBIA is being retired as the storage component, so confirm this is still needed |
 | **GC** (`gc`) | General Commons | — | mechanism not investigated |
 
-## WordPress transfer — worked out, not built *(2026-09-02, extended 2026-09-16)*
+## WordPress transfer — schema done, transfer not built *(2026-09-02, extended 2026-09-16)*
 
-Stopped before implementing: the model needs a schema change to hold this
-properly and there was no time to do it right. Everything below is established
-fact or a decision still to make — **nothing has been built**.
+Stopped before implementing: the model needed a schema change to hold this
+properly and there was no time to do it right. **Schema and renames done
+2026-09-23** (see *Migration checklist*); the transfer itself — the
+per-recordset helper, the transfer-level action, and the `wp` branch in the
+queue transition — **is not built**.
 
 The 2026-09-16 pass read the code rather than reasoning from the model, which
 changed three things: the `wp_object_map` "workaround" turns out to be the
@@ -776,7 +778,7 @@ live pages for dataset 1 already host exactly the files Posda holds.
 So the job is: upload each recordset release's file to the WP media library,
 then point that recordset's download page at it (`download_file`).
 
-### ✅ Schema — settled 2026-09-16 (migration not yet written)
+### ✅ Schema — settled 2026-09-16, migrated 2026-09-23
 
 The 2026-09-02 framing was *"`transfer_wp.wp_media_file_id` cannot hold this, so
 add a parallel column."* Both halves turned out to be wrong in the same
@@ -843,26 +845,30 @@ Two consequences, both accepted deliberately:
   unpopulated pair of misnamed booleans is not worth preserving as a stand-in.
 - The settings surface loses a destination. `SETTINGS_ENDPOINT` maps
   `wp: "wp"` and `settingsPayload` has a `case "wp"`; both go.
-  `useTransferSettings` already guards on `path != null`, so a destination with
-  no settings endpoint looks supported — **verify that before assuming it is
-  deletion rather than rework.**
+  ✅ Verified 2026-09-23: `TransferSettingsForm` renders "no
+  destination-specific settings" for an unmapped destination, so this was pure
+  deletion.
 
 #### Migration checklist
 
-Schema changes go in a migration script, not the add/drop/create trio.
+All in `posda_files/20260923_wp_transfer_download_file.sql`. `0047` and the drop
+script are frozen — the migration series is the record.
 
-- [ ] `ALTER TABLE transfer_recordset RENAME COLUMN retriever_manifest_file_id
+- [x] `ALTER TABLE transfer_recordset RENAME COLUMN retriever_manifest_file_id
       TO download_file_id;`
-- [ ] Rename `fk_transfer_dataset_retriever_manifest_file` to match.
-- [ ] `COMMENT ON COLUMN transfer_recordset.download_file_id` — state the
+- [x] Rename `fk_transfer_dataset_retriever_manifest_file` to
+      `fk_transfer_recordset_download_file`.
+- [x] `COMMENT ON COLUMN transfer_recordset.download_file_id` — state the
       polymorphism and that destination is the discriminator.
-- [ ] `DROP TABLE transfer_wp CASCADE;`
-- [ ] Mirror all of the above into the DbSchema model, or a regenerate clobbers
-      it — and update the drop + test-data scripts to match.
-- [ ] Backend: rename references; delete `get_transfer_wp` / `upsert_transfer_wp`
+- [x] `DROP TABLE transfer_wp CASCADE;`
+- [x] Applied to the local DB and the DbSchema model resynced from it
+      (2026-09-23).
+- [x] Backend: rename references; delete `get_transfer_wp` / `upsert_transfer_wp`
       and `TransferWpUpdate`.
-- [ ] Frontend: rename references; remove `wp` from `SETTINGS_ENDPOINT` and the
-      `case "wp"` in `settingsPayload`.
+- [x] Frontend: rename references; remove `wp` from `SETTINGS_ENDPOINT`,
+      `settingsPayload`, the settings types, and the Media File ID input.
+      Verified: a destination absent from `SETTINGS_ENDPOINT` already renders
+      "no destination-specific settings", so this was deletion, not rework.
 
 ### What already exists and can be reused
 

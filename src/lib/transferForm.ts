@@ -60,7 +60,7 @@ export type TransferRecordset = {
   /** Files matching neither predicate: no manifest can list them, so the
    *  transfer skips them. A routing mistake rather than a category. */
   unlistable_files: number;
-  retriever_manifest_file_id: number | null;
+  download_file_id: number | null;
   downloadable_file_id: number | null;
   security_hash: string | null;
 };

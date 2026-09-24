@@ -154,7 +154,7 @@ function ManifestCell({ recordset }: { recordset: CycleRecordset }) {
 
   const releaseId = recordset.release_in_cycle?.recordset_release_id;
   const row = rows?.find((r) => r.recordset_release_id === releaseId);
-  const hasManifest = row?.retriever_manifest_file_id != null;
+  const hasManifest = row?.download_file_id != null;
   const target = {
     transferId: transfer.dataset_release_transfer_id,
     recordsetReleaseId: releaseId ?? 0,
