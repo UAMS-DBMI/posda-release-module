@@ -118,15 +118,16 @@ export default function AssembleStage() {
         headers={["Recordset", "Draft", "Status", "Files", "Version", ""]}
         rows={cycle.recordsets}
         getRowKey={(r) => r.recordset_id}
-        canExpand={(r) => r.open_draft?.recordset_draft_id != null}
+        // Falls back to the published draft so the contents stay viewable after
+        // bundling, when open_draft goes null. The summary is read-only.
+        canExpand={(r) => (r.open_draft ?? r.published_draft) != null}
         expandLabel="contents"
         expandedKey={expandedId}
         onExpandedKeyChange={(k) => setExpandedId(k as number | null)}
-        renderExpanded={(r) =>
-          r.open_draft ? (
-            <DraftSummary draftId={r.open_draft.recordset_draft_id} />
-          ) : null
-        }
+        renderExpanded={(r) => {
+          const shown = r.open_draft ?? r.published_draft;
+          return shown ? <DraftSummary draftId={shown.recordset_draft_id} /> : null;
+        }}
         renderCells={(r) => {
               const draft = r.open_draft;
               const draftId = draft?.recordset_draft_id ?? null;

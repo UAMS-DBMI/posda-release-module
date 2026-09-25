@@ -1598,9 +1598,11 @@ Recorded so they aren't rediscovered late.
   inferred from everything being distributed. Fine for now, but the Overview and
   the next-action banner both have to decide what to say when nothing is
   outstanding.
-- **Assemble: keep the row expand after bundling.** *(raised 2026-09-24)* Once a
-  recordset has been bundled, its Assemble row should still expand to show the
-  details, not lose them.
+- **Assemble: keep the row expand after bundling — DONE 2026-09-25.** *(raised
+  2026-09-24)* Once a recordset has been bundled, its Assemble row should still
+  expand to show the details, not lose them. The expand now falls back from
+  `open_draft` to `published_draft`, like the row's other cells; the summary
+  endpoint serves a draft whatever its status.
 - **Disseminate waits on an emptied destination.** *(raised 2026-09-24)* When a
   destination is reduced to 0 recordsets, Transfer shows it as "no longer
   configured", but Disseminate still looks as if it is waiting on that
