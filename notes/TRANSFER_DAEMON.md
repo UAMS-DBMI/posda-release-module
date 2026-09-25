@@ -668,6 +668,11 @@ Worth splitting only when a destination cannot share the runtime:
 Even then, prefer **shared core + a thin remote adapter** over a second full
 daemon, so claiming and status handling stay in one implementation.
 
+⚠ **CRDC is the exception, decided 2026-09-25: its own Go daemon.** The table
+above assumes the shared part is most of the work; for CRDC the uploader
+brings its own batching and retries, so what is shared shrinks to
+claim/status. See *GC / CTDC → Its own daemon, in Go*.
+
 ## Keep the boundary: the daemon transports, Posda decides
 
 Already established for IDC (IDC_TRANSFER.md, 2026-07-22: *"Posda does all
@@ -748,7 +753,8 @@ Rough shape of what each adapter has to do. Not researched in depth.
 | **WordPress** (`wp`) | WP REST media upload | one media upload **per recordset release**, each attached to its own download page; refreshes the CM download | ⚠ **must complete before IDC's clinical manifest can generate** — the only cross-destination ordering in the model. Uses `transfer_recordset.download_file_id`; `transfer_wp` is dropped — see below |
 | **Aspera** (`asp`) | Faspex | `faspex_url` recorded on the transfer | may need the proprietary client; likeliest candidate for a separate process |
 | **NBIA** (`nbia`) | NBIA submission | `collection` / `site` recorded | mechanism not investigated; NBIA is being retired as the storage component, so confirm this is still needed |
-| **GC** (`gc`) | General Commons | — | mechanism not investigated |
+| **GC** (`gc`) | CRDC Data Hub CLI uploader, shelled out from `crdc-transfer-daemon` (Go) | Posda generates GC-model metadata TSVs; Data Hub submission must exist first | shares the CRDC process with CTDC — see *GC / CTDC* below |
+| **CTDC** (not yet a destination) | same daemon and uploader as GC | Posda generates CTDC-model metadata TSVs | same transport as GC, different data model |
 
 ## WordPress transfer — built *(2026-09-02, extended 2026-09-16, built 2026-09-24)*
 
@@ -998,6 +1004,163 @@ Still open:
 - The queue toast says "Transfer queued." even though a WP transfer has already
   finished (or failed) by the time it returns.
 
+## GC / CTDC — CRDC submission *(discussion, 2026-09-24)*
+
+**Discussion only — nothing built or decided.** Sources:
+<https://datacommons.cancer.gov/submit> and the uploader README at
+<https://github.com/CBIIT/crdc-datahub-cli-uploader>.
+
+### One process, two targets
+
+General Commons (GC) and the Clinical and Translational Data Commons (CTDC) are
+both reached through the **same CRDC submission process**. Data goes to one or the
+other, so **which commons is always required** — even if Posda runs a single
+combined CRDC flow. What is shared and what is not:
+
+| Shared (the CRDC process) | Per commons |
+|---|---|
+| Submission Request + review | which commons the Data Submission targets |
+| Data Hub portal, API token, CLI uploader | the data model / metadata TSV templates |
+| data-file batches (name, size, MD5 manifest) | metadata content and validation rules |
+| validation → submit → concierge review → release | |
+
+### The CRDC flow
+
+1. **Submission Request** — PI/primary contact applies in the Submission Portal;
+   the CRDC Submission Review Committee decides in **4–6 weeks**. Controlled-access
+   studies must be **registered in dbGaP first**. Data must be de-identified.
+2. **Data Submission** in the Data Hub portal, against one data commons. Two
+   batch types:
+   - **metadata** — TSVs against that commons' data model (Model Navigator, data
+     dictionary and templates in the portal; CRDC standard CDEs in caDSR);
+   - **data files** — uploaded with the CLI uploader.
+3. Portal validation → submit → Data Submission team / data concierge review →
+   **CRDC releases** the data to the commons.
+
+Steps 1 and 3 are human. A Posda transfer only automates the uploads in step 2.
+
+### The transport: `crdc-datahub-cli-uploader`
+
+- **Python 3.13+** (binaries for macOS/Windows); `python3 src/uploader.py --config <file>`.
+- **Auth: a Data Hub API token**, created in the portal (name → *API TOKEN*).
+- Config keys: `api-url`, `token`, `submission` (the Data Submission ID),
+  `type` (`data file` | `metadata`), `data` (local folder), `manifest` (TSV),
+  `id-field`, `retries`, `overwrite`, `dryrun`.
+- Data-file manifest columns: file id (generated if missing, written back as a
+  `-final` manifest and uploaded), file name, size, MD5. Metadata mode uploads
+  every `.txt`/`.tsv` in the folder.
+- Validates against the manifest before uploading; creates *batch* records
+  visible in the portal. Storage is S3-backed per Data Hub (not stated in the
+  README).
+
+### ✅ Its own daemon, in Go — decided 2026-09-25
+
+**CRDC gets a separate daemon: `UAMS-DBMI/crdc-transfer-daemon`**, cloned
+locally at `../crdc-transfer-daemon`, **written in Go**, shelling out to the
+Python CLI uploader. *(Revised 2026-09-25 — the first draft of this section
+suggested a shell-out adapter inside the IDC daemon.)*
+
+Repo state *(checked 2026-09-25)*: **an empty scaffold** — one *"Initial
+commit"* (2026-09-02) holding only an empty `README.md` and GitHub's Go
+`.gitignore`, in sync with `origin/main`.
+
+**Why separate.** The *"one daemon, pluggable adapters"* argument in *The main
+question* rests on the shared part being most of the work. For CRDC it is not:
+
+- **What would be shared is small.** The IDC daemon's hard parts — keyset
+  pagination, 200 parallel workers, HEAD-then-verify-MD5, batched
+  `transfer_file` flushes — are GCS transport. The CRDC uploader does its own
+  batching, retries and bookkeeping. What remains in common is LISTEN, claim and
+  status writes: a few hundred lines, cheap to duplicate.
+- **Runtime.** The uploader is Python. Folding it in would put a Python runtime
+  into a lean Go image that already works.
+- **Credentials.** Keeps the GCS service-account key and a person's Data Hub
+  API token in separate processes.
+- **Workload shape.** IDC is fast, high fan-out and tracked per file. CRDC is a
+  few subprocess batches, a staging folder, then human review — and possibly
+  polling Data Hub for submission status later, which IDC never needs.
+- **Risk.** The IDC daemon is fixed and verified (items 1–7). Refactoring it
+  into a plugin host with no second destination to validate against is
+  speculative.
+- **Precedent.** WordPress already lives outside the IDC daemon (in-process in
+  Posda); one mechanism per process is the pattern in practice.
+
+**Why Go**, even though its main job is driving a Python CLI: consistency with
+the IDC daemon — same language, build, deployment and logging conventions, and
+the claim SQL can be carried over near-verbatim. The uploader is a script rather
+than a packaged library, so Python would not have bought a clean import anyway.
+
+**What this commits us to:**
+
+- **Each daemon claims only its own destinations.** The NOTIFY is
+  destination-agnostic, so both daemons wake on every queued transfer. The claim
+  query must filter on destination (`gc`/`ctdc` here; the IDC daemon already
+  claims only `idc`). This makes the NOTIFY-payload open question —
+  `destination_abbr` in the payload — worth doing rather than merely cheap.
+- **The claim/lease logic exists twice.** Keep the claim SQL identical between
+  the two daemons, and fix the lease/heartbeat gap (*Model gaps*) in both.
+  Extract a shared Go module only if the copies start to drift.
+- IDC change-list items 1–4 (`who_updated = 0`, `transfer_file`, Posda owns
+  destination config, one NOTIFY) apply unchanged; see the shared/IDC-only table
+  under *What the daemon needed changed*.
+
+Friction worth planning for:
+
+- **Staging.** The uploader wants a folder of files matching the manifest's
+  names; Posda stores files under `file_storage_root` paths. The daemon (or
+  Posda) must stage a per-batch folder — links, not copies, at dataset scale.
+- **Per-file progress.** The uploader reports per batch, not per file into
+  `transfer_file`. Either parse its output/final manifest, or accept batch-level
+  status for CRDC.
+- **Credentials.** The API token belongs to a Data Hub user, not a service
+  account — whose token the daemon runs with is an open question.
+- **MD5** is already `file.digest`, so the data-file manifest is cheap to build.
+
+### `success` is not "released"
+
+A CRDC transfer can only honestly mean *batches uploaded to the Data Submission*.
+Validation, submit, review and release happen in the portal. Same gap as
+WordPress's `data_is_live` vs `page_is_live` (CYCLE_WIZARD, *Open question*), but
+wider and slower. Whether Posda later polls Data Hub for submission status is a
+separate decision.
+
+### Posda decides: metadata TSVs are the real work
+
+Per *Keep the boundary*, **Posda generates the metadata TSVs** and the data-file
+manifest; the daemon only uploads them — the CRDC equivalent of the IDC
+manifests. ⚠ **Mapping Posda/CM data onto the GC and CTDC models** (study,
+participant, sample, file nodes, CDEs) **has not been looked at**, and is likely
+most of the effort. Two models means two generators over a shared file manifest.
+
+### Schema: where the commons lives
+
+`transfer_gc` today holds only `published` / `public` — the same unpopulated,
+unread pair that was dropped with `transfer_wp`. A CRDC transfer needs instead:
+the **Data Hub submission ID**, the **target commons**, and probably per-batch
+IDs/status. Two ways to record the commons:
+
+1. **Destination per commons** (`gc`, add `ctdc`), sharing one `transfer_crdc`
+   settings table and one adapter. The commons is known from routing
+   (`recordset_destination`) onward, so a recordset can be marked CTDC-bound, and
+   it matches CRDC's one-Data-Submission-per-commons and Posda's
+   one-destination-per-transfer. *Leaning this way.*
+2. **One `crdc` destination** with a required `data_commons` column on
+   `transfer_crdc`. Fewer lookup rows, but the commons is chosen at transfer
+   time, so routing can no longer say which commons a recordset belongs in.
+
+Either way `transfer_gc` is replaced, not extended — a migration under the
+post-merge rule.
+
+### Open questions
+
+- Does **one Submission Request** cover both GC and CTDC for a study, or is one
+  needed per commons?
+- Is GC the renamed Cancer Data Service (CDS)? Believed so; unconfirmed.
+- Are TCIA collections bound for CRDC open or controlled access (dbGaP gate)?
+- `MANIFEST_FORMATS["gc"]` is a placeholder CSV. If CRDC hosts the data, what
+  does the TCIA download page link to — a GC/CTDC landing page, or a manifest?
+- Whose Data Hub API token does the daemon use, and how is it rotated?
+
 ## Open questions
 
 - Does the DBMI copy of the daemon keep `idc_transfer_channel` as the channel
@@ -1009,6 +1172,8 @@ Still open:
   processes.
 - Is NBIA still a live destination given it is being retired as TCIA's storage
   component?
+- GC / CTDC: where the target commons is recorded, and whether one CRDC
+  Submission Request covers both — see *GC / CTDC — CRDC submission*.
 - Who owns the daemon's deployment/monitoring now that it lives in
   `UAMS-DBMI`, and does it run one instance or several? The claim accepts
   `in_progress` as claimable — which is how it recovers from a crash, and
