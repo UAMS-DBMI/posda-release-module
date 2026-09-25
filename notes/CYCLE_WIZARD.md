@@ -1603,11 +1603,17 @@ Recorded so they aren't rediscovered late.
   expand to show the details, not lose them. The expand now falls back from
   `open_draft` to `published_draft`, like the row's other cells; the summary
   endpoint serves a draft whatever its status.
-- **Disseminate waits on an emptied destination.** *(raised 2026-09-24)* When a
-  destination is reduced to 0 recordsets, Transfer shows it as "no longer
-  configured", but Disseminate still looks as if it is waiting on that
-  destination, even though it has nothing to transfer. Disseminate should treat
-  it the way Transfer does.
+- **Disseminate waits on an emptied destination — DONE 2026-09-25.** *(raised
+  2026-09-24)* When a destination is reduced to 0 recordsets, Transfer shows it
+  as "no longer configured", but Disseminate still looks as if it is waiting on
+  that destination, even though it has nothing to transfer. Disseminate should
+  treat it the way Transfer does. Transfer had the same gap: its tab and banner
+  still counted the orphaned draft as "1 to queue", with a Queue button on the
+  row. The cycle payload's transfers now carry `configured` (same test as the
+  release destinations endpoint); `shippingTransfers()` filters on it for both
+  stages' summaries, banners and Disseminate's publish button; Queue is hidden on
+  an unconfigured row; and the server's publish gate counts only configured
+  transfers.
 
 ## Verification
 

@@ -20,6 +20,7 @@ import {
 import { useTransferRecordsets } from "@/lib/transferForm";
 import {
   disseminationRecordsets,
+  shippingTransfers,
   unlinkedDisseminationRecordsets,
   type CycleRecordset,
   type CycleTransfer,
@@ -56,10 +57,11 @@ function publishBlockedReason(cycle: DatasetCycle): string | null {
   if (release.release_status === "draft") {
     return "Finalize the release in Bundle first.";
   }
-  if (release.transfers.length === 0) {
+  const transfers = shippingTransfers(release);
+  if (transfers.length === 0) {
     return "This release has not been sent anywhere yet.";
   }
-  const undelivered = release.transfers.filter((t) => t.transfer_status !== "success");
+  const undelivered = transfers.filter((t) => t.transfer_status !== "success");
   if (undelivered.length > 0) {
     return `Waiting on ${undelivered.map((t) => t.destination_abbr).join(", ")}.`;
   }
@@ -269,7 +271,8 @@ export default function DisseminateStage() {
 
   const members = disseminationRecordsets(cycle);
   const blockedReason = publishBlockedReason(cycle);
-  const delivered = release.transfers.filter(
+  const transfers = shippingTransfers(release);
+  const delivered = transfers.filter(
     (t) => t.transfer_status === "success",
   ).length;
 
@@ -303,9 +306,9 @@ export default function DisseminateStage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm" style={{ color: "var(--muted)" }}>
           v{release.release_number} · {release.release_status} ·{" "}
-          {release.transfers.length === 0
+          {transfers.length === 0
             ? "no transfers"
-            : `${delivered} of ${release.transfers.length} transfers delivered`}
+            : `${delivered} of ${transfers.length} transfers delivered`}
         </span>
         <Button
           size="sm"

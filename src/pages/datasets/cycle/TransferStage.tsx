@@ -426,7 +426,9 @@ export default function TransferStage() {
                       Manage
                     </Button>
                   )}
-                  {t?.transfer_status === "draft" && (
+                  {/* Nothing routes to an unconfigured destination any more, so
+                      there is nothing to queue -- Manage stays for cleanup. */}
+                  {t?.transfer_status === "draft" && r.configured && (
                     <Button size="sm" onClick={() => setQueueRow(r)}>
                       Queue
                     </Button>

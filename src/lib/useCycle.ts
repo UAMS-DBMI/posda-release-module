@@ -102,6 +102,9 @@ export type DatasetReleaseStatus = "draft" | "released" | "live" | "retracted";
 export type CycleTransfer = TransferChipTransfer & {
   transfer_name: string;
   destination_id: number;
+  /** False once no released member recordset routes to this destination --
+   *  Transfer's "no longer configured". Nothing is left for it to ship. */
+  configured: boolean;
 };
 
 export type CycleDatasetRelease = {
@@ -275,6 +278,13 @@ export function cycleRecordsets(cycle: DatasetCycle): CycleRecordset[] {
   return cycle.recordsets.filter(
     (r) => r.open_draft !== null || r.worked_this_cycle,
   );
+}
+
+/** The transfers the release still ships through. One left behind when its
+ *  destination was unconfigured has nothing to send, so Transfer and
+ *  Disseminate must not wait on it -- the server's publish gate skips it too. */
+export function shippingTransfers(release: CycleDatasetRelease): CycleTransfer[] {
+  return release.transfers.filter((t) => t.configured);
 }
 
 /** Recordsets with a published version that the release does not carry at all.
@@ -517,7 +527,7 @@ function transferStage(cycle: DatasetCycle): StageSummary {
     return { state: "pending", detail: "Release is a draft" };
   }
 
-  const transfers = release.transfers;
+  const transfers = shippingTransfers(release);
   // The release is out of draft, so its data is meant to ship: an absent or
   // unsent transfer is outstanding work, not something to wait on. `pending`
   // would hide it from nextAction(), which only surfaces blocked/active.
@@ -564,7 +574,7 @@ function disseminateStage(cycle: DatasetCycle): StageSummary {
   // Transfers first, and `pending` rather than `active`: Transfer is already
   // reporting this work, and nextAction() surfaces the earliest active/blocked
   // stage -- two stages claiming the same thing would just be noise.
-  const transfers = release.transfers;
+  const transfers = shippingTransfers(release);
   if (transfers.length === 0) return { state: "pending", detail: "No transfers" };
 
   const delivered = transfers.filter((t) => t.transfer_status === "success");
@@ -706,18 +716,19 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
     }
     case "transfer": {
       if (!release) return "Nothing to transfer until a dataset release exists.";
-      const failed = release.transfers.filter((t) => t.transfer_status === "failed");
+      const transfers = shippingTransfers(release);
+      const failed = transfers.filter((t) => t.transfer_status === "failed");
       if (failed.length > 0) {
         return `${plural(failed.length, "transfer")} failed — ${failed.map((t) => t.destination_abbr).join(", ")}.`;
       }
-      if (release.transfers.length === 0) {
+      if (transfers.length === 0) {
         return `v${release.release_number} has no transfers yet — set up a destination.`;
       }
-      const running = release.transfers.filter(
+      const running = transfers.filter(
         (t) => t.transfer_status === "queued" || t.transfer_status === "in_progress",
       ).length;
       if (running > 0) return `${plural(running, "transfer")} in flight.`;
-      const drafts = release.transfers.filter(
+      const drafts = transfers.filter(
         (t) => t.transfer_status === "draft",
       ).length;
       if (drafts > 0) {
@@ -736,14 +747,15 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       if (release.release_status === "draft") {
         return `v${release.release_number} is still a draft — finalize it in Bundle first.`;
       }
-      if (release.transfers.length === 0) {
+      const transfers = shippingTransfers(release);
+      if (transfers.length === 0) {
         return `v${release.release_number} has not been sent anywhere yet.`;
       }
-      const undelivered = release.transfers.filter(
+      const undelivered = transfers.filter(
         (t) => t.transfer_status !== "success",
       );
       if (undelivered.length > 0) {
-        const landed = release.transfers
+        const landed = transfers
           .filter((t) => t.transfer_status === "success")
           .map((t) => t.destination_abbr);
         const waiting = `${plural(undelivered.length, "transfer")} still to land (${undelivered
