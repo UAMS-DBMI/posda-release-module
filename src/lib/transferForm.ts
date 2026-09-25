@@ -96,7 +96,7 @@ export function useReleaseDestinations(releaseId: number | undefined) {
  *  counts — which aggregate over `transfer_file`, potentially ~500k rows for a
  *  large transfer — are not recounted more often than the daemon flushes them,
  *  which it does in batches rather than per file. */
-const TRANSFER_POLL_MS = 5000;
+export const TRANSFER_POLL_MS = 5000;
 
 /** Transfers that actually exist for the release. Fetched separately from the
  *  cycle payload, whose `CycleTransfer` has no `destination_id` — which the

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, type ItemEnvelope } from "@/lib/apiFetch";
 import type { TransferChipTransfer } from "@/components/TransferChip";
 import type { CycleStageState } from "@/components/CycleStrip";
+import { TRANSFER_POLL_MS } from "@/lib/transferForm";
 
 const BASE = "/papi/v1/distribution";
 
@@ -164,6 +165,17 @@ export function useDatasetCycle(
       );
       return json.data;
     },
+    // The daemon moves transfers on its own, so no mutation invalidates this
+    // when one lands. Without polling, the tabs, banner and Disseminate kept
+    // the status from the moment of queueing until a reload. Same rule as
+    // useReleaseTransfers: only while something is in flight.
+    refetchInterval: (query) =>
+      query.state.data?.dataset_release?.transfers.some(
+        (t) =>
+          t.transfer_status === "queued" || t.transfer_status === "in_progress",
+      )
+        ? TRANSFER_POLL_MS
+        : false,
   });
 }
 
