@@ -11,6 +11,9 @@ guidelines. Active feature work, decisions, and checklists live in `notes/`:
 - [notes/TRANSFER_DAEMON.md](notes/TRANSFER_DAEMON.md) — how queued transfers
   actually move: the IDC Go daemon, whether each destination needs its own,
   and what the existing daemon needs changed
+- [notes/CRDC_TRANSFER.md](notes/CRDC_TRANSFER.md) — GC / CTDC transfers via the
+  CRDC submission process: dbGaP, the Data Hub API (direct upload), per-series
+  ZIPs, `transfer_crdc`, the data models, download-manifest formats
 - [notes/CYCLE_WIZARD.md](notes/CYCLE_WIZARD.md) — the guided release cycle:
   routes-as-stages, modals-as-actions, shared form modules, step plan
 
