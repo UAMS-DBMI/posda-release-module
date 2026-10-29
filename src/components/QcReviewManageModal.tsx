@@ -39,15 +39,10 @@ export default function QcReviewManageModal({
   const byModality = detail.data?.series_by_modality ?? [];
   const assignments = detail.data?.assignments ?? [];
   const stale = detail.data?.stale_breakdown ?? null;
-  const seriesTotal = byStatus.reduce((sum, s) => sum + s.count, 0);
-  const approvedCount =
-    byStatus.find((s) => s.qc_status === "approved")?.count ?? 0;
-  const allApproved = seriesTotal > 0 && approvedCount === seriesTotal;
 
   const lifecycle = useQcReviewLifecycle({
     reviewId: idStr ?? "",
     review,
-    allApproved,
     stale,
     onChanged: () => invalidateCycle(),
     onCloned: () => {
@@ -61,12 +56,19 @@ export default function QcReviewManageModal({
     <Modal
       open={open}
       onClose={onClose}
-      size="xl"
+      size="2xl"
       title={reviewId != null ? `Manage QC — Review #${reviewId}` : "Manage QC"}
       footer={
-        <Button variant="ghost" onClick={onClose}>
-          Close
-        </Button>
+        <>
+          {/* Review-level actions sit opposite Close rather than on a row of
+              their own above the content. */}
+          <div className="mr-auto flex flex-wrap gap-2">
+            {review && idStr && lifecycle.actions}
+          </div>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </>
       }
     >
       {detail.isLoading && <LoadingState className="mt-4" />}
@@ -77,9 +79,13 @@ export default function QcReviewManageModal({
       )}
 
       {review && idStr && (
-        <div className="mt-2">
+        <div className="mt-1">
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
+            {[review.dataset_name, review.recordset_name, review.draft_name]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
           {lifecycle.banner}
-          <div className="flex flex-wrap gap-2">{lifecycle.actions}</div>
           {lifecycle.modals}
 
           <SectionCard className="mt-4">

@@ -49,10 +49,10 @@ export default function QcSliceActions({
   const approveUnits = useApproveAssignmentUnits(reviewId);
 
   const isNonDicom = reviewType === "non_dicom";
-  // Only the claim endpoint rejects a terminal review ("Cannot claim a slice on
-  // a complete review"); PUT /qc/assignments/{id} has no such guard, so Assign
-  // stays available -- it is the only way to correct the assignee afterwards.
   const terminal = reviewStatus === "complete" || reviewStatus === "cancelled";
+  // A finished slice is locked: the API refuses to release or reassign it, since
+  // either would reopen work that is done.
+  const sliceDone = assignment.assignment_status === "complete";
 
   const [showReassign, setShowReassign] = useState(false);
   const [reassignUser, setReassignUser] = useState("");
@@ -118,11 +118,6 @@ export default function QcSliceActions({
       await reassign.mutateAsync({
         assignmentId: assignment.assignment_id,
         assigned_to: Number(reassignUser),
-        // The API defaults a newly-assigned slice to 'in_progress'; keep a
-        // finished slice finished when only the assignee is being corrected.
-        ...(assignment.assignment_status === "complete"
-          ? { assignment_status: "complete" }
-          : {}),
       });
       toastSuccess(addToast, "Slice assigned.");
       setShowReassign(false);
@@ -135,7 +130,7 @@ export default function QcSliceActions({
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {!reviewOnly && !terminal &&
+        {!reviewOnly && !terminal && !sliceDone &&
           (assignment.assigned_to == null ? (
             <Button
               size="xs"
@@ -155,7 +150,7 @@ export default function QcSliceActions({
               Release
             </Button>
           ))}
-        {!reviewOnly && (
+        {!reviewOnly && !sliceDone && (
           <Button size="xs" variant="ghost" onClick={openReassign}>
             Assign
           </Button>

@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import {
   useCancelQcReview,
   useCloneQcReview,
-  useUpdateQcReview,
   type QcReviewRow,
   type QcStaleBreakdown,
 } from "@/lib/useQc";
@@ -13,7 +12,8 @@ import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 
 /** Review-level lifecycle for a QC review: the stale "clone to refresh" banner
- *  plus Mark Complete / Clone / Cancel, owning the Clone and Cancel modals.
+ *  plus Clone / Cancel, owning the Clone and Cancel modals. Completion is
+ *  automatic -- the backend completes a review once every unit is approved.
  *  Shared by the review-detail page and the cycle's Verify Manage modal.
  *  `onChanged` lets a host refresh its own rollup after a mutation; `onCloned`
  *  hands back the new review id (the page navigates to it).
@@ -25,7 +25,6 @@ import { toastError, toastSuccess } from "@/components/toastHelpers";
 export function useQcReviewLifecycle({
   reviewId,
   review,
-  allApproved,
   stale,
   onChanged,
   onCloned,
@@ -33,13 +32,11 @@ export function useQcReviewLifecycle({
   reviewId: string;
   /** Undefined while the host is still loading; everything returns null then. */
   review: QcReviewRow | undefined;
-  allApproved: boolean;
   stale: QcStaleBreakdown | null;
   onChanged?: () => void;
   onCloned?: (newReviewId: number) => void;
 }): { actions: ReactNode; banner: ReactNode; modals: ReactNode } {
   const { addToast } = useToast();
-  const update = useUpdateQcReview(reviewId);
   const cancel = useCancelQcReview(reviewId);
   const clone = useCloneQcReview(reviewId);
 
@@ -58,16 +55,6 @@ export function useQcReviewLifecycle({
     active &&
     review?.review_status === "stale" &&
     review?.review_type !== "non_dicom";
-
-  async function handleMarkComplete() {
-    try {
-      await update.mutateAsync({ review_status: "complete" });
-      toastSuccess(addToast, "Review marked complete.");
-      onChanged?.();
-    } catch (e) {
-      toastError(addToast, e instanceof Error ? e.message : "Could not complete review.");
-    }
-  }
 
   async function handleClone() {
     try {
@@ -128,27 +115,17 @@ export function useQcReviewLifecycle({
 
   const actions = active ? (
     <>
-      {review?.review_status !== "complete" && (
-        <Button
-          onClick={() => void handleMarkComplete()}
-          disabled={!allApproved || update.isPending}
-          title={
-            allApproved
-              ? undefined
-              : "All series must be approved before completing"
-          }
-        >
-          Mark Complete
-        </Button>
-      )}
       {canClone && (
         <Button variant="ghost" onClick={() => setShowClone(true)}>
           Clone
         </Button>
       )}
-      <Button variant="ghost" onClick={() => setShowCancel(true)}>
-        Cancel Review
-      </Button>
+      {/* A completed review is locked; it leaves 'complete' only by going stale. */}
+      {review?.review_status !== "complete" && (
+        <Button variant="ghost" onClick={() => setShowCancel(true)}>
+          Cancel Review
+        </Button>
+      )}
     </>
   ) : null;
 

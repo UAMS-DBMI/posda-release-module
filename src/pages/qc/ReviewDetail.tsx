@@ -37,9 +37,6 @@ export default function QcReviewDetail() {
   const byModality = detail.data?.series_by_modality ?? [];
   const stale = detail.data?.stale_breakdown ?? null;
   const seriesTotal = byStatus.reduce((sum, s) => sum + s.count, 0);
-  const approvedCount =
-    byStatus.find((s) => s.qc_status === "approved")?.count ?? 0;
-  const allApproved = seriesTotal > 0 && approvedCount === seriesTotal;
 
   // A non-DICOM review's units are files, not series (the model calls both
   // `qc_unit`); "series" is only right for a DICOM review.
@@ -71,7 +68,6 @@ export default function QcReviewDetail() {
   const lifecycle = useQcReviewLifecycle({
     reviewId: reviewId ?? "",
     review,
-    allApproved,
     stale,
     onCloned: (id: number) => navigate(`/qc/reviews/${id}`),
   });
