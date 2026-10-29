@@ -845,8 +845,15 @@ contract is:
   `"Ready for processing"`? Not decided. → *Bucket layout & versioning*
 - **Curation-side group 13 check (2026-10-29):** where in the Posda curation
   workflow it runs, and how it tells "no tags" from "tags present but not
-  indexed". UI warning on `missing_collection_name` also not built.
-  → *Where `collection_name` can be empty*
+  indexed". → *Where `collection_name` can be empty*
+- **Manifest-generation warnings in the UI (deferred 2026-10-29):** the imaging
+  generate response returns `missing_collection_name`, but
+  `useGenerateIdcManifest` / `TransferSettingsForm` only show "manifest
+  generated". Other non-blocking notices are likely to come out of generation,
+  so design one general shape — e.g. a `warnings` list on every generate
+  response, shown as a warning toast — rather than a one-off for this count.
+  Also decide whether warnings must persist past the toast (would need storing
+  on `transfer_idc` — a schema change).
 - **`dataset_short_name` mapping (2026-07-30 meeting):** needs verification
   against real collection examples that it correctly maps to the public-facing
   TCIA collection short name. → *Dataset manifest*
