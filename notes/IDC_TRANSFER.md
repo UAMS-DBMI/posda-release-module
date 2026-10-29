@@ -406,7 +406,7 @@ layout**).
 
 | Field | Meaning | In impl? |
 |---|---|---|
-| `collection_name` | TCIA collection (or analysis result) short name | ❌ needs adding |
+| `collection_name` | TCIA collection short name — always a collection, never an analysis result (an analysis result's DICOM carries the collection it points at) — **Posda** `ctp_file.project_name`, i.e. `(0013,"CTP",10)` | ✅ 2026-10-29 |
 | `patient_id` | DICOM Patient identifier | ✅ |
 | `patient_hash` | MD5 of concatenation of study hashes, ordered by hash | ✅ |
 | `study_instance_uid` | DICOM Study instance UID | ✅ |
@@ -415,7 +415,7 @@ layout**).
 | `series_hash` | MD5 of concatenation of instance hashes, ordered by hash | ✅ |
 | `sop_instance_uid` | DICOM SOP instance UID | ✅ |
 | `instance_hash` | MD5 of the DICOM instance | ✅ |
-| `relative_file_url` | Instance file path relative to the manifest | ❌ needs adding |
+| `relative_file_url` | Instance file path relative to the manifest | ✅ 2026-10-29 `./imaging/<digest>` |
 | `posda_file_id` | Posda `file_id` of the instance | ✅ |
 
 **`relative_file_url` form:** per-instance paths are **relative to the manifest's
@@ -436,9 +436,18 @@ imaging-manifest/generate`):
 - **Format:** CSV (via `csv.DictWriter`).
 - **One row per instance**, ordered patient → study → series → SOP. No separate
   top-level header block; `dataset_hash` is repeated on every row (`CROSS JOIN`).
-- **Columns emitted (in order):** `dataset_hash`, `patient_id`, `patient_hash`,
-  `study_instance_uid`, `study_hash`, `series_instance_uid`, `series_hash`,
-  `sop_instance_uid`, `instance_hash`, `file_id`.
+- **Columns emitted (in order):** `dataset_hash`, `collection_name`,
+  `patient_id`, `patient_hash`, `study_instance_uid`, `study_hash`,
+  `series_instance_uid`, `series_hash`, `sop_instance_uid`, `instance_hash`,
+  `relative_file_url`, `file_id`.
+- **`collection_name`** is per file, from `ctp_file.project_name` via a **LEFT**
+  join — an inner join would drop the file and change `dataset_hash`. A missing
+  row or blank value is emitted **empty, not refused**; the generate response
+  reports the count as `missing_collection_name` so the UI can warn before
+  queueing. See *Where `collection_name` can be empty* below.
+- **`relative_file_url`** is `'./imaging/' || digest`, computed in the query —
+  the same path the fan-out writes to `transfer_file.file_dest_url`, without
+  reading it.
 - **Hashes computed at generation time** (not read from storage), bottom-up via
   `md5(string_agg(... ORDER BY ...))`: `series_hash` ← instance `digest`s;
   `study_hash` ← `series_hash`es; `patient_hash` ← `study_hash`es;
@@ -450,12 +459,55 @@ imaging-manifest/generate`):
 - **Persistence:** writes the CSV to file storage, upserts a `file` +
   `downloadable_file`, and sets `transfer_idc.imaging_manifest_file_id`.
 
-Fields still missing from the impl are marked "needs adding" in the spec tables
-above (`collection_name`, `relative_file_url`); `posda_file_id` is emitted in
-code as `file_id`.
+All spec fields are implemented; `posda_file_id` is emitted in code as
+`file_id` (renaming it changes the header IDC parses — check with Bill first).
 
-_(No open questions specific to this manifest — the remaining work is the
-generator fixes and the ❌ fields above.)_
+Verified 2026-10-29 against a 1,693-file local timepoint in a rolled-back
+transaction: all rows kept, every `relative_file_url` matches its hash, and
+`dataset_hash` is identical with and without two files' CTP data removed (those
+two come out with an empty `collection_name`, count 2). Not yet exercised over
+HTTP.
+
+### Where `collection_name` can be empty
+
+Lots of files will arrive without group 13 tags, so this is expected, not
+exceptional. **Catching it belongs in the Posda curation workflow**, before the
+release module — curators edit the activity to add the tags and reimport into
+the release. The manifest's empty value + count is the backstop. Not built.
+
+`ctp_file` is written only by the DICOM indexer — `Posda::DB::DicomIod::Import`
+(the live Perl `FastFileProcessWorker`) and its port `posda/ingest/iod.py`
+`_insert_ctp` (PR #436, on `master`). Routes to no row or a blank project:
+
+1. **No group 13 block** — anything that bypassed CTP: direct/API imports from
+   other sources, Posda-generated DICOM (SEG, RTSTRUCT, SC —
+   `AdHocSecondaryCaptureConverter.pl` stamps CTP 10–12 itself for this reason).
+2. **An edit deleted CTP 10.** Every edit is a new file, indexed from its own
+   tags; the generic editors will delete it if told to. `ApplyDispositions`
+   only deletes CTP 11/12 (why local `site_name` is NULL); CTP 10–14 are `K` in
+   the private tag KB.
+3. **Only CTP 15 / 50 present** — the indexer's guard tests 10–14 only.
+4. **Creator element missing or not exactly `CTP`** — the lookup is by owner, so
+   `(0013,1010)` can hold a good value and still read as absent. Confirmed on a
+   test file in both ingests.
+5. **No SOP Class UID / DICOMDIR** — the import is never called (the preflight
+   already refuses on the missing `file_sop_common`).
+6. **Perl only, inferred:** the worker runs DBI with AutoCommit on and
+   RaiseError off, so a failed `ctp_file` insert (e.g. invalid UTF-8 in a CTP
+   value) is a stderr warning and indexing carries on without the row.
+
+In cases 4 and 6 the tags *are* present, so "add the group 13 tags" is the
+wrong instruction — a curation-side check should read the files' tags, not
+just `ctp_file`.
+
+⚠ **PR #436 bug, reported to its developer 2026-10-29:** the Python ingest keeps
+VR `UN` for private tags in explicit-VR files (the private dictionary's `LO` is
+used only when the VR is missing), decodes them as bytes, and psycopg2 stores
+them as hex text — `'\x50736575…'` for `Pseudo-PHI-DICOM-Data`. Not blank, so
+neither the count above nor an emptiness check catches it, and it would ship as
+`collection_name`. The KB records CTP tags observed as `UN` in real files. Perl
+reads the same file correctly. Reproduced with pydicom 3.0.2 against
+`origin/master`'s ingest; implicit-VR files are unaffected.
 
 ---
 
@@ -791,6 +843,10 @@ contract is:
 - **Resubmission to an already-published version folder (2026-07-30
   meeting):** delete-and-recreate the folder, or reset its `status.json` to
   `"Ready for processing"`? Not decided. → *Bucket layout & versioning*
+- **Curation-side group 13 check (2026-10-29):** where in the Posda curation
+  workflow it runs, and how it tells "no tags" from "tags present but not
+  indexed". UI warning on `missing_collection_name` also not built.
+  → *Where `collection_name` can be empty*
 - **`dataset_short_name` mapping (2026-07-30 meeting):** needs verification
   against real collection examples that it correctly maps to the public-facing
   TCIA collection short name. → *Dataset manifest*
@@ -993,6 +1049,19 @@ out of contradictions the draft exposed in these notes.
   be worth revisiting — and dropping `download_url`, if IDC does not use it,
   would remove most of its purpose. → *Clinical manifest*
 
+**2026-10-29**
+- **`collection_name` ← `ctp_file.project_name`** (`(0013,"CTP",10)`), per
+  file — it is always a collection; analysis results point at collections. Not
+  WordPress, and not the dataset's name. → *Imaging manifest*
+- **Missing group 13 is a curation problem, not a manifest gate.** The check
+  belongs in the Posda curation workflow; the generator LEFT joins `ctp_file`,
+  emits empty values, and returns a `missing_collection_name` warning count
+  instead of refusing. → *Where `collection_name` can be empty*
+- **The IDC queries stay anchored on `file`.** `dicom_file` (no unique
+  constraint, has held duplicates) is not read anywhere in `distribution.py`;
+  every per-file table joined is PK on `file_id`, and the `files` CTE's
+  `DISTINCT` covers a file repeated across release rows.
+
 ## Action items
 
 **2026-07-16 (meeting)**
@@ -1089,8 +1158,9 @@ Pick back up here (nothing in flight, no half-done edits):
      Verified against the local DB (both queries `PREPARE`; fixture reports
      clean; detection + dedup confirmed in a rolled-back transaction). See
      [CYCLE_WIZARD.md](CYCLE_WIZARD.md) step 6.0.
-2. **Then** the ❌ fields: imaging manifest (`dataset_type`, `dataset_name`,
-   `dataset_doi`, `collection_name`, `relative_file_url`) and dataset manifest
+2. **Then** the ❌ fields: imaging manifest — ✅ **done 2026-10-29**
+   (`collection_name`, `relative_file_url`; the dataset-level fields once listed
+   here are no longer in the imaging spec) — and dataset manifest
    (`dataset_version_doi` — now has a source in `dataset_release.release_doi`,
    `file_manifest_url`, `license_*`).
    - Only one decision still blocks the dataset-manifest work: the **license
