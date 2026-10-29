@@ -25,7 +25,11 @@ export default function QcSliceActions({
   reviewType,
   reviewStatus,
   onChanged,
+  reviewOnly = false,
 }: {
+  /** Only the Review action -- the Verify expand, where everything else lives
+   *  in the Manage modal. */
+  reviewOnly?: boolean;
   reviewId: string;
   assignment: QcAssignment;
   /** Parent review's type; drives the Review action (non_dicom -> approve modal
@@ -131,7 +135,7 @@ export default function QcSliceActions({
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {!terminal &&
+        {!reviewOnly && !terminal &&
           (assignment.assigned_to == null ? (
             <Button
               size="xs"
@@ -151,9 +155,11 @@ export default function QcSliceActions({
               Release
             </Button>
           ))}
-        <Button size="xs" variant="ghost" onClick={openReassign}>
-          Assign
-        </Button>
+        {!reviewOnly && (
+          <Button size="xs" variant="ghost" onClick={openReassign}>
+            Assign
+          </Button>
+        )}
         {assignment.assigned_to != null &&
           (isNonDicom ? (
             <Button
@@ -174,7 +180,7 @@ export default function QcSliceActions({
               Review
             </ExternalLinkButton>
           ))}
-        {!isNonDicom && assignment.assignment_status !== "complete" && (
+        {!reviewOnly && !isNonDicom && assignment.assignment_status !== "complete" && (
           <Button
             size="xs"
             variant="ghost"

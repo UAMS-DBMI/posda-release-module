@@ -171,6 +171,7 @@ export default function ReviewList({
                       reviewType={rev.review_type}
                       reviewStatus={rev.review_status}
                       onChanged={invalidateCycle}
+                      reviewOnly
                     />
                   </div>
                 </Fragment>
