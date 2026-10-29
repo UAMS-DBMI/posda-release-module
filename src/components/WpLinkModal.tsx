@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/Spinner";
@@ -22,6 +22,11 @@ type WpLinkModalProps = {
   posdaObjectType: "dataset" | "recordset";
   posdaObjectId: number | undefined;
   typeOptions: WpObjectTypeOption[];
+  /** What is being linked, shown under the title (e.g. "Recordset · CT"). */
+  subject?: string;
+  /** Offered in Link Existing while the search box is empty. */
+  suggestions?: WpSearchResult[];
+  suggestionsLabel?: string;
 };
 
 function slugify(title: string): string {
@@ -40,6 +45,39 @@ function decodeHtmlEntities(text: string): string {
   return el.value;
 }
 
+function WpResultList({
+  items,
+  onPick,
+}: {
+  items: WpSearchResult[];
+  onPick: (item: WpSearchResult) => void;
+}) {
+  return (
+    <ul
+      className="max-h-64 overflow-y-auto divide-y rounded"
+      style={{ border: "1px solid var(--border-strong)" }}
+    >
+      {items.map((r) => (
+        <li
+          key={r.id}
+          className="flex cursor-pointer items-center justify-between gap-4 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          onClick={() => onPick(r)}
+        >
+          <span className="text-sm">
+            <span className="font-medium">{decodeHtmlEntities(r.title)}</span>
+            <span className="ml-2 text-xs" style={{ color: "var(--muted)" }}>
+              {r.status}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs" style={{ color: "var(--muted)" }}>
+            ID {r.id}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Link an existing WP post to a Posda object, or create one as a new draft.
  *  Shared by `recordsets/Detail.tsx`, `datasets/Detail.tsx`, and the cycle
  *  Setup stage, all backed by the same `wp_object_map` row. */
@@ -49,13 +87,22 @@ export default function WpLinkModal({
   posdaObjectType,
   posdaObjectId,
   typeOptions,
+  subject,
+  suggestions = [],
+  suggestionsLabel = "Suggestions",
 }: WpLinkModalProps) {
   const { addToast } = useToast();
   const [mode, setMode] = useState<"link" | "create" | "unlink">("link");
   const [wpObjectType, setWpObjectType] = useState(typeOptions[0]?.value ?? "");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<WpSearchResult[]>([]);
+  // What `results` answers -- results only show while it matches the box,
+  // so a paste or edit never displays another search's "No results."
+  const [searched, setSearched] = useState<{ term: string; endpoint: string } | null>(
+    null,
+  );
   const [isSearching, setIsSearching] = useState(false);
+  const latestSearch = useRef(0);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -68,11 +115,46 @@ export default function WpLinkModal({
 
   const selectedOption =
     typeOptions.find((o) => o.value === wpObjectType) ?? typeOptions[0];
+  const endpoint = selectedOption?.searchEndpoint;
+  const term = query.trim();
+  const hasCurrentResults =
+    searched !== null && searched.term === term && searched.endpoint === endpoint;
+
+  const runSearch = useCallback(
+    async (searchTerm: string) => {
+      if (!searchTerm || !endpoint) return;
+      // A slower earlier search must not overwrite a newer one.
+      const requestId = ++latestSearch.current;
+      setIsSearching(true);
+      try {
+        const found = await searchWpObjects(endpoint, searchTerm);
+        if (requestId !== latestSearch.current) return;
+        setResults(found);
+        setSearched({ term: searchTerm, endpoint });
+      } catch (e) {
+        if (requestId !== latestSearch.current) return;
+        setError(e instanceof Error ? e.message : "Search failed.");
+      } finally {
+        if (requestId === latestSearch.current) setIsSearching(false);
+      }
+    },
+    [endpoint],
+  );
+
+  // Search as the user types or pastes, once the text settles.
+  useEffect(() => {
+    if (mode !== "link" || !term) return;
+    const timer = setTimeout(() => void runSearch(term), 300);
+    return () => clearTimeout(timer);
+  }, [mode, term, runSearch]);
 
   function reset() {
+    latestSearch.current++;
     setMode("link");
     setQuery("");
     setResults([]);
+    setSearched(null);
+    setIsSearching(false);
     setTitle("");
     setSlug("");
     setSlugEdited(false);
@@ -82,19 +164,6 @@ export default function WpLinkModal({
   function handleClose() {
     reset();
     onClose();
-  }
-
-  async function handleSearch() {
-    if (!query.trim() || !selectedOption) return;
-    setIsSearching(true);
-    setResults([]);
-    try {
-      setResults(await searchWpObjects(selectedOption.searchEndpoint, query.trim()));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Search failed.");
-    } finally {
-      setIsSearching(false);
-    }
   }
 
   async function handleLink(result: WpSearchResult) {
@@ -118,6 +187,10 @@ export default function WpLinkModal({
       setError(msg);
       toastError(addToast, msg);
     }
+  }
+
+  function pickResult(result: WpSearchResult) {
+    if (!saveLink.isPending) void handleLink(result);
   }
 
   async function handleUnlink() {
@@ -168,6 +241,11 @@ export default function WpLinkModal({
         </Button>
       }
     >
+      {subject && (
+        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+          {subject}
+        </p>
+      )}
       <div className="mt-4 space-y-4">
         <div
           className="inline-flex rounded-md p-0.5"
@@ -234,46 +312,36 @@ export default function WpLinkModal({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleSearch();
+                  if (e.key === "Enter") void runSearch(term);
                 }}
                 placeholder="Search by title..."
                 className="input flex-1"
                 autoFocus
               />
               <Button
-                onClick={() => void handleSearch()}
-                disabled={isSearching || !query.trim()}
+                onClick={() => void runSearch(term)}
+                disabled={isSearching || !term}
               >
                 {isSearching ? "…" : "Search"}
               </Button>
             </div>
-            {results.length > 0 && (
-              <ul
-                className="max-h-64 overflow-y-auto divide-y rounded"
-                style={{ border: "1px solid var(--border-strong)" }}
-              >
-                {results.map((r) => (
-                  <li
-                    key={r.id}
-                    className="flex cursor-pointer items-center justify-between gap-4 px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    onClick={() => {
-                      if (!saveLink.isPending) void handleLink(r);
-                    }}
-                  >
-                    <span className="text-sm">
-                      <span className="font-medium">{decodeHtmlEntities(r.title)}</span>
-                      <span className="ml-2 text-xs" style={{ color: "var(--muted)" }}>
-                        {r.status}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-xs" style={{ color: "var(--muted)" }}>
-                      ID {r.id}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            {!term && suggestions.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium" style={{ color: "var(--muted)" }}>
+                  {suggestionsLabel}
+                </p>
+                <WpResultList items={suggestions} onPick={pickResult} />
+              </div>
             )}
-            {!isSearching && results.length === 0 && query && (
+            {hasCurrentResults && results.length > 0 && (
+              <WpResultList items={results} onPick={pickResult} />
+            )}
+            {term && isSearching && (
+              <p className="text-sm" style={{ color: "var(--muted)" }}>
+                Searching…
+              </p>
+            )}
+            {!isSearching && hasCurrentResults && results.length === 0 && (
               <p className="text-sm" style={{ color: "var(--muted)" }}>
                 No results.
               </p>

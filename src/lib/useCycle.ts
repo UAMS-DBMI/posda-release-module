@@ -3,6 +3,7 @@ import { apiFetch, type ItemEnvelope } from "@/lib/apiFetch";
 import type { TransferChipTransfer } from "@/components/TransferChip";
 import type { CycleStageState } from "@/components/CycleStrip";
 import { TRANSFER_POLL_MS } from "@/lib/transferForm";
+import type { WpSearchResult } from "@/lib/wpObjectMap";
 
 const BASE = "/papi/v1/distribution";
 
@@ -136,6 +137,9 @@ export type DatasetCycle = {
   /** Downloads listed on the dataset's WordPress page that aren't the
    *  current download for any recordset here (excludes trashed downloads). */
   orphaned_download_count: number;
+  /** Those downloads, shaped like WP search results -- offered as link
+   *  suggestions in Setup. */
+  orphaned_downloads: WpSearchResult[];
   /** The release this rollup describes -- the pinned one when the cycle URL
    *  names a release, otherwise the dataset's latest. */
   dataset_release: CycleDatasetRelease | null;

@@ -414,6 +414,12 @@ export default function SetupStage() {
         typeOptions={[
           { value: "download", label: "Download", searchEndpoint: "manager/downloads" },
         ]}
+        subject={`Recordset · ${
+          cycle.recordsets.find((r) => r.recordset_id === wpRecordsetId)
+            ?.recordset_name ?? ""
+        }`}
+        suggestions={cycle.orphaned_downloads}
+        suggestionsLabel="Unlinked downloads on this dataset's WordPress page"
       />
 
       <WpLinkModal
@@ -422,6 +428,7 @@ export default function SetupStage() {
         posdaObjectType="dataset"
         posdaObjectId={datasetId ? Number(datasetId) : undefined}
         typeOptions={[wpTypeOptionForDataset(cycle.dataset_type_name)]}
+        subject={`Dataset · ${cycle.dataset_name}`}
       />
     </div>
   );
