@@ -27,6 +27,9 @@ export type CycleQc = {
   series_total: number;
   series_pending: number;
   series_approved: number;
+  /** The non-DICOM file units within series_pending (which counts every
+   *  QC unit, series and file alike). */
+  files_pending: number;
 };
 
 export type CycleRecordsetRelease = {
@@ -713,8 +716,15 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       }
       const total = withDraft.reduce((n, r) => n + r.qc.series_total, 0);
       const pending = withDraft.reduce((n, r) => n + r.qc.series_pending, 0);
+      const filesPending = withDraft.reduce((n, r) => n + r.qc.files_pending, 0);
       const percent = total === 0 ? 0 : Math.round(((total - pending) / total) * 100);
-      return `QC is ${percent}% reviewed — ${plural(pending, "series")} still to decide.`;
+      // "series" is its own plural, so it can't go through plural().
+      const parts = [
+        pending - filesPending > 0 ? `${pending - filesPending} series` : "",
+        filesPending > 0 ? plural(filesPending, "file") : "",
+      ].filter(Boolean);
+      if (parts.length === 0) return `QC is ${percent}% reviewed.`;
+      return `QC is ${percent}% reviewed — ${parts.join(" and ")} still to decide.`;
     }
     case "bundle": {
       const publishable = cycle.recordsets.filter(isPublishable).length;
