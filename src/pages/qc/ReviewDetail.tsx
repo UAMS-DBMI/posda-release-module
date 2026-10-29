@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQcReview, useUpdateQcReview } from "@/lib/useQc";
+import { isRetiredReview, useQcReview, useUpdateQcReview } from "@/lib/useQc";
 import { useUsers } from "@/lib/useUsers";
 import QcAssignments from "@/components/qc/QcAssignments";
 import { useQcReviewLifecycle } from "@/components/qc/QcReviewLifecycle";
@@ -82,7 +82,7 @@ export default function QcReviewDetail() {
     }
   }
 
-  const active = review && review.review_status !== "cancelled";
+  const active = review && !isRetiredReview(review.review_status);
 
   return (
     <PageShell size="5xl">
@@ -126,7 +126,7 @@ export default function QcReviewDetail() {
                     ? "success"
                     : review.review_status === "stale"
                       ? "warning"
-                      : review.review_status === "cancelled"
+                      : isRetiredReview(review.review_status)
                         ? "neutral"
                         : "success",
               }
@@ -186,7 +186,7 @@ export default function QcReviewDetail() {
             assignments={assignments}
             reviewType={review.review_type}
             reviewStatus={review.review_status}
-            canManage={review.review_status !== "cancelled"}
+            canManage={!isRetiredReview(review.review_status)}
           />
         </SectionCard>
       )}

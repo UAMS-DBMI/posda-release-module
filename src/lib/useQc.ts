@@ -9,7 +9,13 @@ import { apiFetch, type ItemEnvelope, type ListEnvelope } from "@/lib/apiFetch";
 const BASE = "/papi/v1/distribution";
 
 export type QcReviewType = "full" | "partial" | "non_dicom";
-export type QcReviewStatus = "open" | "complete" | "cancelled" | "stale";
+export type QcReviewStatus = "open" | "complete" | "cancelled" | "stale" | "replaced";
+
+/** Cancelled, or replaced by a clone of it: the review no longer counts and
+ *  has nothing left to act on. */
+export function isRetiredReview(status: string | undefined): boolean {
+  return status === "cancelled" || status === "replaced";
+}
 
 /** Raw qc_review row (as returned by the detail endpoint). */
 export type QcReviewRow = {
@@ -208,6 +214,10 @@ export function useCloneQcReview(reviewId: string | undefined) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["qc-reviews"] });
+      // The clone brings its own assignment, and retires the source as
+      // 'replaced' -- refresh both, or the new row shows no assignment line.
+      void queryClient.invalidateQueries({ queryKey: ["qc-assignments"] });
+      void queryClient.invalidateQueries({ queryKey: ["qc-review"] });
       // The cycle payload embeds a QC rollup per recordset, which drives the
       // Verify summary, the publish gate and the next-action banner. Any change
       // to a review or its units moves those numbers.

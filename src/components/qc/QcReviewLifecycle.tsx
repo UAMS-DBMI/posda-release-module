@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
+  isRetiredReview,
   useCancelQcReview,
   useCloneQcReview,
   type QcReviewRow,
@@ -46,7 +47,7 @@ export function useQcReviewLifecycle({
   );
   const [showCancel, setShowCancel] = useState(false);
 
-  const active = !!review && review.review_status !== "cancelled";
+  const active = !!review && !isRetiredReview(review.review_status);
 
   // Clone re-runs the series draw, which is only meaningful when the draft has
   // moved under the review -- and on a non-DICOM review it draws nothing and

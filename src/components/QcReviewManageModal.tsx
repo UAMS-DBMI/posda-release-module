@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useQcReview } from "@/lib/useQc";
+import { isRetiredReview, useQcReview } from "@/lib/useQc";
 import QcAssignments from "@/components/qc/QcAssignments";
 import { useQcReviewLifecycle } from "@/components/qc/QcReviewLifecycle";
 import QcSeriesSummary from "@/components/qc/QcSeriesSummary";
@@ -101,7 +101,7 @@ export default function QcReviewManageModal({
               assignments={assignments}
               reviewType={review.review_type}
               reviewStatus={review.review_status}
-              canManage={review.review_status !== "cancelled"}
+              canManage={!isRetiredReview(review.review_status)}
               onChanged={invalidateCycle}
             />
           </SectionCard>

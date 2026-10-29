@@ -33,6 +33,7 @@ const statusVariant: Record<string, BadgeVariant> = {
   ready: "success",
   complete: "success",
   cancelled: "neutral",
+  replaced: "neutral",
   stale: "warning",
   // assignment workflow
   needs_qc: "warning",

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  isRetiredReview,
   useApproveAssignmentUnits,
   useClaimAssignment,
   useCompleteAssignmentForTesting,
@@ -49,7 +50,7 @@ export default function QcSliceActions({
   const approveUnits = useApproveAssignmentUnits(reviewId);
 
   const isNonDicom = reviewType === "non_dicom";
-  const terminal = reviewStatus === "complete" || reviewStatus === "cancelled";
+  const terminal = reviewStatus === "complete" || isRetiredReview(reviewStatus);
   // A finished slice is locked: the API refuses to release or reassign it, since
   // either would reopen work that is done.
   const sliceDone = assignment.assignment_status === "complete";
