@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type Key } from "react";
 import RecordsetLink from "@/components/RecordsetLink";
 import CreateDraftModal from "@/components/CreateDraftModal";
 import CreateRecordsetModal from "@/components/CreateRecordsetModal";
@@ -34,7 +34,7 @@ export default function AssembleStage() {
     wpLinked: boolean;
   } | null>(null);
   const [manage, setManage] = useState<ManageTarget | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<Key>>(new Set());
 
   const setStatus = useSetDraftStatus(datasetId);
 
@@ -122,8 +122,9 @@ export default function AssembleStage() {
         // bundling, when open_draft goes null. The summary is read-only.
         canExpand={(r) => (r.open_draft ?? r.published_draft) != null}
         expandLabel="contents"
-        expandedKey={expandedId}
-        onExpandedKeyChange={(k) => setExpandedId(k as number | null)}
+        alwaysExpanded={false}
+        expandedKeys={expandedIds}
+        onExpandedKeysChange={setExpandedIds}
         renderExpanded={(r) => {
           const shown = r.open_draft ?? r.published_draft;
           return shown ? <DraftSummary draftId={shown.recordset_draft_id} /> : null;

@@ -29,10 +29,16 @@ type ExpandableTableProps<T> = {
   canExpand?: (row: T) => boolean;
   /** Noun for the chevron tooltip: "contents" -> "Show contents". */
   expandLabel?: string;
-  expandedKey: Key | null;
-  onExpandedKeyChange: (key: Key | null) => void;
+  /** Single-open mode: one row at a time. */
+  expandedKey?: Key | null;
+  onExpandedKeyChange?: (key: Key | null) => void;
+  /** Multi-open mode: used instead of expandedKey when given. */
+  expandedKeys?: ReadonlySet<Key>;
+  onExpandedKeysChange?: (keys: Set<Key>) => void;
   pagination?: ExpandableTablePagination;
   emptyMessage?: ReactNode;
+  /** Show every expandable row's detail, with no chevron column. */
+  alwaysExpanded?: boolean;
 };
 
 function Chevron({ expanded }: { expanded: boolean }) {
@@ -65,12 +71,30 @@ export default function ExpandableTable<T>({
   renderExpanded,
   canExpand,
   expandLabel = "contents",
-  expandedKey,
+  expandedKey = null,
   onExpandedKeyChange,
+  expandedKeys,
+  onExpandedKeysChange,
   pagination,
   emptyMessage,
+  alwaysExpanded = false,
 }: ExpandableTableProps<T>) {
-  const colSpan = headers.length + 1;
+  const colSpan = alwaysExpanded ? headers.length : headers.length + 1;
+
+  function isOpen(key: Key) {
+    return expandedKeys ? expandedKeys.has(key) : expandedKey === key;
+  }
+
+  function toggle(key: Key) {
+    if (expandedKeys) {
+      const next = new Set(expandedKeys);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      onExpandedKeysChange?.(next);
+    } else {
+      onExpandedKeyChange?.(expandedKey === key ? null : key);
+    }
+  }
 
   const totalPages = pagination
     ? Math.max(1, Math.ceil(pagination.totalItems / pagination.pageSize))
@@ -118,7 +142,7 @@ export default function ExpandableTable<T>({
         <table className="data-table min-w-full border-collapse text-left text-sm">
           <thead>
             <tr className="bg-accent">
-              <th className="w-10 px-2 py-1" />
+              {!alwaysExpanded && <th className="w-10 px-2 py-1" />}
               {headers.map((h, i) => (
                 <th key={i} className={TH}>
                   {h}
@@ -130,24 +154,26 @@ export default function ExpandableTable<T>({
             {visibleRows.map((row) => {
               const key = getRowKey(row);
               const expandable = canExpand ? canExpand(row) : true;
-              const expanded = expandable && expandedKey === key;
+              const expanded = expandable && (alwaysExpanded || isOpen(key));
 
               return (
                 <Fragment key={key}>
                   <tr className="table-row">
-                    <td className="px-1 py-1">
-                      {expandable && (
-                        <button
-                          type="button"
-                          onClick={() => onExpandedKeyChange(expanded ? null : key)}
-                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-(--surface-alt)"
-                          style={{ color: "var(--muted)" }}
-                          title={`${expanded ? "Hide" : "Show"} ${expandLabel}`}
-                        >
-                          <Chevron expanded={expanded} />
-                        </button>
-                      )}
-                    </td>
+                    {!alwaysExpanded && (
+                      <td className="px-1 py-1">
+                        {expandable && (
+                          <button
+                            type="button"
+                            onClick={() => toggle(key)}
+                            className="flex h-7 w-7 items-center justify-center rounded hover:bg-(--surface-alt)"
+                            style={{ color: "var(--muted)" }}
+                            title={`${expanded ? "Hide" : "Show"} ${expandLabel}`}
+                          >
+                            <Chevron expanded={expanded} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                     {renderCells(row)}
                   </tr>
                   {expanded && (
