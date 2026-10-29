@@ -223,6 +223,9 @@ function useReviewInvalidation(reviewId: string | undefined) {
   return () => {
     void queryClient.invalidateQueries({ queryKey: qcKeys.review(reviewId ?? "") });
     void queryClient.invalidateQueries({ queryKey: ["qc-assignments"] });
+    // Unit decisions move each review's approved count and, since reviews
+    // auto-complete, its status -- both read from the per-draft review lists.
+    void queryClient.invalidateQueries({ queryKey: ["qc-reviews"] });
     // Approving or releasing units moves the cycle's QC rollup, which the
     // Verify summary, the publish gate and the banner all read.
     void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
