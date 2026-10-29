@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import QcSliceActions from "@/components/qc/QcSliceActions";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/Spinner";
 import {
+  isRetiredReview,
   useAssignmentQueue,
   useQcReviews,
   type QcQueueAssignment,
@@ -54,15 +55,30 @@ export default function ReviewList({
   draftId,
   datasetId,
   onManage,
+  rollupKey,
 }: {
   draftId: number;
   datasetId: string | undefined;
   onManage: (reviewId: number) => void;
+  /** The cycle's QC rollup for this draft, serialized. Review status changes
+   *  server-side (staleness, auto-complete, replacement) from places that
+   *  never touch these queries -- e.g. Assemble's file edits -- but they all
+   *  move the rollup, so a change here re-fetches the rows. */
+  rollupKey?: string;
 }) {
   const queryClient = useQueryClient();
   const reviews = useQcReviews(String(draftId));
   const slices = useAssignmentQueue({ recordsetDraftId: draftId });
   const users = useUsers();
+
+  // Runs on mount too: the default 30 s staleTime would otherwise serve rows
+  // cached before, say, an Assemble edit when coming back to Verify.
+  useEffect(() => {
+    void reviews.refetch();
+    void slices.refetch();
+    // Keyed on the rollup alone; refetch is stable per query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rollupKey]);
 
   const invalidateCycle = () =>
     void queryClient.invalidateQueries({
@@ -96,8 +112,8 @@ export default function ReviewList({
   // Non-cancelled first, cancelled to the bottom (stable otherwise).
   const sorted = [...allReviews].sort(
     (a, b) =>
-      (a.review_status === "cancelled" ? 1 : 0) -
-      (b.review_status === "cancelled" ? 1 : 0),
+      (isRetiredReview(a.review_status) ? 1 : 0) -
+      (isRetiredReview(b.review_status) ? 1 : 0),
   );
 
   const HEAD = "text-xs font-semibold uppercase tracking-wide";
@@ -117,7 +133,7 @@ export default function ReviewList({
       <div />
 
       {sorted.map((rev, i) => {
-        const cancelled = rev.review_status === "cancelled";
+        const cancelled = isRetiredReview(rev.review_status);
         const revSlices = byReview.get(rev.qc_review_id) ?? [];
         return (
           <Fragment key={rev.qc_review_id}>

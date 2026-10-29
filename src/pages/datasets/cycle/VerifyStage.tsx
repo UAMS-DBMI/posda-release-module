@@ -67,6 +67,7 @@ export default function VerifyStage() {
               draftId={r.qc_draft_id}
               datasetId={datasetId}
               onManage={setManageReviewId}
+              rollupKey={JSON.stringify(r.qc)}
             />
           ) : null
         }
