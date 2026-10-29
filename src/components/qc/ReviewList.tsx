@@ -21,6 +21,30 @@ function assigneeName(assignedTo: number | null, users: Map<number, string>): st
 const REVIEW_COLS =
   "minmax(4rem,auto) minmax(6rem,auto) minmax(4rem,auto) minmax(5rem,auto) auto";
 
+function ApprovedProgress({ approved, total }: { approved: number; total: number }) {
+  const percent = total === 0 ? 0 : Math.round((approved / total) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        role="progressbar"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className="h-1.5 w-24 overflow-hidden rounded-full"
+        style={{ background: "var(--border)" }}
+      >
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${percent}%`, background: "var(--accent)" }}
+        />
+      </div>
+      <span>
+        {approved.toLocaleString()}/{total.toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
 /** The draft's reviews with their assignment slices, listed inline in the
  *  expanded row. Two lazy fetches (reviews + the draft's slices). Cancelled
  *  reviews sort to the bottom and show no slices (the slice query excludes
@@ -133,10 +157,7 @@ export default function ReviewList({
                   ? "non-DICOM"
                   : "full"}
             </div>
-            <div>
-              {rev.series_approved.toLocaleString()}/
-              {rev.series_total.toLocaleString()}
-            </div>
+            <ApprovedProgress approved={rev.series_approved} total={rev.series_total} />
             <div>
               <Button
                 size="xs"
@@ -161,8 +182,9 @@ export default function ReviewList({
                     <StatusBadge status={s.assignment_status} />
                   </div>
                   <div />
+                  {/* A lone slice's count is the review's, already shown above. */}
                   <div className="text-xs" style={MUTED}>
-                    {s.series_approved}/{s.series_total}
+                    {revSlices.length > 1 && `${s.series_approved}/${s.series_total}`}
                   </div>
                   <div>
                     <QcSliceActions
