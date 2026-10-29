@@ -95,7 +95,7 @@ export default function QcReviewModal({
     >
       <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
         {nonDicom
-          ? "This review covers every non-DICOM file in the draft. Mirabelle is DICOM-only, so these are reviewed by downloading the files and marking them approved."
+          ? "Review by downloading the files and marking them approved."
           : "A partial review samples the chosen percentage of series per modality; a full review includes every series."}
       </p>
 
