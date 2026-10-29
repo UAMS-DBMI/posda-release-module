@@ -74,7 +74,7 @@ export default function Tabs({
       role="tablist"
       onKeyDown={handleKeyDown}
       className={classNames(
-        "flex flex-wrap items-stretch gap-1 border-b",
+        "flex items-stretch gap-1 border-b",
         className,
       )}
       style={{ borderColor: "var(--border-strong)" }}
@@ -83,7 +83,7 @@ export default function Tabs({
         const isActive = tab.key === active;
         const state = tab.state ?? "pending";
         const className = classNames(
-          "-mb-px flex items-center gap-2 rounded-t-md border px-3 py-2 text-sm transition-colors",
+          "-mb-px flex min-w-0 flex-auto items-start gap-2 rounded-t-md border px-3 py-2 text-sm transition-colors",
           "focus-visible:outline-2 focus-visible:outline-offset-[-2px]",
           isActive
             ? "border-accent font-semibold text-accent"
@@ -112,7 +112,7 @@ export default function Tabs({
             {state === "done" ? (
               <span
                 aria-hidden
-                className="flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full"
+                className="mt-1.25 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full"
                 style={{ background: "var(--accent)" }}
               >
                 <svg
@@ -132,25 +132,30 @@ export default function Tabs({
               <span
                 aria-hidden
                 className={classNames(
-                  "h-2.5 w-2.5 shrink-0 rounded-full border-2",
+                  "mt-1.25 h-2.5 w-2.5 shrink-0 rounded-full border-2",
                   state === "blocked" ? "border-amber-500 bg-amber-500" : "",
                   state === "active" ? "animate-pulse" : "",
                 )}
                 style={dotStyles[state]}
               />
             )}
-            {tab.label}
-            {tab.detail && (
-              <span
-                className={classNames(
-                  "text-xs font-normal",
-                  state === "blocked" ? "text-amber-600 dark:text-amber-400" : "",
-                )}
-                style={state === "blocked" ? {} : { color: "var(--muted)" }}
-              >
-                {tab.detail}
-              </span>
-            )}
+            <span className="flex min-w-0 flex-1 flex-col items-start">
+              <span className="whitespace-nowrap">{tab.label}</span>
+              {tab.detail && (
+                // w-0 min-w-full: the detail adds no width of its own, so the
+                // label sizes the tab and the detail truncates to fit it.
+                <span
+                  className={classNames(
+                    "w-0 min-w-full truncate text-left text-xs font-normal",
+                    state === "blocked" ? "text-amber-600 dark:text-amber-400" : "",
+                  )}
+                  style={state === "blocked" ? {} : { color: "var(--muted)" }}
+                  title={typeof tab.detail === "string" ? tab.detail : undefined}
+                >
+                  {tab.detail}
+                </span>
+              )}
+            </span>
           </>
         );
 
