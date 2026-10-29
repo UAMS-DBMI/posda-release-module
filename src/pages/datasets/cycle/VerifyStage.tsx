@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type Key } from "react";
 import ExpandableTable from "@/components/ExpandableTable";
 import RecordsetLink from "@/components/RecordsetLink";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,7 +35,7 @@ export default function VerifyStage() {
   const queryClient = useQueryClient();
 
   const [createFor, setCreateFor] = useState<CreateTarget | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<Key>>(new Set());
   const [manageReviewId, setManageReviewId] = useState<number | null>(null);
 
   const cycleActive = isCycleActive(cycle);
@@ -59,8 +59,8 @@ export default function VerifyStage() {
         getRowKey={(r) => r.recordset_id}
         canExpand={(r) => r.qc_draft_id != null && r.qc.reviews_total > 0}
         expandLabel="reviews"
-        expandedKey={expandedId}
-        onExpandedKeyChange={(k) => setExpandedId(k as number | null)}
+        expandedKeys={expandedIds}
+        onExpandedKeysChange={setExpandedIds}
         renderExpanded={(r) =>
           r.qc_draft_id != null ? (
             <ReviewList
