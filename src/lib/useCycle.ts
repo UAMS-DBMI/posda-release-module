@@ -32,6 +32,8 @@ export type CycleQc = {
   /** The non-DICOM file units within series_pending (which counts every
    *  QC unit, series and file alike). */
   files_pending: number;
+  /** Likewise, the file units within series_rejected. */
+  files_rejected: number;
 };
 
 export type CycleRecordsetRelease = {
@@ -478,6 +480,11 @@ function verifyStage(cycle: DatasetCycle): StageSummary {
   const stale = sum((q) => q.stale);
   if (stale > 0) return { state: "blocked", detail: `${stale} stale` };
 
+  // A rejection keeps its review open, so without this the tab would read
+  // "100% reviewed" while the gate stays shut.
+  const rejected = sum((q) => q.series_rejected);
+  if (rejected > 0) return { state: "blocked", detail: `${rejected} rejected` };
+
   const open = sum((q) => q.open);
   const total = sum((q) => q.series_total);
   const pending = sum((q) => q.series_pending);
@@ -719,14 +726,28 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       const total = withDraft.reduce((n, r) => n + r.qc.series_total, 0);
       const pending = withDraft.reduce((n, r) => n + r.qc.series_pending, 0);
       const filesPending = withDraft.reduce((n, r) => n + r.qc.files_pending, 0);
+      const rejected = withDraft.reduce((n, r) => n + r.qc.series_rejected, 0);
+      const filesRejected = withDraft.reduce((n, r) => n + r.qc.files_rejected, 0);
       const percent = total === 0 ? 0 : Math.round(((total - pending) / total) * 100);
       // "series" is its own plural, so it can't go through plural().
-      const parts = [
-        pending - filesPending > 0 ? `${pending - filesPending} series` : "",
-        filesPending > 0 ? plural(filesPending, "file") : "",
-      ].filter(Boolean);
-      if (parts.length === 0) return `QC is ${percent}% reviewed.`;
-      return `QC is ${percent}% reviewed — ${parts.join(" and ")} still to decide.`;
+      const unitParts = (all: number, files: number) =>
+        [
+          all - files > 0 ? `${all - files} series` : "",
+          files > 0 ? plural(files, "file") : "",
+        ].filter(Boolean);
+      const parts = unitParts(pending, filesPending);
+      const rejectedParts = unitParts(rejected, filesRejected);
+      // A rejection keeps its review open and the gate shut, so it is named
+      // even when everything has been decided.
+      if (parts.length === 0) {
+        if (rejectedParts.length > 0) {
+          return `${rejectedParts.join(" and ")} rejected — fix the draft and re-review.`;
+        }
+        return `QC is ${percent}% reviewed.`;
+      }
+      const rejectedNote =
+        rejectedParts.length > 0 ? `; ${rejectedParts.join(" and ")} rejected` : "";
+      return `QC is ${percent}% reviewed — ${parts.join(" and ")} still to decide${rejectedNote}.`;
     }
     case "bundle": {
       const publishable = cycle.recordsets.filter(isPublishable).length;
