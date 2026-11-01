@@ -100,6 +100,7 @@ export default function QcReviewManageModal({
                 // A non-DICOM review's units have no modality; its file
                 // table below stands in for the modality breakdown.
                 byModality={review.review_type === "non_dicom" ? [] : byModality}
+                hideEmpty={review.review_type === "non_dicom"}
               />
               {review.review_type === "non_dicom" && (
                 <div className="mt-4">

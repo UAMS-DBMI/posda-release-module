@@ -301,14 +301,16 @@ export function useRejectAssignmentUnits(reviewId: string | undefined) {
   });
 }
 
-/** One non-DICOM file unit; `file_id` feeds the raw download. */
+/** One non-DICOM file unit -- a snapshot of the file reviewed, so it outlives
+ *  the file's removal from the draft. `file_id` feeds the raw download. */
 export type QcReviewFile = {
   qc_unit_id: number;
   assignment_id: number | null;
-  recordset_draft_file_id: number;
   file_id: number;
   file_name: string | null;
   qc_status: string;
+  /** False once the file was removed or replaced in the draft. */
+  in_draft: boolean;
   /** From the history entry that set qc_status -- a rejection's reason. */
   status_notes: string | null;
   status_who: number | null;

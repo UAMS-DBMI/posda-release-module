@@ -76,8 +76,20 @@ itself rather than needing manual status changes.
       in the source keeps its decision (and its note, re-recorded as "carried
       from review #N: …"), anything else starts pending -- so a fixed file
       comes back for review. Always carry-forward: the clone modal skips the
-      mode choice (resample would only wipe decisions). Stale breakdown counts
-      new hashes only; see TECH_DEBT #18 for why changed/dropped read 0.
+      mode choice (resample would only wipe decisions).
+- [x] **File units are snapshots, like series units** (2026-11-01,
+      `20261101_qc_unit_file_snapshot.sql`). A QC decision is about content
+      that existed when it was made, so a unit must not depend on draft
+      membership. Series units already stored identity (UID) + content (hash)
+      with no draft link; file units pointed at `recordset_draft_file_id`
+      (cascade), which emptied reviews when a file was replaced. Now a file
+      unit stores `file_id` (content) + `file_name` (identity); "in the
+      draft?" is a join (`in_draft` on the files list, shown as "removed from
+      draft"). Stale breakdown / clone reconcile share `QC_FILE_COMPARE`:
+      same name + new hash = changed, the series rule with name for UID.
+      Unique key mirrors the draft's: `(review, file_id, file_name)`.
+      Open question: should a non-DICOM `file_name` be unique within a draft?
+      Not required by this change.
 
 ### ➕ Draft add sources — Merge / Replace all everywhere (2026-11-01)
 

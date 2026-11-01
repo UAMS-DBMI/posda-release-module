@@ -18,9 +18,13 @@ type ModalityProgress = {
 export default function QcSeriesSummary({
   byStatus,
   byModality,
+  hideEmpty = false,
 }: {
   byStatus: QcStatusCount[];
   byModality: QcModalityCount[];
+  /** Render nothing rather than "No series." -- a non-DICOM review's file
+   *  table says it has no files. */
+  hideEmpty?: boolean;
 }) {
   const seriesTotal = byStatus.reduce((sum, s) => sum + s.count, 0);
 
@@ -48,6 +52,7 @@ export default function QcSeriesSummary({
   }, [byModality]);
 
   if (seriesTotal === 0) {
+    if (hideEmpty) return null;
     return (
       <p className="text-sm" style={{ color: "var(--muted)" }}>
         No series.

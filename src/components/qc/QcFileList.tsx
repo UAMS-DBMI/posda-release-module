@@ -53,7 +53,16 @@ export default function QcFileList({
         {
           key: "file_name",
           label: "File",
-          render: (v, row) => (v ? String(v) : `File ${row.file_id}`),
+          render: (v, row) => (
+            <>
+              {v ? String(v) : `File ${row.file_id}`}
+              {!row.in_draft && (
+                <span className="ml-2 text-xs" style={{ color: "var(--muted)" }}>
+                  removed from draft
+                </span>
+              )}
+            </>
+          ),
         },
         ...(showSlice
           ? [
