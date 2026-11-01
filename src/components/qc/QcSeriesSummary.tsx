@@ -73,6 +73,7 @@ export default function QcSeriesSummary({
         <DynamicTable
           rows={modalityProgress}
           getRowKey={(row) => row.modality}
+          hideSummary
           columns={[
             { key: "modality", label: "Modality" },
             { key: "pending", label: "Pending" },

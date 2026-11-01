@@ -4,6 +4,7 @@ import {
   useApproveAssignmentUnits,
   useClaimAssignment,
   useCompleteAssignmentForTesting,
+  useRejectAssignmentUnits,
   useReleaseAssignment,
   useUpdateAssignment,
   type QcAssignment,
@@ -13,6 +14,7 @@ import { useUsers } from "@/lib/useUsers";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Button, ExternalLinkButton } from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import QcFileList from "@/components/qc/QcFileList";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 
@@ -53,16 +55,23 @@ export default function QcSliceActions({
   const reassign = useUpdateAssignment(reviewId);
   const completeForTesting = useCompleteAssignmentForTesting(reviewId);
   const approveUnits = useApproveAssignmentUnits(reviewId);
+  const rejectUnits = useRejectAssignmentUnits(reviewId);
 
   const isNonDicom = reviewType === "non_dicom";
   const terminal = reviewStatus === "complete" || isRetiredReview(reviewStatus);
   // A finished slice is locked: the API refuses to release or reassign it, since
   // either would reopen work that is done.
   const sliceDone = assignment.assignment_status === "complete";
+  const allApproved =
+    assignment.series_total > 0 && assignment.series_approved === assignment.series_total;
+  const allRejected =
+    assignment.series_total > 0 && assignment.series_rejected === assignment.series_total;
 
   const [showReassign, setShowReassign] = useState(false);
   const [reassignUser, setReassignUser] = useState("");
   const [showNonDicom, setShowNonDicom] = useState(false);
+  // Reject asks for a reason first; this holds it while the field is open.
+  const [rejectNotes, setRejectNotes] = useState<string | null>(null);
 
   const users = useMemo(
     () =>
@@ -106,11 +115,29 @@ export default function QcSliceActions({
     try {
       await approveUnits.mutateAsync(assignment.assignment_id);
       toastSuccess(addToast, "Files marked approved.");
-      setShowNonDicom(false);
+      closeNonDicom();
       onChanged?.();
     } catch (e) {
       toastError(addToast, e instanceof Error ? e.message : "Could not approve files.");
     }
+  }
+
+  async function handleReject() {
+    const notes = rejectNotes?.trim();
+    if (!notes) return;
+    try {
+      await rejectUnits.mutateAsync({ assignmentId: assignment.assignment_id, notes });
+      toastSuccess(addToast, "Files marked rejected.");
+      closeNonDicom();
+      onChanged?.();
+    } catch (e) {
+      toastError(addToast, e instanceof Error ? e.message : "Could not reject files.");
+    }
+  }
+
+  function closeNonDicom() {
+    setShowNonDicom(false);
+    setRejectNotes(null);
   }
 
   function openReassign() {
@@ -243,36 +270,72 @@ export default function QcSliceActions({
         </p>
       </Modal>
 
-      {/* Non-DICOM review: download (deferred) + mark the slice's files approved. */}
+      {/* Non-DICOM review: download each file, then decide the slice as a
+          whole. A decided slice can still be flipped the other way. */}
       <Modal
         open={showNonDicom}
-        onClose={() => setShowNonDicom(false)}
+        onClose={closeNonDicom}
         title="Review Non-DICOM Files"
-        size="sm"
+        size="xl"
         footer={
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => setShowNonDicom(false)}
-              disabled={approveUnits.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleApprove()}
-              loading={approveUnits.isPending}
-              disabled={assignment.assignment_status === "complete"}
-            >
-              Mark Approved
-            </Button>
-          </>
+          rejectNotes === null ? (
+            <>
+              <Button variant="ghost" onClick={closeNonDicom} disabled={approveUnits.isPending}>
+                Close
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setRejectNotes("")}
+                disabled={terminal || allRejected || approveUnits.isPending}
+              >
+                Reject All
+              </Button>
+              <Button
+                onClick={() => void handleApprove()}
+                loading={approveUnits.isPending}
+                disabled={terminal || allApproved}
+              >
+                Approve All
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => setRejectNotes(null)}
+                disabled={rejectUnits.isPending}
+              >
+                Back
+              </Button>
+              <Button
+                onClick={() => void handleReject()}
+                loading={rejectUnits.isPending}
+                disabled={!rejectNotes.trim()}
+              >
+                Reject All
+              </Button>
+            </>
+          )
         }
       >
-        <p className="mt-4 text-sm" style={{ color: "var(--muted)" }}>
-          {assignment.assignment_status === "complete"
-            ? "This slice's files are already approved."
-            : "Confirm this slice's non-DICOM files pass review. Marking approved completes the slice. (File download will be added here later.)"}
+        <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
+          Download and check each file, then approve or reject them together.
         </p>
+        <div className="mt-4">
+          <QcFileList reviewId={reviewId} assignmentId={assignment.assignment_id} />
+        </div>
+        {rejectNotes !== null && (
+          <label className="mt-4 block text-sm">
+            <span className="font-medium">Reason for rejecting</span>
+            <textarea
+              value={rejectNotes}
+              onChange={(e) => setRejectNotes(e.target.value)}
+              rows={3}
+              className="textarea mt-1 w-full"
+              autoFocus
+            />
+          </label>
+        )}
       </Modal>
     </>
   );

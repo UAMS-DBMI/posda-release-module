@@ -122,6 +122,7 @@ export default function QcAssignments({
           <DynamicTable
             rows={assignments}
             getRowKey={(row) => row.assignment_id}
+            hideSummary
             columns={[
               {
                 key: "assignment_id",

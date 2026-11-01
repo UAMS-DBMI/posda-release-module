@@ -236,6 +236,7 @@ function useReviewInvalidation(reviewId: string | undefined) {
     // Unit decisions move each review's approved count and, since reviews
     // auto-complete, its status -- both read from the per-draft review lists.
     void queryClient.invalidateQueries({ queryKey: ["qc-reviews"] });
+    void queryClient.invalidateQueries({ queryKey: ["qc-review-files"] });
     // Approving or releasing units moves the cycle's QC rollup, which the
     // Verify summary, the publish gate and the banner all read.
     void queryClient.invalidateQueries({ queryKey: ["dataset-cycle"] });
@@ -284,6 +285,51 @@ export function useApproveAssignmentUnits(reviewId: string | undefined) {
       ),
     onSuccess: invalidate,
   });
+}
+
+/** Reject every unit in a slice -- the non-DICOM reviewer's other answer. A
+ *  reason is required. The slice completes but its review stays open. */
+export function useRejectAssignmentUnits(reviewId: string | undefined) {
+  const invalidate = useReviewInvalidation(reviewId);
+  return useMutation({
+    mutationFn: ({ assignmentId, notes }: { assignmentId: number; notes: string }) =>
+      apiFetch<ItemEnvelope<{ assignment_id: number; rejected: number }>>(
+        `${BASE}/qc/assignments/${assignmentId}/reject-units`,
+        { method: "POST", body: JSON.stringify({ notes }) },
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** One non-DICOM file unit; `file_id` feeds the raw download. */
+export type QcReviewFile = {
+  qc_unit_id: number;
+  assignment_id: number | null;
+  recordset_draft_file_id: number;
+  file_id: number;
+  file_name: string | null;
+  qc_status: string;
+};
+
+/** A non-DICOM review's files, or one slice's when `assignmentId` is given. */
+export function useReviewFiles(
+  reviewId: string | undefined,
+  assignmentId?: number,
+  enabled = true,
+) {
+  const qs = assignmentId != null ? `?assignment_id=${assignmentId}` : "";
+  return useQuery({
+    queryKey: ["qc-review-files", reviewId ?? "", assignmentId ?? null],
+    enabled: enabled && Boolean(reviewId),
+    queryFn: () =>
+      apiFetch<ListEnvelope<QcReviewFile>>(`${BASE}/qc/reviews/${reviewId}/files${qs}`),
+    select: (env) => env.data,
+  });
+}
+
+/** Same-origin raw-file URL; pair with `download={file_name}` to name the save. */
+export function qcFileDownloadUrl(fileId: number): string {
+  return `/papi/v1/files/${fileId}/data`;
 }
 
 /** TEST HELPER: approve all of a slice's series and complete the slice (does not

@@ -5,6 +5,7 @@ import { useUsers } from "@/lib/useUsers";
 import QcAssignments from "@/components/qc/QcAssignments";
 import { useQcReviewLifecycle } from "@/components/qc/QcReviewLifecycle";
 import QcSeriesSummary from "@/components/qc/QcSeriesSummary";
+import QcFileList from "@/components/qc/QcFileList";
 import { Button } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
@@ -175,10 +176,22 @@ export default function QcReviewDetail() {
           )}
 
           <CardHeader className={review.review_notes ? "mt-6" : undefined}>
-            <CardTitle>Status</CardTitle>
+            <CardTitle>
+              {review.review_type === "non_dicom" ? "Files" : "DICOM Series"}
+            </CardTitle>
           </CardHeader>
           <div>
-            <QcSeriesSummary byStatus={byStatus} byModality={byModality} />
+            <QcSeriesSummary
+                byStatus={byStatus}
+                // A non-DICOM review's units have no modality; its file
+                // table below stands in for the modality breakdown.
+                byModality={review.review_type === "non_dicom" ? [] : byModality}
+              />
+            {review.review_type === "non_dicom" && (
+              <div className="mt-4">
+                <QcFileList reviewId={reviewId} showSlice />
+              </div>
+            )}
           </div>
 
           <QcAssignments
