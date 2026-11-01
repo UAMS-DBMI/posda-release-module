@@ -2,7 +2,7 @@ import { Fragment, type Key, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 
 const TH =
-  "px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-white";
+  "px-2 py-1 text-left text-xs font-semibold tracking-wide text-white";
 
 /** Controlled paging. The caller owns page state; rows may be either the whole
  *  list (windowed here) or one server-sent page (passed through), matching
