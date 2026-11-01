@@ -234,7 +234,7 @@ export default function DynamicTable<T extends RowLike>({
       return (
         <th
           key={column.key}
-          className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-white"
+          className="px-2 py-1 text-left text-xs font-semibold tracking-wide text-white"
         >
           {label}
         </th>
@@ -243,7 +243,7 @@ export default function DynamicTable<T extends RowLike>({
     return (
       <th
         key={column.key}
-        className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-white"
+        className="px-2 py-1 text-left text-xs font-semibold tracking-wide text-white"
       >
         <button
           type="button"
