@@ -400,6 +400,8 @@ export type QcQueueAssignment = QcAssignment & {
   recordset_draft_id: number;
   recordset_id: number;
   recordset_name: string;
+  dataset_id: number | null;
+  dataset_name: string | null;
 };
 
 export type UserFlag = {

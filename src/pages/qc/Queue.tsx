@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useAssignmentQueue, useClaimAssignment } from "@/lib/useQc";
 import DynamicTable from "@/components/DynamicTable";
+import QcReviewManageModal from "@/components/QcReviewManageModal";
 import { Button } from "@/components/ui/Button";
 import { SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
@@ -13,6 +13,11 @@ export default function QcQueue() {
   const { addToast } = useToast();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  // The review opened in the Manage modal, with its dataset so the modal can
+  // refresh that dataset's cycle rollup after a change.
+  const [managed, setManaged] = useState<{ reviewId: number; datasetId: number | null } | null>(
+    null,
+  );
 
   const queue = useAssignmentQueue({
     unassigned: true,
@@ -68,18 +73,26 @@ export default function QcQueue() {
               },
             }}
             columns={[
+              {
+                key: "dataset_name",
+                label: "Dataset",
+                render: (v) => (v ? String(v) : "—"),
+              },
               { key: "recordset_name", label: "Recordset" },
               {
                 key: "review_type",
                 label: "Review",
                 render: (_v, row) => (
-                  <Link
-                    to={`/qc/reviews/${row.qc_review_id}`}
-                    className="transition-colors hover:text-accent"
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setManaged({ reviewId: row.qc_review_id, datasetId: row.dataset_id })
+                    }
+                    className="cursor-pointer transition-colors hover:text-accent"
                     style={{ color: "var(--accent)" }}
                   >
                     {row.review_type} #{row.qc_review_id}
-                  </Link>
+                  </button>
                 ),
               },
               {
@@ -118,6 +131,13 @@ export default function QcQueue() {
           />
         )}
       </SectionCard>
+
+      <QcReviewManageModal
+        open={managed !== null}
+        onClose={() => setManaged(null)}
+        reviewId={managed?.reviewId ?? null}
+        datasetId={managed?.datasetId != null ? String(managed.datasetId) : undefined}
+      />
     </PageShell>
   );
 }
