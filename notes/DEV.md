@@ -88,8 +88,13 @@ itself rather than needing manual status changes.
       draft"). Stale breakdown / clone reconcile share `QC_FILE_COMPARE`:
       same name + new hash = changed, the series rule with name for UID.
       Unique key mirrors the draft's: `(review, file_id, file_name)`.
-      Open question: should a non-DICOM `file_name` be unique within a draft?
-      Not required by this change.
+      Non-DICOM names are now unique within a draft (see Draft add sources).
+- [x] **Deleting a draft cancels its unfinished reviews** (2026-11-01).
+      Draft delete is a soft delete and left open/stale reviews live, so they
+      stayed in the pickup queue, My QC Queue, claims and the rollup. The
+      delete endpoint now sets them `cancelled` in its transaction; complete
+      reviews stay as the record of finished work. Backfill:
+      `20261101_03_cancel_reviews_of_deleted_drafts.sql`.
 
 ### ➕ Draft add sources — Merge / Replace all everywhere (2026-11-01)
 
