@@ -13,6 +13,72 @@ behavioral guidelines, and links to the other notes files.
 >
 > **Sequencing (top to bottom):**
 
+### 🔁 Verify stage + QC lifecycle rework (2026-10-29 → in progress)
+
+Goal: make Verify the one place a curator runs QC for the cycle -- review rows
+inline, everything else in the Manage modal -- with a QC lifecycle that runs
+itself rather than needing manual status changes.
+
+**Decisions (done):**
+- **Layout.** Verify's recordset rows expand (several at once; `ExpandableTable`
+  keeps `alwaysExpanded`, set false). The expand lists each review with its
+  slices; only **Review** stays inline on a slice row. Claim / Release / Assign
+  / Split / Clone / Cancel live in the **Manage** modal (`size="2xl"`, subtitle
+  dataset · recordset · draft, review actions in the footer).
+- **Auto-complete.** No Mark Complete. A slice completes when it has no pending
+  units; a review completes when every unit is approved (`qc_sync_review_status`,
+  called from `qc_sync_assignment_status`) and reopens if that stops being true.
+- **Locking.** A complete slice can't be released or reassigned (409); a
+  complete or `replaced` review can't be cancelled (409; button hidden).
+- **Staleness covers complete reviews too, scoped by file type**
+  (`20261029_qc_stale_complete_and_scoped.sql`): a DICOM-file change stales
+  DICOM reviews only, a non-DICOM change stales non-DICOM reviews only. A
+  complete review leaves `complete` only by going stale.
+- **`replaced` status** (`20261029_qc_review_status_replaced.sql`, comment only
+  -- `review_status` has no CHECK). Cloning a stale review sets the source to
+  `replaced`, so it stops blocking the gate. Rollup, queue and claim exclude
+  `replaced` like `cancelled`; the UI treats both as retired (`isRetiredReview`).
+- **Publish gate enforced in the backend.** Publish returns 422 `QC_INCOMPLETE`
+  unless the draft has ≥1 complete review and none open/stale (same rule as
+  `isPublishable`).
+- **Test-only Complete** (`complete-for-testing`) shows only for the `system`
+  and `admin` users -- UI only, the endpoint is unrestricted.
+- **Non-DICOM file review (2026-11-01).** `GET /qc/reviews/{id}/files` (optional
+  `assignment_id`) lists file units by name. Review modal: the slice's files
+  with a download each (`/papi/v1/files/{file_id}/data`, anchor `download`
+  supplies the name), **Approve All** / **Reject All**. Manage and the review
+  page show the files under the status counts in a "Files" section (DICOM:
+  "DICOM Series"). QC tables hide "Showing x-y of z".
+- **Reject is all-or-nothing per slice** (for now). `POST
+  /qc/assignments/{id}/reject-units` requires a reason (stored per unit in
+  `qc_unit_history.notes`). The slice completes (nothing pending) but the review
+  stays open, so publish stays blocked. A decided slice can be flipped either
+  way until its review completes.
+- **Segmented progress bar** (`QcProgressBar`): approved green / rejected red /
+  flagged amber / pending track, labelled approved/total, breakdown on hover.
+  Used on review rows and on the recordset rows' Approved column, replacing
+  "0/1 (100%)" (its percent meant *decided*, not approved). The cycle rollup
+  carries `series_rejected` / `series_flagged` for it.
+
+**Open:**
+- [x] Next banner / Verify tab name rejections (2026-11-01). All decided + some
+      rejected read "QC is 100% reviewed." while the gate stayed shut. Now the
+      tab is blocked "N rejected"; the banner says "1 file rejected — fix the
+      draft and re-review.", or appends "; N rejected" while units are still
+      pending. The rollup adds `files_rejected` (file share of
+      `series_rejected`, like `files_pending`).
+- [x] Reject reason on hover over a rejected status in the file table
+      (2026-11-01): "Rejected by <user>, <when>: <reason>". The files endpoint
+      returns `status_notes` / `status_who` / `status_when` from the history
+      entry that set the current status.
+- [x] Clone a stale non-DICOM review like DICOM (2026-11-01, TECH_DEBT #13).
+      Redraws every current non-DICOM file; a file whose **content hash** was
+      in the source keeps its decision (and its note, re-recorded as "carried
+      from review #N: …"), anything else starts pending -- so a fixed file
+      comes back for review. Always carry-forward: the clone modal skips the
+      mode choice (resample would only wipe decisions). Stale breakdown counts
+      new hashes only; see TECH_DEBT #18 for why changed/dropped read 0.
+
 ### 🧹 Pre-prod consistency cleanup — port cycle modals to non-cycle pages
 
 Goal: the standalone dataset/recordset/draft pages should use the same modals the
@@ -777,7 +843,9 @@ sampling time; when the draft moves, in-flight reviews go out of date.
 
 - **Persist (decided):** keep `'stale'` in the `review_status` enum. On any draft
   mutation, mark that draft's **open** reviews `→ 'stale'`. Completed/cancelled
-  reviews are terminal and not auto-changed.
+  reviews are terminal and not auto-changed. ⚠ **Superseded 2026-10-29:**
+  complete reviews go stale too, scoped by file type -- see the Verify rework
+  section at the top.
 - **Trigger:** statement-level trigger on `recordset_draft_file` (INSERT/DELETE) →
   `UPDATE qc_review SET review_status='stale'
    WHERE recordset_draft_id IN (affected) AND review_status='open'`.
@@ -981,9 +1049,8 @@ A draft release blocks distribution **in the UI only** (TECH_DEBT #5).
   **≥1 complete QC review AND none open/stale** (cancelled reviews don't
   count either way). A draft with zero reviews is NOT publishable. Implemented
   in the draft-detail Publish gate + `CurrentCycleCard` Publish stage
-  ("Requires QC" when no reviews). ⚠ Backend does not enforce this yet —
-  server-side guard on the publish endpoint is future backend work (flag:
-  public API behavior change).
+  ("Requires QC" when no reviews). Backend enforces it since 2026-10-29
+  (publish → 422 `QC_INCOMPLETE`).
 - **One open draft per recordset.** Unlikely to have more than one; can be
   restricted. UI: hide/disable "New Draft" while a draft is open; Current
   Cycle panel is a singleton. ⚠ DB/API-level restriction (unique partial

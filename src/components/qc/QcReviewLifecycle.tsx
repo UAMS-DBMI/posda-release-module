@@ -49,17 +49,18 @@ export function useQcReviewLifecycle({
 
   const active = !!review && !isRetiredReview(review.review_status);
 
-  // Clone re-runs the series draw, which is only meaningful when the draft has
-  // moved under the review -- and on a non-DICOM review it draws nothing and
-  // yields an empty clone (tech-debt #13). So: stale DICOM reviews only.
-  const canClone =
-    active &&
-    review?.review_status === "stale" &&
-    review?.review_type !== "non_dicom";
+  // Clone redraws against the current draft, which only means something once
+  // the draft has moved under the review: stale reviews only.
+  const canClone = active && review?.review_status === "stale";
+  // A non-DICOM review takes every file, so "resample" would only discard the
+  // decisions; it always carries forward (matched by content hash).
+  const isNonDicom = review?.review_type === "non_dicom";
 
   async function handleClone() {
     try {
-      const res = await clone.mutateAsync({ mode: cloneMode });
+      const res = await clone.mutateAsync({
+        mode: isNonDicom ? "carry_forward" : cloneMode,
+      });
       toastSuccess(addToast, "Review cloned.");
       setShowClone(false);
       onChanged?.();
@@ -152,35 +153,42 @@ export function useQcReviewLifecycle({
           </>
         }
       >
-        <div className="mt-4 space-y-3 text-sm">
-          <label className="flex items-start gap-2">
-            <input
-              type="radio"
-              name="clone-mode"
-              checked={cloneMode === "carry_forward"}
-              onChange={() => setCloneMode("carry_forward")}
-              className="mt-1"
-            />
-            <span>
-              <span className="font-medium">Carry forward</span> — re-sample the
-              current draft with the same seed and keep prior decisions (changed
-              series reset to pending).
-            </span>
-          </label>
-          <label className="flex items-start gap-2">
-            <input
-              type="radio"
-              name="clone-mode"
-              checked={cloneMode === "resample"}
-              onChange={() => setCloneMode("resample")}
-              className="mt-1"
-            />
-            <span>
-              <span className="font-medium">Resample</span> — a fresh draw with a
-              new seed; no decisions carried.
-            </span>
-          </label>
-        </div>
+        {isNonDicom ? (
+          <p className="mt-4 text-sm" style={{ color: "var(--muted)" }}>
+            Re-draws the draft's current files. Unchanged files keep their
+            decisions; new or changed files start pending.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3 text-sm">
+            <label className="flex items-start gap-2">
+              <input
+                type="radio"
+                name="clone-mode"
+                checked={cloneMode === "carry_forward"}
+                onChange={() => setCloneMode("carry_forward")}
+                className="mt-1"
+              />
+              <span>
+                <span className="font-medium">Carry forward</span> — re-sample the
+                current draft with the same seed and keep prior decisions (changed
+                series reset to pending).
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="radio"
+                name="clone-mode"
+                checked={cloneMode === "resample"}
+                onChange={() => setCloneMode("resample")}
+                className="mt-1"
+              />
+              <span>
+                <span className="font-medium">Resample</span> — a fresh draw with a
+                new seed; no decisions carried.
+              </span>
+            </label>
+          </div>
+        )}
       </Modal>
 
       {/* Cancel confirm */}
