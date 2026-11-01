@@ -1,6 +1,7 @@
 import { Fragment, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import QcProgressBar from "@/components/qc/QcProgressBar";
 import QcSliceActions from "@/components/qc/QcSliceActions";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -21,30 +22,6 @@ function assigneeName(assignedTo: number | null, users: Map<number, string>): st
 
 const REVIEW_COLS =
   "minmax(4rem,auto) minmax(6rem,auto) minmax(4rem,auto) minmax(5rem,auto) auto";
-
-function ApprovedProgress({ approved, total }: { approved: number; total: number }) {
-  const percent = total === 0 ? 0 : Math.round((approved / total) * 100);
-  return (
-    <div className="flex items-center gap-2">
-      <div
-        role="progressbar"
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        className="h-1.5 w-24 overflow-hidden rounded-full"
-        style={{ background: "var(--border)" }}
-      >
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${percent}%`, background: "var(--accent)" }}
-        />
-      </div>
-      <span>
-        {approved.toLocaleString()}/{total.toLocaleString()}
-      </span>
-    </div>
-  );
-}
 
 /** The draft's reviews with their assignment slices, listed inline in the
  *  expanded row. Two lazy fetches (reviews + the draft's slices). Cancelled
@@ -173,7 +150,12 @@ export default function ReviewList({
                   ? "non-DICOM"
                   : "full"}
             </div>
-            <ApprovedProgress approved={rev.series_approved} total={rev.series_total} />
+            <QcProgressBar
+              approved={rev.series_approved}
+              rejected={rev.series_rejected}
+              flagged={rev.series_flagged}
+              total={rev.series_total}
+            />
             <div>
               <Button
                 size="xs"

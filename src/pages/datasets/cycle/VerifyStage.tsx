@@ -4,6 +4,7 @@ import RecordsetLink from "@/components/RecordsetLink";
 import { useQueryClient } from "@tanstack/react-query";
 import QcReviewModal from "@/components/QcReviewModal";
 import QcReviewManageModal from "@/components/QcReviewManageModal";
+import QcProgressBar from "@/components/qc/QcProgressBar";
 import ReviewList from "@/components/qc/ReviewList";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -11,7 +12,6 @@ import {
   cycleRecordsets,
   isCycleActive,
   isPublishable,
-  qcPercent,
   type CycleQc,
 } from "@/lib/useCycle";
 import { useCycleContext } from "./CycleLayout";
@@ -86,10 +86,19 @@ export default function VerifyStage() {
               // No DICOM series to sample -> "Add Review" creates a non_dicom review.
               const nonDicomOnly =
                 !!draft?.has_non_dicom && !draft?.has_dicom;
+              // The bar's segments carry rejected / flagged; a "(x%)" here read
+              // as approved when it meant decided ("0/1 (100%)").
               const progress =
-                qc.series_total === 0
-                  ? "—"
-                  : `${qc.series_approved.toLocaleString()}/${qc.series_total.toLocaleString()} (${qcPercent(qc)}%)`;
+                qc.series_total === 0 ? (
+                  "—"
+                ) : (
+                  <QcProgressBar
+                    approved={qc.series_approved}
+                    rejected={qc.series_rejected}
+                    flagged={qc.series_flagged}
+                    total={qc.series_total}
+                  />
+                );
 
               return (
                 <>

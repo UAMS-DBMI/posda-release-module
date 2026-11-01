@@ -27,6 +27,8 @@ export type CycleQc = {
   series_total: number;
   series_pending: number;
   series_approved: number;
+  series_rejected: number;
+  series_flagged: number;
   /** The non-DICOM file units within series_pending (which counts every
    *  QC unit, series and file alike). */
   files_pending: number;
