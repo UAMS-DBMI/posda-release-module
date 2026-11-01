@@ -5,8 +5,6 @@ import { useTheme } from "@/lib/useTheme";
 const sections = [
   { label: "Dashboard",  home: "/",           prefix: "/" },
   { label: "Datasets",   home: "/datasets",   prefix: "/datasets" },
-  { label: "Recordsets", home: "/recordsets", prefix: "/recordsets" },
-  { label: "Transfers",  home: "/transfers",  prefix: "/transfers" },
   { label: "QC",         home: "/qc/queue",   prefix: "/qc" },
 ] as const;
 
