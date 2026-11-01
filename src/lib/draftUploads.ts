@@ -35,12 +35,20 @@ async function importFile(file: File, name: string): Promise<number> {
   return json.file_id;
 }
 
+/** How an incoming batch lands in the draft: added alongside what's there,
+ *  replacing draft files with the same name (different content), or replacing
+ *  the draft's entire contents. */
+export type DraftAddMode = "add" | "replace_same_name" | "replace_all";
+
 /** Pull the file attached to the recordset's WP download object into the draft.
  *  The backend resolves draft -> recordset -> download object -> media source
  *  and imports it under the media's original filename. */
-export async function pullWpFileToDraft(draftId: number): Promise<void> {
+export async function pullWpFileToDraft(
+  draftId: number,
+  mode: DraftAddMode = "add",
+): Promise<void> {
   const res = await fetch(
-    `/papi/v1/distribution/recordsets/drafts/${draftId}/files/from-wp`,
+    `/papi/v1/distribution/recordsets/drafts/${draftId}/files/from-wp?mode=${mode}`,
     { method: "POST" },
   );
   if (!res.ok) {
@@ -58,6 +66,7 @@ export async function pullWpFileToDraft(draftId: number): Promise<void> {
 export async function uploadFilesToDraft(
   draftId: number,
   files: File[],
+  mode: DraftAddMode = "add",
 ): Promise<number> {
   const imported: { file_id: number; file_name: string }[] = [];
   for (const file of files) {
@@ -71,7 +80,7 @@ export async function uploadFilesToDraft(
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ files: imported }),
+      body: JSON.stringify({ files: imported, mode }),
     },
   );
   if (!res.ok) {

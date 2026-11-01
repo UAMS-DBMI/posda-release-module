@@ -79,6 +79,35 @@ itself rather than needing manual status changes.
       mode choice (resample would only wipe decisions). Stale breakdown counts
       new hashes only; see TECH_DEBT #18 for why changed/dropped read 0.
 
+### ➕ Draft add sources — Merge / Replace all everywhere (2026-11-01)
+
+Activity already offered Merge (series by UID: add new, replace changed) or
+Replace all. Release, Upload and WordPress were add-only -- WordPress too,
+so re-pulling an updated WP file left the old one beside it.
+
+- **Every source now has the Merge / Replace all toggle** (`DraftAddFiles`).
+  Replace all sits behind the same click-twice confirm (4 s lapse).
+- **Release:** Merge = add the release's files not in the draft (unchanged).
+  Replace all goes server-side -- `content/replace-all` now takes
+  `compare_release_id` as an alternative to a timepoint (exactly one), copying
+  the release's memberships with their names, so the browser never posts a
+  big release's file list.
+- **Upload / WordPress:** Merge offers **"Replace N same-name files"**
+  (checked by default), the named-file analogue of "replace N changed
+  series". A draft file is replaced only when the name matches **and** the
+  content differs; an identical file is left alone (no churn, no stale QC).
+  Sized up front by `POST drafts/{id}/files/name-matches` (upload) and
+  `GET drafts/{id}/files/from-wp/preview` (WP filename + whether it's in the
+  draft).
+- **Backend:** `files/add` body and `files/from-wp` query take
+  `mode` = `add` | `replace_same_name` | `replace_all`, applied in the same
+  transaction as the insert (`_apply_draft_add_mode`). Responses gain
+  `removed`. Draft-file triggers (QC staleness) fire as for any edit.
+- ⚠ Found while testing: `db.fetch_one` returns `[]`, not `None`, on no rows,
+  so `if x is None` never fires. `_require_timepoint` and three other
+  timepoint checks in `distribution.py` use that pattern and never 404 --
+  pre-existing, not fixed here.
+
 ### 🧹 Pre-prod consistency cleanup — port cycle modals to non-cycle pages
 
 Goal: the standalone dataset/recordset/draft pages should use the same modals the
