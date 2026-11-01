@@ -309,6 +309,10 @@ export type QcReviewFile = {
   file_id: number;
   file_name: string | null;
   qc_status: string;
+  /** From the history entry that set qc_status -- a rejection's reason. */
+  status_notes: string | null;
+  status_who: number | null;
+  status_when: string | null;
 };
 
 /** A non-DICOM review's files, or one slice's when `assignmentId` is given. */

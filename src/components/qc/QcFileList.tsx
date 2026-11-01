@@ -2,7 +2,17 @@ import DynamicTable from "@/components/DynamicTable";
 import { DownloadIcon } from "@/components/icons";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/Spinner";
-import { qcFileDownloadUrl, useReviewFiles } from "@/lib/useQc";
+import { qcFileDownloadUrl, useReviewFiles, type QcReviewFile } from "@/lib/useQc";
+import { useUsers } from "@/lib/useUsers";
+
+/** Hover text for a rejected file: who, when, and the reason given. */
+function rejectionTitle(row: QcReviewFile, users: Map<number, string>): string | undefined {
+  if (row.qc_status !== "rejected") return undefined;
+  const who = row.status_who != null ? (users.get(row.status_who) ?? `User ${row.status_who}`) : null;
+  const when = row.status_when ? new Date(row.status_when).toLocaleString() : null;
+  const by = [who && `by ${who}`, when].filter(Boolean).join(", ");
+  return `Rejected${by ? ` ${by}` : ""}: ${row.status_notes ?? "no reason recorded"}`;
+}
 
 /** A non-DICOM review's files with their status and a download link: one
  *  slice's in the Review modal, the whole review's (with a Slice column) in the
@@ -17,6 +27,7 @@ export default function QcFileList({
   showSlice?: boolean;
 }) {
   const files = useReviewFiles(reviewId, assignmentId);
+  const users = useUsers();
 
   if (files.isLoading) return <LoadingState />;
   if (files.isError) {
@@ -56,7 +67,11 @@ export default function QcFileList({
         {
           key: "qc_status",
           label: "Status",
-          render: (v) => <StatusBadge status={String(v)} />,
+          render: (v, row) => (
+            <span title={rejectionTitle(row, users)}>
+              <StatusBadge status={String(v)} />
+            </span>
+          ),
         },
         {
           key: "file_id",
