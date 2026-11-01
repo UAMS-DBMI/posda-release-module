@@ -257,7 +257,15 @@ export default function AssembleStage() {
                               Mark Ready
                             </Button>
                           )}
-                          <Button size="sm" variant="ghost" onClick={() => openManage("add")}>
+                          {/* Every Manage tab edits the draft, and a ready draft
+                              is what QC sampled -- so changes go through Reopen. */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openManage("add")}
+                            disabled={isReady}
+                            title={isReady ? "Reopen the draft to change it" : undefined}
+                          >
                             Manage
                           </Button>
                         </div>
