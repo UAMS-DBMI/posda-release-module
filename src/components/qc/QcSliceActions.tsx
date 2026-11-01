@@ -10,6 +10,7 @@ import {
   type QcReviewType,
 } from "@/lib/useQc";
 import { useUsers } from "@/lib/useUsers";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Button, ExternalLinkButton } from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/Toast";
@@ -43,6 +44,10 @@ export default function QcSliceActions({
 }) {
   const { addToast } = useToast();
   const userMap = useUsers();
+  // The test-only Complete shortcut is for the system / admin accounts only.
+  const currentUser = useCurrentUser();
+  const canTestComplete =
+    currentUser?.username === "system" || currentUser?.username === "admin";
   const claim = useClaimAssignment(reviewId);
   const release = useReleaseAssignment(reviewId);
   const reassign = useUpdateAssignment(reviewId);
@@ -176,7 +181,7 @@ export default function QcSliceActions({
               Review
             </ExternalLinkButton>
           ))}
-        {!reviewOnly && !isNonDicom && assignment.assignment_status !== "complete" && (
+        {canTestComplete && !reviewOnly && !isNonDicom && assignment.assignment_status !== "complete" && (
           <Button
             size="xs"
             variant="ghost"
