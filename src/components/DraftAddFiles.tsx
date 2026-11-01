@@ -6,6 +6,7 @@ import ActivitySourcePicker, {
 import FilePicker from "@/components/FilePicker";
 import ReleasePicker from "@/components/ReleasePicker";
 import DraftSeriesReconcile from "@/components/DraftSeriesReconcile";
+import NameConflictPicker from "@/components/NameConflictPicker";
 import { draftFilesKey } from "@/components/DraftFileList";
 import { draftSummaryKey } from "@/components/DraftSummary";
 import { Button } from "@/components/ui/Button";
@@ -17,6 +18,7 @@ import {
   pullWpFileToDraft,
   uploadFilesToDraft,
   type DraftAddMode,
+  type NameConflictChoice,
 } from "@/lib/draftUploads";
 
 type Mode = "activity" | "release" | "upload" | "wordpress";
@@ -35,29 +37,28 @@ const OPS: { key: Op; label: string }[] = [
   { key: "replace-all", label: "Replace all" },
 ];
 
-type DiffResult = {
-  removed_file_ids: number[];
-  removed_count: number;
-  unchanged_count: number;
-  added_count: number;
+type ReleaseMergePreview = {
+  to_add: number;
+  already_in: number;
+  name_conflicts: number;
+  release_total: number;
+  draft_total: number;
 };
 
-// A draft diff reports, relative to a previous release: removed = in the release
-// but not the draft (i.e. what "add" would pull in), unchanged = already in the
-// draft, added = in the draft but not the release. (Activity sources use the
-// series reconcile instead -- file-level add can't replace corrected series.)
-function useDraftDiff(draftId: number, releaseId: number | null) {
+// What bringing a release in would do: Merge adds its memberships (with the
+// release's names) the draft lacks; Replace all swaps the totals.
+function useReleaseMergePreview(draftId: number, releaseId: number | null) {
   return useQuery({
-    queryKey: ["draft-diff", draftId, releaseId],
+    queryKey: ["draft-release-merge", draftId, releaseId],
     enabled: releaseId !== null,
     queryFn: async () => {
       const res = await fetch(
-        `/papi/v1/distribution/recordsets/drafts/${draftId}/diff?compare_release_id=${releaseId}`,
+        `/papi/v1/distribution/recordsets/drafts/${draftId}/content/merge-release/preview?compare_release_id=${releaseId}`,
         { cache: "no-store" },
       );
-      if (!res.ok) throw new Error("Could not load diff.");
-      const json = (await res.json()) as { data: DiffResult } | DiffResult;
-      return "data" in json ? json.data : json;
+      if (!res.ok) throw new Error("Could not compare with the release.");
+      const json = (await res.json()) as { data: ReleaseMergePreview };
+      return json.data;
     },
   });
 }
@@ -162,9 +163,10 @@ type DraftAddFilesProps = {
 
 /** Add files to an open draft from an activity timepoint, a previous release,
  *  a local upload, or the recordset's WordPress download. Each source can
- *  merge into the draft or replace its entire contents; uploads and the WP
- *  pull can also replace draft files that share a name. Bulk only -- per-file
- *  selection is the (still-held) file browser. */
+ *  merge into the draft or replace its entire contents. A draft never holds
+ *  two different non-DICOM files under one name, so a merge that collides
+ *  replaces the draft's file (default) or skips the incoming one. Bulk only --
+ *  per-file selection is the (still-held) file browser. */
 export default function DraftAddFiles({
   draftId,
   recordsetId,
@@ -175,7 +177,7 @@ export default function DraftAddFiles({
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>("activity");
   const [op, setOp] = useState<Op>("merge");
-  const [replaceSameName, setReplaceSameName] = useState(true);
+  const [onNameConflict, setOnNameConflict] = useState<NameConflictChoice>("replace");
   const [source, setSource] = useState<ActivitySource | null>(null);
   const [releaseId, setReleaseId] = useState<number | null>(null);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -186,8 +188,7 @@ export default function DraftAddFiles({
   ];
   const isDiffMode = mode === "release";
 
-  const diff = useDraftDiff(draftId, releaseId);
-  const toAdd = diff.data?.removed_file_ids ?? [];
+  const releasePreview = useReleaseMergePreview(draftId, releaseId);
 
   // Folder uploads carry a relative subpath; that is the name they're stored under.
   const uploadNames = uploadFiles.map((f) => f.webkitRelativePath || f.name);
@@ -195,15 +196,12 @@ export default function DraftAddFiles({
   const sameNameCount = nameMatches.data?.length ?? 0;
   const wpPreview = useWpPreview(draftId, mode === "wordpress");
 
-  // The mode for an upload / WP pull, from the Merge / Replace-all choice.
-  function addMode(sameNameAvailable: boolean): DraftAddMode {
-    if (op === "replace-all") return "replace_all";
-    return replaceSameName && sameNameAvailable ? "replace_same_name" : "add";
-  }
+  const addMode: DraftAddMode = op === "replace-all" ? "replace_all" : "add";
 
   function chooseMode(m: Mode) {
     setMode(m);
     setOp("merge");
+    setOnNameConflict("replace");
   }
 
   function invalidateAfterChange() {
@@ -214,26 +212,36 @@ export default function DraftAddFiles({
     });
     void queryClient.invalidateQueries({ queryKey: ["draft-name-matches", draftId] });
     void queryClient.invalidateQueries({ queryKey: ["draft-wp-preview", draftId] });
+    void queryClient.invalidateQueries({ queryKey: ["draft-release-merge", draftId] });
   }
 
-  const add = useMutation({
+  const mergeRelease = useMutation({
     mutationFn: async () => {
       const res = await fetch(
-        `/papi/v1/distribution/recordsets/drafts/${draftId}/files/add`,
+        `/papi/v1/distribution/recordsets/drafts/${draftId}/content/merge-release`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ files: toAdd.map((file_id) => ({ file_id })) }),
+          body: JSON.stringify({
+            compare_release_id: releaseId,
+            on_name_conflict: onNameConflict,
+          }),
         },
       );
       if (!res.ok) {
         throw new Error(extractApiError(await res.json(), "Could not add files."));
       }
+      return (await res.json()) as {
+        data: { files_added: number; files_removed: number };
+      };
     },
-    onSuccess: () => {
-      toastSuccess(addToast, `Added ${toAdd.length.toLocaleString()} files.`);
+    onSuccess: (json) => {
+      const replaced = json.data.files_removed;
+      toastSuccess(
+        addToast,
+        `Added ${json.data.files_added.toLocaleString()} files${replaced > 0 ? ` (${replaced.toLocaleString()} replaced)` : ""}.`,
+      );
       invalidateAfterChange();
-      void diff.refetch();
     },
     onError: (e) =>
       toastError(addToast, e instanceof Error ? e.message : "Could not add files."),
@@ -260,14 +268,13 @@ export default function DraftAddFiles({
         `Draft replaced — ${json.data.files_added.toLocaleString()} files (${json.data.files_removed.toLocaleString()} removed).`,
       );
       invalidateAfterChange();
-      void diff.refetch();
     },
     onError: (e) =>
       toastError(addToast, e instanceof Error ? e.message : "Could not replace."),
   });
 
   const upload = useMutation({
-    mutationFn: () => uploadFilesToDraft(draftId, uploadFiles, addMode(sameNameCount > 0)),
+    mutationFn: () => uploadFilesToDraft(draftId, uploadFiles, addMode, onNameConflict),
     onSuccess: (count) => {
       toastSuccess(addToast, `Uploaded ${count.toLocaleString()} files.`);
       setUploadFiles([]);
@@ -278,8 +285,7 @@ export default function DraftAddFiles({
   });
 
   const wpPull = useMutation({
-    mutationFn: () =>
-      pullWpFileToDraft(draftId, addMode(!!wpPreview.data?.same_name_in_draft)),
+    mutationFn: () => pullWpFileToDraft(draftId, addMode, onNameConflict),
     onSuccess: () => {
       toastSuccess(addToast, "Pulled the WordPress file into the draft.");
       invalidateAfterChange();
@@ -293,7 +299,7 @@ export default function DraftAddFiles({
 
   // The Merge / Replace-all toggle shows once there's something to bring in.
   const hasSource =
-    (mode === "release" && !!diff.data) ||
+    (mode === "release" && !!releasePreview.data) ||
     (mode === "upload" && uploadFiles.length > 0) ||
     (mode === "wordpress" && !!wpPreview.data);
 
@@ -363,10 +369,10 @@ export default function DraftAddFiles({
         )}
       </div>
 
-      {isDiffMode && diff.isLoading && <LoadingState className="mt-3" />}
-      {isDiffMode && diff.isError && (
+      {isDiffMode && releasePreview.isLoading && <LoadingState className="mt-3" />}
+      {isDiffMode && releasePreview.isError && (
         <p className="mt-3 text-sm text-red-600 dark:text-red-400">
-          Could not load diff.
+          {releasePreview.error.message}
         </p>
       )}
       {mode === "wordpress" && wpPreview.isLoading && <LoadingState className="mt-3" />}
@@ -399,33 +405,37 @@ export default function DraftAddFiles({
         </div>
       )}
 
-      {isDiffMode && diff.data && op === "merge" && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm" style={{ color: "var(--muted)" }}>
-            {diff.data.removed_count.toLocaleString()} not in draft ·{" "}
-            {diff.data.unchanged_count.toLocaleString()} already in
-          </p>
-          <Button
-            size="sm"
-            onClick={() => add.mutate()}
-            disabled={toAdd.length === 0}
-            loading={add.isPending}
-          >
-            Add {toAdd.length.toLocaleString()} Files
-          </Button>
+      {isDiffMode && releasePreview.data && op === "merge" && (
+        <div className="mt-3 space-y-2 text-sm">
+          {releasePreview.data.name_conflicts > 0 && (
+            <NameConflictPicker
+              count={releasePreview.data.name_conflicts}
+              value={onNameConflict}
+              onChange={setOnNameConflict}
+            />
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p style={{ color: "var(--muted)" }}>
+              {releasePreview.data.to_add.toLocaleString()} not in draft ·{" "}
+              {releasePreview.data.already_in.toLocaleString()} already in
+            </p>
+            <Button
+              size="sm"
+              onClick={() => mergeRelease.mutate()}
+              disabled={releasePreview.data.to_add === 0}
+              loading={mergeRelease.isPending}
+            >
+              Add {releasePreview.data.to_add.toLocaleString()} Files
+            </Button>
+          </div>
         </div>
       )}
-      {isDiffMode && diff.data && op === "replace-all" && (
+      {isDiffMode && releasePreview.data && op === "replace-all" && (
         <div className="mt-3 space-y-2 text-sm">
           <div className="space-y-0.5" style={{ color: "var(--muted)" }}>
             <p>Replace the draft's entire contents with this release.</p>
-            <p>
-              New: {files(diff.data.removed_count + diff.data.unchanged_count)}.
-            </p>
-            <p>
-              Removes the draft's current{" "}
-              {files(diff.data.unchanged_count + diff.data.added_count)}.
-            </p>
+            <p>New: {files(releasePreview.data.release_total)}.</p>
+            <p>Removes the draft's current {files(releasePreview.data.draft_total)}.</p>
           </div>
           <div className="flex justify-end">
             <ConfirmReplaceButton
@@ -440,15 +450,11 @@ export default function DraftAddFiles({
       {mode === "upload" && uploadFiles.length > 0 && op === "merge" && (
         <div className="mt-3 space-y-2 text-sm">
           {sameNameCount > 0 && (
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={replaceSameName}
-                onChange={(e) => setReplaceSameName(e.target.checked)}
-              />
-              Replace {sameNameCount.toLocaleString()} same-name file
-              {sameNameCount === 1 ? "" : "s"} in the draft
-            </label>
+            <NameConflictPicker
+              count={sameNameCount}
+              value={onNameConflict}
+              onChange={setOnNameConflict}
+            />
           )}
           <div className="flex justify-end">
             <Button
@@ -481,14 +487,11 @@ export default function DraftAddFiles({
       {mode === "wordpress" && wpPreview.data && op === "merge" && (
         <div className="mt-3 space-y-2 text-sm">
           {wpPreview.data.same_name_in_draft && (
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={replaceSameName}
-                onChange={(e) => setReplaceSameName(e.target.checked)}
-              />
-              Replace the draft's {wpPreview.data.file_name}
-            </label>
+            <NameConflictPicker
+              count={1}
+              value={onNameConflict}
+              onChange={setOnNameConflict}
+            />
           )}
           <div className="flex justify-end">
             <Button size="sm" onClick={() => wpPull.mutate()} loading={wpPull.isPending}>

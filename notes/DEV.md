@@ -31,10 +31,10 @@ itself rather than needing manual status changes.
 - **Locking.** A complete slice can't be released or reassigned (409); a
   complete or `replaced` review can't be cancelled (409; button hidden).
 - **Staleness covers complete reviews too, scoped by file type**
-  (`20261029_qc_stale_complete_and_scoped.sql`): a DICOM-file change stales
+  (`20261029_01_qc_stale_complete_and_scoped.sql`): a DICOM-file change stales
   DICOM reviews only, a non-DICOM change stales non-DICOM reviews only. A
   complete review leaves `complete` only by going stale.
-- **`replaced` status** (`20261029_qc_review_status_replaced.sql`, comment only
+- **`replaced` status** (`20261029_02_qc_review_status_replaced.sql`, comment only
   -- `review_status` has no CHECK). Cloning a stale review sets the source to
   `replaced`, so it stops blocking the gate. Rollup, queue and claim exclude
   `replaced` like `cancelled`; the UI treats both as retired (`isRetiredReview`).
@@ -78,7 +78,7 @@ itself rather than needing manual status changes.
       comes back for review. Always carry-forward: the clone modal skips the
       mode choice (resample would only wipe decisions).
 - [x] **File units are snapshots, like series units** (2026-11-01,
-      `20261101_qc_unit_file_snapshot.sql`). A QC decision is about content
+      `20261101_01_qc_unit_file_snapshot.sql`). A QC decision is about content
       that existed when it was made, so a unit must not depend on draft
       membership. Series units already stored identity (UID) + content (hash)
       with no draft link; file units pointed at `recordset_draft_file_id`
@@ -99,22 +99,38 @@ so re-pulling an updated WP file left the old one beside it.
 
 - **Every source now has the Merge / Replace all toggle** (`DraftAddFiles`).
   Replace all sits behind the same click-twice confirm (4 s lapse).
-- **Release:** Merge = add the release's files not in the draft (unchanged).
-  Replace all goes server-side -- `content/replace-all` now takes
-  `compare_release_id` as an alternative to a timepoint (exactly one), copying
-  the release's memberships with their names, so the browser never posts a
-  big release's file list.
-- **Upload / WordPress:** Merge offers **"Replace N same-name files"**
-  (checked by default), the named-file analogue of "replace N changed
-  series". A draft file is replaced only when the name matches **and** the
-  content differs; an identical file is left alone (no churn, no stale QC).
-  Sized up front by `POST drafts/{id}/files/name-matches` (upload) and
-  `GET drafts/{id}/files/from-wp/preview` (WP filename + whether it's in the
-  draft).
-- **Backend:** `files/add` body and `files/from-wp` query take
-  `mode` = `add` | `replace_same_name` | `replace_all`, applied in the same
-  transaction as the insert (`_apply_draft_add_mode`). Responses gain
-  `removed`. Draft-file triggers (QC staleness) fire as for any edit.
+- **Unique non-DICOM names (decided 2026-11-01).** A draft never holds two
+  different non-DICOM files under one name -- the name is the file's identity
+  (a corrected `uid_crosswalk.csv` replaces the old one). Required, not
+  suggested: a collision is resolved **Replace** (default -- the draft's file
+  goes) or **Skip** (the incoming file is dropped), never "keep both".
+  Content-identical files under *different* names stay allowed (TECH_DEBT #9);
+  DICOM is exempt (activity DICOM has no name). Backstop:
+  `trg_recordset_draft_file_unique_non_dicom_name`
+  (`20261101_02_draft_non_dicom_unique_name.sql`) -- a trigger, since "is it
+  DICOM" lives on `file` and an index predicate can't reach it.
+- **API:** `mode` = `add` | `replace_all` (empty the draft first) is separate
+  from `on_name_conflict` = `replace` | `skip`; omitted + a collision = 409
+  `NAME_CONFLICT` listing the names. Two different files sharing a name in one
+  batch = 422. One helper resolves it for every source
+  (`_plan_non_dicom_names`), so all four agree:
+  - `files/add` (upload) and `files/from-wp` take both params.
+  - **Release:** Merge is server-side now -- `content/merge-release` (+
+    `/preview` for the counts) adds the release's memberships **with the
+    release's names**. It used to post bare file_ids, so names came back from
+    `file_import` and a renamed file returned under its old name. Replace all
+    = `content/replace-all` with `compare_release_id` (alternative to a
+    timepoint), never posting a big release's file list.
+  - **Activity:** `series/merge` and `series/apply` take `on_name_conflict`
+    for their non-DICOM add; `series-summary` reports
+    `non_dicom_name_conflicts`.
+- **UI:** every Merge shows `NameConflictPicker` ("N files share a name with
+  a file already in the draft: (•) Replace them ( ) Skip them") when there
+  are collisions. Upload counts by name (files are hashed only on Upload), so
+  an identical same-name file is counted but is a no-op. Replace all sits
+  behind the click-twice confirm (4 s lapse).
+- Closes the `QC_FILE_COMPARE` duplicate-name edge: with unique names its
+  name join can't fan out.
 - ⚠ Found while testing: `db.fetch_one` returns `[]`, not `None`, on no rows,
   so `if x is None` never fires. `_require_timepoint` and three other
   timepoint checks in `distribution.py` use that pattern and never 404 --

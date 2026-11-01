@@ -34,7 +34,7 @@ See [CLAUDE.md](../CLAUDE.md) for architecture and active feature checklists.
   at `recordset_draft_file_id` with `ON DELETE CASCADE`, so removing or
   replacing a draft file deleted the unit and its history (a rejection and its
   reason), leaving a stale review empty with a "complete" 0/0 slice.
-  `20261101_qc_unit_file_snapshot.sql` makes a file unit a snapshot like a
+  `20261101_01_qc_unit_file_snapshot.sql` makes a file unit a snapshot like a
   series unit: it carries `file_id` (content) + `file_name` (identity), the
   draft link is gone, and only deleting the review removes a unit. The stale
   breakdown and clone reconcile now report changed (same name, new hash) /

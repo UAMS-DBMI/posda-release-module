@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ActivitySource } from "@/components/ActivitySourcePicker";
 import { draftFilesKey } from "@/components/DraftFileList";
 import { draftSummaryKey } from "@/components/DraftSummary";
+import NameConflictPicker from "@/components/NameConflictPicker";
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/Spinner";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
+import type { NameConflictChoice } from "@/lib/draftUploads";
 
 type Summary = {
   source_series_count: number;
@@ -22,6 +24,8 @@ type Summary = {
   source_non_dicom_file_count: number;
   draft_non_dicom_file_count: number;
   non_dicom_to_add: number;
+  /** Timepoint non-DICOM names already used by a different draft file. */
+  non_dicom_name_conflicts: number;
 };
 
 function files(n: number): string {
@@ -58,6 +62,7 @@ export default function DraftSeriesReconcile({
   const [addNew, setAddNew] = useState(true);
   const [updateMatching, setUpdateMatching] = useState(true);
   const [includeNonDicom, setIncludeNonDicom] = useState(true);
+  const [onNameConflict, setOnNameConflict] = useState<NameConflictChoice>("replace");
   const [confirmReplace, setConfirmReplace] = useState(false);
 
   useEffect(() => {
@@ -100,6 +105,7 @@ export default function DraftSeriesReconcile({
             add_new: addNew,
             update_matching: updateMatching,
             include_non_dicom: includeNonDicom,
+            on_name_conflict: onNameConflict,
           }),
         },
       );
@@ -221,6 +227,13 @@ export default function DraftSeriesReconcile({
               Add {s.non_dicom_to_add.toLocaleString()} non-DICOM file
               {s.non_dicom_to_add === 1 ? "" : "s"}
             </label>
+          )}
+          {includeNonDicom && s.non_dicom_name_conflicts > 0 && (
+            <NameConflictPicker
+              count={s.non_dicom_name_conflicts}
+              value={onNameConflict}
+              onChange={setOnNameConflict}
+            />
           )}
           <div className="flex items-center justify-between gap-3 pt-1">
             <p className="text-xs" style={{ color: "var(--muted)" }}>

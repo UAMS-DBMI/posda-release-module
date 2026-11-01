@@ -35,10 +35,12 @@ async function importFile(file: File, name: string): Promise<number> {
   return json.file_id;
 }
 
-/** How an incoming batch lands in the draft: added alongside what's there,
- *  replacing draft files with the same name (different content), or replacing
- *  the draft's entire contents. */
-export type DraftAddMode = "add" | "replace_same_name" | "replace_all";
+/** Whether an incoming batch joins the draft or replaces its entire contents. */
+export type DraftAddMode = "add" | "replace_all";
+
+/** What to do when an incoming non-DICOM file has the name of a different
+ *  draft file -- a draft never holds both. */
+export type NameConflictChoice = "replace" | "skip";
 
 /** Pull the file attached to the recordset's WP download object into the draft.
  *  The backend resolves draft -> recordset -> download object -> media source
@@ -46,9 +48,11 @@ export type DraftAddMode = "add" | "replace_same_name" | "replace_all";
 export async function pullWpFileToDraft(
   draftId: number,
   mode: DraftAddMode = "add",
+  onNameConflict: NameConflictChoice = "replace",
 ): Promise<void> {
+  const params = new URLSearchParams({ mode, on_name_conflict: onNameConflict });
   const res = await fetch(
-    `/papi/v1/distribution/recordsets/drafts/${draftId}/files/from-wp?mode=${mode}`,
+    `/papi/v1/distribution/recordsets/drafts/${draftId}/files/from-wp?${params.toString()}`,
     { method: "POST" },
   );
   if (!res.ok) {
@@ -67,6 +71,7 @@ export async function uploadFilesToDraft(
   draftId: number,
   files: File[],
   mode: DraftAddMode = "add",
+  onNameConflict: NameConflictChoice = "replace",
 ): Promise<number> {
   const imported: { file_id: number; file_name: string }[] = [];
   for (const file of files) {
@@ -80,7 +85,7 @@ export async function uploadFilesToDraft(
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ files: imported, mode }),
+      body: JSON.stringify({ files: imported, mode, on_name_conflict: onNameConflict }),
     },
   );
   if (!res.ok) {
