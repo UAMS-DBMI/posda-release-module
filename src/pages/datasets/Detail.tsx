@@ -36,7 +36,6 @@ type DatasetReleasesResponse = {
 
 type DatasetRecordset = {
   recordset_id: number;
-  recordset_doi: string | null;
   dataset_id: number;
   recordset_type_id: number;
   recordset_type_name: string;
@@ -433,9 +432,26 @@ export default function DatasetDetail() {
                         ),
                       },
                       { key: "recordset_type_name", label: "Type" },
-                      { key: "recordset_doi", label: "DOI" },
                       { key: "active", label: "Active" },
                       { key: "when_updated", label: "Updated" },
+                      {
+                        key: "recordset_id",
+                        label: "",
+                        sortable: false,
+                        render: (_v, row) => (
+                          <FavoriteStar
+                            size={20}
+                            filled={favoriteKeys.has(`recordset:${row.recordset_id}`)}
+                            onClick={() =>
+                              void toggleFavorite(
+                                "recordset",
+                                row.recordset_id,
+                                row.recordset_name,
+                              )
+                            }
+                          />
+                        ),
+                      },
                     ]}
                     formatters={{
                       when_updated: (value) => formatDateTime(value as string),
