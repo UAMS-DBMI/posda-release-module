@@ -29,9 +29,11 @@ import { LoadingState } from "@/components/ui/Spinner";
 type RecordsetRelease = {
   recordset_release_id: number;
   recordset_id: number;
-  release_number: number;
-  release_date: string;
-  release_notes: string;
+  /** Null on a draft release -- the number is claimed at publish. */
+  release_number: number | null;
+  release_status: string;
+  release_date: string | null;
+  release_notes: string | null;
   file_count: number;
 };
 
@@ -75,7 +77,14 @@ function normalizeRecordsetReleasesResponse(
     : Array.isArray(source?.data)
       ? source.data
       : []
-  ).slice().sort((a, b) => b.release_number - a.release_number);
+  )
+    .slice()
+    // Newest first; a draft release has no number yet and is the newest.
+    .sort(
+      (a, b) =>
+        (b.release_number ?? Number.MAX_SAFE_INTEGER) -
+        (a.release_number ?? Number.MAX_SAFE_INTEGER),
+    );
 
   return {
     releases,
@@ -148,8 +157,6 @@ export default function RecordsetDetail() {
   const [draftsItemsPerPage, setDraftsItemsPerPage] = useState(4);
   const [releasesPage, setReleasesPage] = useState(1);
   const [releasesItemsPerPage, setReleasesItemsPerPage] = useState(4);
-  const [destinationsPage, setDestinationsPage] = useState(1);
-  const [destinationsItemsPerPage, setDestinationsItemsPerPage] = useState(4);
   const [releasesData, setReleasesData] =
     useState<RecordsetReleasesResponse | null>(null);
   const [isLoadingReleases, setIsLoadingReleases] = useState(false);
@@ -431,12 +438,7 @@ export default function RecordsetDetail() {
       {!isLoading && recordset && recordsetId && (
         <SectionCard className="mt-4">
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <CardTitle>Destinations</CardTitle>
-              <span className="text-xs" style={{ color: "var(--muted)" }}>
-                ({destinations.length})
-              </span>
-            </div>
+            <CardTitle>Destinations</CardTitle>
             <Button
               size="sm"
               onClick={openAddDestModal}
@@ -457,17 +459,7 @@ export default function RecordsetDetail() {
             {!isLoadingDestinations && !destinationsError && (
               <DynamicTable
                 rows={destinations}
-                pagination={{
-                  defaultItemsPerPage: 4,
-                  totalItems: destinations.length,
-                  page: destinationsPage,
-                  pageSize: destinationsItemsPerPage,
-                  onPageChange: setDestinationsPage,
-                  onPageSizeChange: (n) => {
-                    setDestinationsItemsPerPage(n);
-                    setDestinationsPage(1);
-                  },
-                }}
+                hideSummary
                 columns={[
                   { key: "destination_name", label: "Destination" },
                   { key: "destination_abbr", label: "Abbr" },
@@ -483,14 +475,7 @@ export default function RecordsetDetail() {
           </div>
 
           <CardHeader className="mt-6">
-            <div className="flex items-center gap-2">
-              <CardTitle>Drafts</CardTitle>
-              {draftsData && (
-                <span className="text-xs" style={{ color: "var(--muted)" }}>
-                  ({draftsData.total})
-                </span>
-              )}
-            </div>
+            <CardTitle>Drafts</CardTitle>
             {!openDraft && (
               <Button size="sm" onClick={() => setShowCreateDraftModal(true)}>
                 New Draft
@@ -520,10 +505,15 @@ export default function RecordsetDetail() {
                   pageSize: draftsItemsPerPage,
                   totalItems: draftsData.total,
                   onPageChange: setDraftsPage,
-                  onPageSizeChange: (nextItemsPerPage) => {
-                    setDraftsItemsPerPage(nextItemsPerPage);
-                    setDraftsPage(1);
-                  },
+                  // The page-size picker only once there's more than the
+                  // smallest page (4) -- so it doesn't vanish after picking 10.
+                  onPageSizeChange:
+                    draftsData.total > 4
+                      ? (nextItemsPerPage) => {
+                          setDraftsItemsPerPage(nextItemsPerPage);
+                          setDraftsPage(1);
+                        }
+                      : undefined,
                 }}
                 emptyMessage="No drafts yet."
                 renderCells={(d) => {
@@ -612,6 +602,8 @@ export default function RecordsetDetail() {
             {!isLoadingReleases && !releasesError && releasesData && (
               <DynamicTable
                 rows={releasesData.releases}
+                // Summary bar only once there's more than the smallest page (4).
+                hideSummary={releasesData.total <= 4}
                 pagination={{
                   defaultItemsPerPage: 4,
                   totalItems: releasesData.total,
@@ -624,15 +616,22 @@ export default function RecordsetDetail() {
                   },
                 }}
                 columns={[
-                  { key: "recordset_release_id", label: "ID" },
                   { key: "release_number", label: "Version" },
+                  {
+                    key: "release_status",
+                    label: "Status",
+                    render: (value) => <StatusBadge status={String(value)} />,
+                  },
                   { key: "release_date", label: "Date" },
                   { key: "release_notes", label: "Notes" },
                   { key: "file_count", label: "File Count" },
                 ]}
+                // A draft release has no number or date yet.
                 formatters={{
+                  release_number: (value) => (value != null ? String(value) : "—"),
                   release_date: (value) =>
-                    new Date(String(value)).toLocaleDateString(),
+                    value ? new Date(String(value)).toLocaleDateString() : "—",
+                  release_notes: (value) => (value ? String(value) : "—"),
                 }}
                 onRowClick={(row) =>
                   navigate(
