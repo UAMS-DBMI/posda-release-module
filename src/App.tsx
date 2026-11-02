@@ -109,8 +109,11 @@ function RootLayout() {
             then reload this page.
           </AuthNotice>
         ) : authStatus === "error" ? (
-          <AuthNotice title="Can't reach the Posda API">
-            The API didn't respond. Check that it's running, then reload.
+          // Usually a lapsed login: the request lands on Posda's login page,
+          // which isn't API data, rather than coming back as a 401.
+          <AuthNotice title="Can't reach Posda">
+            You may need to log into Posda. Log in, then reload this page. If
+            it still doesn't load, contact your Posda administrator.
           </AuthNotice>
         ) : (
           <Outlet />
