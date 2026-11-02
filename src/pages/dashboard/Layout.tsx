@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 const dashboardLinks = [
   { to: "/dashboard", label: "Overview" },
@@ -8,6 +9,9 @@ const dashboardLinks = [
 
 export default function DashboardLayout() {
   const { pathname } = useLocation();
+  useDocumentTitle(
+    dashboardLinks.find((link) => link.to === pathname)?.label ?? "Dashboard",
+  );
 
   return (
     <div className="content-width flex min-h-screen gap-8 px-4 py-8 sm:px-6">

@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import classNames from "@/lib/classNames";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 type PageShellSize = "3xl" | "5xl" | "6xl";
 
@@ -62,6 +63,9 @@ type Breadcrumb = { label: string; href: string };
 
 type PageDetailHeaderProps = {
   title: string;
+  /** Browser-tab title, when it should differ from `title`; see
+   *  useDocumentTitle. */
+  documentTitle?: string;
   breadcrumb?: Breadcrumb;
   breadcrumbs?: Breadcrumb[];
   subtitle?: ReactNode;
@@ -89,6 +93,7 @@ const badgeDotClasses: Record<BadgeVariant, string> = {
 
 export function PageDetailHeader({
   title,
+  documentTitle,
   breadcrumb,
   breadcrumbs,
   subtitle,
@@ -97,6 +102,8 @@ export function PageDetailHeader({
   subActions,
 }: PageDetailHeaderProps) {
   const trail = breadcrumbs ?? (breadcrumb ? [breadcrumb] : []);
+  // Every page with this header names its tab with no extra wiring.
+  useDocumentTitle(documentTitle ?? title);
   return (
     <div>
       {trail.length > 0 && (

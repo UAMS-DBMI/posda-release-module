@@ -119,6 +119,12 @@ export default function CycleLayout() {
     <PageShell size="5xl">
       <PageDetailHeader
         title={data ? `${data.dataset_name} — Release Cycle` : "Release Cycle"}
+        // The stage first, so several open cycles tell their tabs apart.
+        documentTitle={
+          data
+            ? `${STAGE_LABELS[activeStage ?? "setup"]} · ${data.dataset_name}`
+            : "Release Cycle"
+        }
         breadcrumbs={[
           { label: "Datasets", href: "/datasets" },
           ...(datasetId
