@@ -231,8 +231,35 @@ See *Bucket path scheme* below for the agreed layout. The daemon's flat
 `<base>/<md5>` becomes `<base>/imaging/<md5>`, and the imaging manifest's
 `relative_file_url` (still unimplemented) becomes `./imaging/<md5>`.
 
-**10. No `status.json`.** The per-version readiness signal and bucket-write mutex
-proposed 2026-07-31 (still unverified by either side) is not implemented.
+**10. `status.json` and the version lock: built 2026-11-03, not yet agreed
+with IDC.** `src/versionlock.go` ports Bill's corrected lock; its tests (his
+behavioral spec, run on a GCS emulator) pass. The daemon takes the lock, refuses
+a closed version, sets `Draft`, uploads, and releases, leaving it at `Draft`.
+The **API** (`papi/util/idc_bucket.py`, same rules and tests) reads the status
+live and does the hand-off: **Set to Ready** on the Transfer stage's IDC row. So
+the daemon is no longer the only bucket writer. Queue refuses (409) at
+`Processing`/`Processed`, and go live refuses until `Processed`, which is IDC's
+published; a v2 waiting on IDC's release of v1 is deliberately deferred. **Not
+run against a real bucket or end to end.** The API needs `GCS_KEY_JSON` in `api.env` (key
+limited to the bucket) and an image rebuilt for `google-cloud-storage`. Our
+assumptions, to confirm with IDC before this is used:
+- Object names and shape: `<version>/status.lock`, `<version>/status.json`,
+  `{"status": "..."}`. IDC has to use the same ones.
+- `Processed` is refused (needs a new version); so are `Processing` and any
+  unknown value. `Draft`, `Ready for processing`, `Errored` and no status file
+  are overwritten in place. Resubmitting an ingested folder is still undecided
+  (IDC_TRANSFER.md, *Pending confirmation*), so refusing is the safe default.
+- Worker ids are `posda-transfer-<id>` and `posda-api-transfer-<id>`. A stale API
+  lock needs a person. A daemon transfer finding its own lock after a
+  restart re-takes it: the one exception to "not reentrant", because the lock
+  has no lease and a crash would otherwise hold the version forever. A stale IDC
+  lock still needs a person.
+- A lock held by someone else leaves the transfer `in_progress`, retried each
+  reconcile sweep (5 min).
+
+⚠ A daemon refusal marks the transfer `failed` with the reason only in the log.
+It now only happens when the API's Queue check couldn't read the bucket, or IDC
+started in between.
 
 ### If it becomes the shared daemon
 
@@ -738,8 +765,8 @@ Recorded here rather than rediscovered during the build:
   `transfer_file` rows to `pending`, so the daemon re-verifies everything
   (HEAD-then-MD5 skips identical objects) and replaces the manifests. Without
   the reset every completed row is skipped and only the manifests upload.
-  ⚠ Nothing checks `status.json` / the per-version mutex yet, so a re-push can
-  race IDC's copy while it is processing that version.
+  A re-push takes the version lock first and is refused once IDC has processed
+  the version -- see #10.
 - **Partial failure has no representation.** If 3 of 500k files fail, the
   transfer is `failed` — but the other 499,997 uploaded. Whether a retry
   re-uploads everything or only the failures depends on `transfer_file` being

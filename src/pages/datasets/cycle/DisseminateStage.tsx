@@ -21,6 +21,7 @@ import {
   useWpPageStates,
   type WpPageState,
 } from "@/lib/dissemination";
+import { useIdcBucketStatus, type IdcBucketStatus } from "@/lib/idcBucket";
 import { useTransferRecordsets } from "@/lib/transferForm";
 import { namedDownloadUrl } from "@/lib/transferSettings";
 import {
@@ -57,6 +58,7 @@ function publicTransfer(
 function publishBlockedReason(
   cycle: DatasetCycle,
   wpPages: WpPageState[],
+  idc: IdcBucketStatus | undefined,
 ): string | null {
   const release = cycle.dataset_release;
   if (!release) return "No release to publish.";
@@ -72,6 +74,17 @@ function publishBlockedReason(
   const undelivered = transfers.filter((t) => t.transfer_status !== "success");
   if (undelivered.length > 0) {
     return `Waiting on ${undelivered.map((t) => t.destination_abbr).join(", ")}.`;
+  }
+  // IDC's Processed is its published, and the release goes live with IDC.
+  if (
+    transfers.some((t) => t.destination_abbr === "idc") &&
+    idc?.status !== "Processed"
+  ) {
+    return idc?.status === "" || idc?.status === "Draft"
+      ? "Set the IDC transfer to Ready in Transfer first."
+      : idc?.status === null
+        ? "Couldn't read the IDC status."
+        : "Waiting on IDC to publish.";
   }
   // Transfers only stage files, and manifests are attached here; the pages
   // still point at the previous files until they're updated below.
@@ -357,6 +370,10 @@ export default function DisseminateStage() {
   const release = cycle.dataset_release;
   const publish = usePublishRelease(datasetId, release?.dataset_release_id);
   const wpPages = useWpPageStates(release?.dataset_release_id);
+  const idcTransfer = release
+    ? shippingTransfers(release).find((t) => t.destination_abbr === "idc")
+    : undefined;
+  const idc = useIdcBucketStatus(idcTransfer?.dataset_release_transfer_id);
 
   if (!release) {
     return (
@@ -367,7 +384,7 @@ export default function DisseminateStage() {
   }
 
   const members = disseminationRecordsets(cycle);
-  const blockedReason = publishBlockedReason(cycle, wpPages.data ?? []);
+  const blockedReason = publishBlockedReason(cycle, wpPages.data ?? [], idc.data);
   const transfers = shippingTransfers(release);
   const delivered = transfers.filter(
     (t) => t.transfer_status === "success",

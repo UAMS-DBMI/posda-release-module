@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, type ItemEnvelope } from "@/lib/apiFetch";
 import type { TransferChipTransfer } from "@/components/TransferChip";
 import type { CycleStageState } from "@/components/CycleStrip";
+import { useIdcBucketStatus, type IdcBucketStatus } from "@/lib/idcBucket";
 import { TRANSFER_POLL_MS } from "@/lib/transferForm";
 import type { WpSearchResult } from "@/lib/wpObjectMap";
 
@@ -558,7 +559,85 @@ function bundleStage(cycle: DatasetCycle): StageSummary {
   return { state: "done", detail: `v${release.release_number} ${release.release_status}` };
 }
 
-function transferStage(cycle: DatasetCycle): StageSummary {
+/** The IDC transfer whose hand-off the cycle is waiting on. Only a released
+ *  release asks: a live one is past it, and so is a retracted one. */
+function idcHandOffTransfer(release: CycleDatasetRelease): CycleTransfer | undefined {
+  if (release.release_status !== "released") return undefined;
+  return shippingTransfers(release).find(
+    (t) => t.destination_abbr === "idc" && t.transfer_status === "success",
+  );
+}
+
+/** Live status of the cycle's IDC version. A hook, and passed into the summaries
+ *  below, so they stay pure over their inputs. */
+export function useCycleIdcStatus(cycle: DatasetCycle | undefined) {
+  const release = cycle?.dataset_release;
+  const transfer = release ? idcHandOffTransfer(release) : undefined;
+  return useIdcBucketStatus(transfer?.dataset_release_transfer_id);
+}
+
+function idcHandOffSummary(idc: IdcBucketStatus | undefined): StageSummary {
+  switch (idc?.status) {
+    case undefined:
+      return { state: "active", detail: "Checking IDC…" };
+    case null:
+      return { state: "blocked", detail: "IDC status unknown" };
+    case "":
+    case "Draft":
+      return { state: "active", detail: "Set to Ready" };
+    case "Ready for processing":
+    case "Processing":
+      return { state: "active", detail: "With IDC" };
+    case "Processed":
+      return { state: "done", detail: "Delivered" };
+    case "Errored":
+      return { state: "blocked", detail: "IDC errors" };
+    default:
+      return { state: "blocked", detail: `IDC: ${idc?.status}` };
+  }
+}
+
+function idcHandOffMessage(
+  releaseNumber: number,
+  idc: IdcBucketStatus | undefined,
+): string {
+  switch (idc?.status) {
+    case undefined:
+      return "Checking IDC…";
+    case null:
+      return "Couldn't read this version's status from the IDC bucket.";
+    case "":
+    case "Draft":
+      return `v${releaseNumber} is uploaded — set it to Ready for IDC.`;
+    case "Ready for processing":
+    case "Processing":
+      return `Waiting on IDC to publish v${releaseNumber}.`;
+    case "Errored":
+      return "IDC reported errors — fix them and push again.";
+    default:
+      return `IDC has v${releaseNumber} at "${idc?.status}".`;
+  }
+}
+
+/** Every transfer has landed and IDC has the version, so there's nothing for the
+ *  curator to do but wait, and no button to press. */
+function waitingOnIdc(cycle: DatasetCycle, idc: IdcBucketStatus | undefined): boolean {
+  const release = cycle.dataset_release;
+  if (!release || !idcHandOffTransfer(release)) return false;
+  if (shippingTransfers(release).some((t) => t.transfer_status !== "success")) {
+    return false;
+  }
+  return (
+    idc === undefined ||
+    idc.status === "Ready for processing" ||
+    idc.status === "Processing"
+  );
+}
+
+function transferStage(
+  cycle: DatasetCycle,
+  idc: IdcBucketStatus | undefined,
+): StageSummary {
   const release = cycle.dataset_release;
   if (!release) return { state: "pending", detail: "—" };
   if (release.release_status === "draft") {
@@ -585,9 +664,10 @@ function transferStage(cycle: DatasetCycle): StageSummary {
   // failed and in-flight are handled above -- so a non-success transfer here is
   // a draft by elimination; filtering on it says so rather than implying it.
   const drafts = transfers.filter((t) => t.transfer_status === "draft").length;
-  return drafts === 0
-    ? { state: "done", detail: "Delivered" }
-    : { state: "active", detail: `${drafts} to queue` };
+  if (drafts > 0) return { state: "active", detail: `${drafts} to queue` };
+  return idcHandOffTransfer(release)
+    ? idcHandOffSummary(idc)
+    : { state: "done", detail: "Delivered" };
 }
 
 // Publishing the release's WordPress pages, then marking it live.
@@ -596,7 +676,10 @@ function transferStage(cycle: DatasetCycle): StageSummary {
 // by the stage itself (WpBadge -> useWpObject), and this must stay a pure
 // function of the cycle payload. So "N to publish" is not something it can
 // know -- the stage UI shows that, the tab shows whether the work can start.
-function disseminateStage(cycle: DatasetCycle): StageSummary {
+function disseminateStage(
+  cycle: DatasetCycle,
+  idc: IdcBucketStatus | undefined,
+): StageSummary {
   const release = cycle.dataset_release;
   if (!release) return { state: "pending", detail: "—" };
   if (release.release_status === "retracted") {
@@ -648,6 +731,10 @@ function disseminateStage(cycle: DatasetCycle): StageSummary {
   if (!cycle.dataset_wp_linked) {
     return { state: "blocked", detail: "Collection not linked" };
   }
+  // Download pages can still be worked on; going live waits for IDC to publish.
+  if (idcHandOffTransfer(release) && idc?.status !== "Processed") {
+    return { state: "active", detail: "Waiting on IDC" };
+  }
 
   return { state: "active", detail: "Ready to publish" };
 }
@@ -655,14 +742,15 @@ function disseminateStage(cycle: DatasetCycle): StageSummary {
 /** Per-stage rollups across every recordset, in pipeline order. */
 export function stageSummaries(
   cycle: DatasetCycle,
+  idc: IdcBucketStatus | undefined,
 ): Record<StageKey, StageSummary> {
   return {
     setup: setupStage(cycle),
     assemble: assembleStage(cycle),
     verify: verifyStage(cycle),
     bundle: bundleStage(cycle),
-    transfer: transferStage(cycle),
-    disseminate: disseminateStage(cycle),
+    transfer: transferStage(cycle, idc),
+    disseminate: disseminateStage(cycle, idc),
   };
 }
 
@@ -679,15 +767,19 @@ export type NextAction = {
   stage: StageKey;
   /** What the cycle needs, in plain language. */
   message: string;
-  /** Label for the action that addresses it. */
-  actionLabel: string;
+  /** Label for the action that addresses it; null when it's a wait on IDC. */
+  actionLabel: string | null;
   /** True when something is wrong rather than merely in progress. */
   blocked: boolean;
 };
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
+function stageMessage(
+  cycle: DatasetCycle,
+  stage: StageKey,
+  idc: IdcBucketStatus | undefined,
+): string {
   const withDraft = cycle.recordsets.filter((r) => r.open_draft !== null);
   const release = cycle.dataset_release;
 
@@ -793,7 +885,9 @@ function stageMessage(cycle: DatasetCycle, stage: StageKey): string {
       if (drafts > 0) {
         return `${plural(drafts, "transfer")} ready to queue for v${release.release_number}.`;
       }
-      return "All transfers delivered.";
+      return idcHandOffTransfer(release)
+        ? idcHandOffMessage(release.release_number, idc)
+        : "All transfers delivered.";
     }
     case "disseminate": {
       if (!release) return "Nothing to publish until a dataset release exists.";
@@ -848,8 +942,11 @@ const ACTION_LABELS: Record<StageKey, string> = {
 /** The single thing this cycle most needs next: anything blocked, in pipeline
  *  order, otherwise the earliest stage still in progress. Null when nothing is
  *  outstanding. */
-export function nextAction(cycle: DatasetCycle): NextAction | null {
-  const summaries = stageSummaries(cycle);
+export function nextAction(
+  cycle: DatasetCycle,
+  idc: IdcBucketStatus | undefined,
+): NextAction | null {
+  const summaries = stageSummaries(cycle, idc);
 
   const blocked = STAGE_ORDER.find((key) => summaries[key].state === "blocked");
   const stage = blocked ?? STAGE_ORDER.find((key) => summaries[key].state === "active");
@@ -857,8 +954,9 @@ export function nextAction(cycle: DatasetCycle): NextAction | null {
 
   return {
     stage,
-    message: stageMessage(cycle, stage),
-    actionLabel: ACTION_LABELS[stage],
+    message: stageMessage(cycle, stage, idc),
+    actionLabel:
+      stage === "transfer" && waitingOnIdc(cycle, idc) ? null : ACTION_LABELS[stage],
     blocked: blocked != null,
   };
 }

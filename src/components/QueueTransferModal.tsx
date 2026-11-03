@@ -111,7 +111,8 @@ export default function QueueTransferModal({
         <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
           This re-pushes the transfer. The daemon re-checks every file against
           the bucket: identical files are skipped, missing or changed ones are
-          uploaded, and the manifests are replaced.
+          uploaded, and the manifests are replaced. The version goes back to
+          Draft, so set it to Ready again afterward.
         </p>
       ) : isIdc && transfer?.transfer_status === "failed" ? (
         <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>

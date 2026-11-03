@@ -317,4 +317,6 @@ function invalidateTransfers(
   });
   // A WordPress transfer stages files, which Disseminate's page states read.
   void queryClient.invalidateQueries({ queryKey: ["wp-pages"] });
+  // A re-push puts an IDC version back at Draft.
+  void queryClient.invalidateQueries({ queryKey: ["idc-bucket-status"] });
 }

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
+import type { IdcBucketStatus } from "@/lib/idcBucket";
 import {
   isCycleInProgress,
   nextAction,
@@ -11,6 +12,7 @@ import {
 
 type CycleNextActionProps = {
   cycle: DatasetCycle;
+  idc: IdcBucketStatus | undefined;
   datasetId: string | undefined;
   onGoToStage: (stage: StageKey) => void;
 };
@@ -20,10 +22,11 @@ type CycleNextActionProps = {
  *  carry per-stage status; this says what to do about it. */
 export default function CycleNextAction({
   cycle,
+  idc,
   datasetId,
   onGoToStage,
 }: CycleNextActionProps) {
-  const action = nextAction(cycle);
+  const action = nextAction(cycle, idc);
   const { addToast } = useToast();
   const startNextCycle = useStartNextCycle(datasetId);
 
@@ -129,14 +132,16 @@ export default function CycleNextAction({
             action.blocked ? "text-amber-700 dark:text-amber-400" : ""
           }`}
         >
-          {action.blocked ? "Blocked: " : "Next: "}
+          {action.blocked ? "Blocked: " : action.actionLabel ? "Next: " : ""}
         </span>
         {action.message}
       </p>
 
-      <Button size="sm" onClick={() => onGoToStage(action.stage)}>
-        {action.actionLabel}
-      </Button>
+      {action.actionLabel && (
+        <Button size="sm" onClick={() => onGoToStage(action.stage)}>
+          {action.actionLabel}
+        </Button>
+      )}
     </div>
   );
 }

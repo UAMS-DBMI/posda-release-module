@@ -3,6 +3,7 @@ import ExpandableTable from "@/components/ExpandableTable";
 import RecordsetLink from "@/components/RecordsetLink";
 import TransferManageModal from "@/components/TransferManageModal";
 import QueueTransferModal from "@/components/QueueTransferModal";
+import { IdcBucketPill, IdcTransferActions } from "@/components/IdcBucketStatus";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/Spinner";
@@ -381,7 +382,11 @@ export default function TransferStage() {
               <td className="px-2 py-1">
                 {t ? (
                   <div>
-                    <StatusBadge status={t.transfer_status} />
+                    {r.destination_abbr === "idc" && t.transfer_status === "success" ? (
+                      <IdcBucketPill transferId={t.dataset_release_transfer_id} />
+                    ) : (
+                      <StatusBadge status={t.transfer_status} />
+                    )}
                     {t.file_count > 0 && (
                       <div
                         className="mt-0.5 text-xs"
@@ -431,15 +436,31 @@ export default function TransferStage() {
                   {/* WordPress and IDC can run again once finished, and both are
                       idempotent: unchanged files reuse their attachment or are
                       skipped by the daemon's MD5 check. The rest queue once --
-                      they have no daemon yet. */}
+                      they have no daemon yet. A finished IDC transfer also
+                      depends on what IDC has done with the version. */}
                   {r.configured &&
+                  r.destination_abbr === "idc" &&
+                  t?.transfer_status === "success" ? (
+                    <IdcTransferActions
+                      transferId={t.dataset_release_transfer_id}
+                      onQueue={() => setQueueRow(r)}
+                    />
+                  ) : (
+                    r.configured &&
                     (t?.transfer_status === "draft" ||
                       ((r.destination_abbr === "wp" || r.destination_abbr === "idc") &&
                         (t?.transfer_status === "success" ||
                           t?.transfer_status === "failed"))) && (
-                    <Button size="sm" onClick={() => setQueueRow(r)}>
-                      Queue
-                    </Button>
+                      <Button
+                        size="sm"
+                        // Solid only when it's the next step: a finished
+                        // transfer has nothing left to do.
+                        variant={t?.transfer_status === "success" ? "ghost" : undefined}
+                        onClick={() => setQueueRow(r)}
+                      >
+                        Queue
+                      </Button>
+                    )
                   )}
                 </div>
               </td>

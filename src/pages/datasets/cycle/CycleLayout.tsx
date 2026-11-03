@@ -21,6 +21,7 @@ import {
   STAGE_BLURBS,
   STAGE_LABELS,
   STAGE_ORDER,
+  useCycleIdcStatus,
   useDatasetCycle,
   type DatasetCycle,
   type StageKey,
@@ -66,6 +67,7 @@ export default function CycleLayout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const cycle = useDatasetCycle(datasetId, releaseId);
+  const idc = useCycleIdcStatus(cycle.data);
 
   const data = cycle.data;
   const activeStage = stageFromPath(pathname);
@@ -88,7 +90,9 @@ export default function CycleLayout() {
   // Bare `/cycle` -> open where the cycle actually is, pinned to the release it
   // resolved to. (Overview page: step 8.)
   if (activeStage === null && data) {
-    const summaries = stageSummaries(data);
+    // Which stage is unfinished can depend on what IDC says.
+    if (idc.isLoading) return <LoadingState />;
+    const summaries = stageSummaries(data, idc.data);
     return (
       <Navigate
         to={stagePath(datasetId, pinnedId, firstUnfinishedStage(summaries))}
@@ -104,7 +108,7 @@ export default function CycleLayout() {
     data.latest_dataset_release_id != null &&
     data.dataset_release.dataset_release_id !== data.latest_dataset_release_id;
 
-  const summaries = data ? stageSummaries(data) : null;
+  const summaries = data ? stageSummaries(data, idc.data) : null;
   const tabs: TabItem[] = summaries
     ? STAGE_ORDER.map((key) => ({
         key,
@@ -197,6 +201,7 @@ export default function CycleLayout() {
         <>
           <CycleNextAction
             cycle={data}
+            idc={idc.data}
             datasetId={datasetId}
             onGoToStage={(stage) => navigate(stagePath(datasetId, pinnedId, stage))}
           />

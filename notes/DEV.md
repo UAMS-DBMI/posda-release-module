@@ -1158,7 +1158,19 @@ A draft release blocks distribution **in the UI only** (TECH_DEBT #5).
   releases, so a version could go out of date. A later file with different
   bytes gets WP's `-1` suffix. Posda's Download buttons use the same name: the
   server builds it (`retriever_manifest_filename`) and returns it as
-  `manifest_file_name` on the transfer's recordset list.
+  `manifest_file_name` on the transfer's recordset list. **Training step:** to
+  push a manifest again with identical contents (say, to pick up a new name),
+  delete it in WordPress first, then Update Page. A Re-upload button was
+  decided against; the delete-first path was tested 2026-11-03.
+- **IDC hand-off (2026-11-03).** An upload leaves the version at `Draft`; the
+  curator ends the Transfer stage with **Set to Ready** on the IDC row, because
+  that's where re-pushing happens and it changes nothing public. The API reads
+  and writes `status.json` directly (`google-cloud-storage`, `GCS_KEY_JSON` in `api.env`).
+  Go live waits for `Processed`, which is IDC's published. The banner and the
+  Transfer and Disseminate tabs follow the live status (`useCycleIdcStatus`,
+  passed into the pure summaries; refetched each minute). While IDC has it the
+  banner has no button. On a finished IDC row the status pill replaces `success`.
+  Details and open assumptions: TRANSFER_DAEMON.md #10.
 - **One open draft per recordset.** Unlikely to have more than one; can be
   restricted. UI: hide/disable "New Draft" while a draft is open; Current
   Cycle panel is a singleton. ⚠ DB/API-level restriction (unique partial
