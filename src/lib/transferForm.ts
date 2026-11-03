@@ -63,6 +63,8 @@ export type TransferRecordset = {
   download_file_id: number | null;
   downloadable_file_id: number | null;
   security_hash: string | null;
+  /** What a saved retriever manifest is called, here and on the public page. */
+  manifest_file_name: string;
 };
 
 export function releaseDestinationsKey(releaseId: number | undefined) {
@@ -313,4 +315,6 @@ function invalidateTransfers(
   void queryClient.invalidateQueries({
     queryKey: ["dataset-cycle", datasetId ?? ""],
   });
+  // A WordPress transfer stages files, which Disseminate's page states read.
+  void queryClient.invalidateQueries({ queryKey: ["wp-pages"] });
 }

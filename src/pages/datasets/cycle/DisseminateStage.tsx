@@ -1,14 +1,15 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import DynamicTable from "@/components/DynamicTable";
+import ManifestPreviewModal from "@/components/ManifestPreviewModal";
 import { Button, ExternalLinkButton } from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
+import { LoadingState } from "@/components/ui/Spinner";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { WpPostStatusBadge } from "@/components/WpLinkPill";
 import {
-  DownloadIcon,
   EditIcon,
   ExternalLinkIcon,
-  RefreshIcon,
-  UploadIcon,
 } from "@/components/icons";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess, toastWarning } from "@/components/toastHelpers";
@@ -16,8 +17,12 @@ import {
   useAttachRetrieverManifest,
   useGenerateRetrieverManifest,
   usePublishRelease,
+  useUpdateWpPage,
+  useWpPageStates,
+  type WpPageState,
 } from "@/lib/dissemination";
 import { useTransferRecordsets } from "@/lib/transferForm";
+import { namedDownloadUrl } from "@/lib/transferSettings";
 import {
   disseminationRecordsets,
   shippingTransfers,
@@ -49,7 +54,10 @@ function publicTransfer(
  *  individual row needs: a manifest can be generated as soon as *its* transfer
  *  lands, but publishing takes every page live at once, so it waits for all of
  *  them. Mirrors the server's gate, which refuses regardless. */
-function publishBlockedReason(cycle: DatasetCycle): string | null {
+function publishBlockedReason(
+  cycle: DatasetCycle,
+  wpPages: WpPageState[],
+): string | null {
   const release = cycle.dataset_release;
   if (!release) return "No release to publish.";
   if (release.release_status === "live") return "Already live.";
@@ -64,6 +72,12 @@ function publishBlockedReason(cycle: DatasetCycle): string | null {
   const undelivered = transfers.filter((t) => t.transfer_status !== "success");
   if (undelivered.length > 0) {
     return `Waiting on ${undelivered.map((t) => t.destination_abbr).join(", ")}.`;
+  }
+  // Transfers only stage files, and manifests are attached here; the pages
+  // still point at the previous files until they're updated below.
+  const stale = wpPages.filter((p) => !p.page_current);
+  if (stale.length > 0) {
+    return `Update the download for ${stale.map((p) => p.recordset_name).join(", ")}.`;
   }
   const unlinked = unlinkedDisseminationRecordsets(cycle);
   if (unlinked.length > 0) {
@@ -96,52 +110,27 @@ function DestinationCell({ recordset }: { recordset: CycleRecordset }) {
   );
 }
 
-/** Manifest state and actions for one recordset.
- *
- *  Its own component so each row's `useTransferRecordsets` is an independent
- *  query — a hook cannot be called inside a `.map()`. Rows sharing a transfer
- *  share one fetch, since the query key is the transfer. Same reason `WpBadge`
- *  is split out for Setup's table. */
-function ManifestCell({ recordset }: { recordset: CycleRecordset }) {
+/** The Disseminate column: is this recordset's download page current, and a way
+ *  in to what goes on it. The same for manifest and data-file rows; the
+ *  differences live in the modal. Its own component so each row can hold its
+ *  modal state -- a hook cannot be called inside a `.map()`. */
+function DownloadPageCell({ recordset }: { recordset: CycleRecordset }) {
   const { cycle } = useCycleContext();
-  const { addToast } = useToast();
-  const generate = useGenerateRetrieverManifest();
-  const attach = useAttachRetrieverManifest();
+  const pages = useWpPageStates(cycle.dataset_release?.dataset_release_id);
+  const [managing, setManaging] = useState(false);
 
   const { transfer, destinationAbbr } = publicTransfer(
     recordset,
     cycle.dataset_release?.transfers ?? [],
   );
-  const delivered = transfer?.transfer_status === "success";
-  const { data: rows, isLoading } = useTransferRecordsets(
-    transfer?.dataset_release_transfer_id,
-    delivered,
-  );
-
-  const muted = { color: "var(--muted)" };
-
-  // Shared by every state so the column keeps one row height: a cell holding
-  // icon buttons would otherwise sit taller than one holding a line of text,
-  // leaving the table visibly ragged.
-  const cell = "flex min-h-8 items-center gap-1";
-
-  const note = (text: string, title?: string) => (
-    <div className={`${cell} px-2 text-xs`} style={muted} title={title}>
+  const cell = "flex min-h-8 items-center gap-2";
+  const note = (text: string) => (
+    <div className={`${cell} px-2 text-xs`} style={{ color: "var(--muted)" }}>
       {text}
     </div>
   );
 
   if (!destinationAbbr) return note("—");
-  // Not "pending" but "not applicable": a WordPress download links the data
-  // file itself, uploaded to the media library by the WordPress transfer, so
-  // there is no manifest for a retriever to read. That upload belongs to
-  // Transfer, not here.
-  if (destinationAbbr === "wp") {
-    return note(
-      "N/A - Direct download",
-      "A WordPress download links the data file itself, uploaded to the media library by the WordPress transfer — there is no manifest.",
-    );
-  }
   if (!transfer) {
     return (
       <div className={cell}>
@@ -149,18 +138,76 @@ function ManifestCell({ recordset }: { recordset: CycleRecordset }) {
       </div>
     );
   }
-  if (!delivered) {
+  if (transfer.transfer_status !== "success") {
     return note(`Waiting (${transfer.transfer_status.replace(/_/g, " ")})`);
   }
-  if (isLoading) return note("Loading…");
+  if (pages.isLoading) return note("Loading…");
 
   const releaseId = recordset.release_in_cycle?.recordset_release_id;
-  const row = rows?.find((r) => r.recordset_release_id === releaseId);
+  const state = pages.data?.find((p) => p.recordset_release_id === releaseId);
+  if (!state) return note("—");
+
+  return (
+    <div className={cell}>
+      {state.page_current ? (
+        <StatusBadge status="success" label="Page updated" variant="success" />
+      ) : (
+        <StatusBadge status="none" label="Page not updated" variant="warning" />
+      )}
+      <Button size="sm" variant="ghost" onClick={() => setManaging(true)}>
+        Manage
+      </Button>
+      {managing && (
+        <DownloadPageModal
+          recordset={recordset}
+          transfer={transfer}
+          state={state}
+          onClose={() => setManaging(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** What goes on one recordset's download page, and Update Page to put it there
+ *  -- the public change. A retriever manifest is generated here first; a
+ *  WordPress data file was already uploaded by its transfer. */
+function DownloadPageModal({
+  recordset,
+  transfer,
+  state,
+  onClose,
+}: {
+  recordset: CycleRecordset;
+  transfer: CycleTransfer;
+  state: WpPageState;
+  onClose: () => void;
+}) {
+  const { addToast } = useToast();
+  const generate = useGenerateRetrieverManifest();
+  const attach = useAttachRetrieverManifest();
+  const update = useUpdateWpPage();
+  const [previewing, setPreviewing] = useState(false);
+
+  const isDirect = state.destination_abbr === "wp";
+  const { data: rows, isLoading } = useTransferRecordsets(
+    transfer.dataset_release_transfer_id,
+    !isDirect,
+  );
+  const row = rows?.find((r) => r.recordset_release_id === state.recordset_release_id);
   const hasManifest = row?.download_file_id != null;
   const target = {
     transferId: transfer.dataset_release_transfer_id,
-    recordsetReleaseId: releaseId ?? 0,
+    recordsetReleaseId: state.recordset_release_id,
   };
+  const manifestUrl =
+    hasManifest && row?.downloadable_file_id && row?.security_hash
+      ? namedDownloadUrl(
+          row.downloadable_file_id,
+          row.security_hash,
+          row.manifest_file_name,
+        )
+      : null;
 
   function handleGenerate() {
     generate.mutate(target, {
@@ -179,74 +226,123 @@ function ManifestCell({ recordset }: { recordset: CycleRecordset }) {
     });
   }
 
-  function handleAttach() {
-    attach.mutate(target, {
-      onSuccess: (r) =>
-        toastSuccess(
-          addToast,
-          // Neither flag set is a success, not a no-op failure: the identical
-          // manifest was already uploaded and already linked.
-          !r.uploaded && !r.attached
-            ? "Already attached — the manifest has not changed."
-            : r.uploaded
-              ? "Uploaded and attached to the WordPress download page."
-              : "Attached the existing upload to the WordPress download page.",
-        ),
-      onError: (e) =>
-        toastError(
-          addToast,
-          e instanceof Error ? e.message : "Could not attach the manifest.",
-        ),
-    });
+  function handleUpdatePage() {
+    const onError = (e: Error) =>
+      toastError(addToast, e.message || "Could not update the download.");
+    const onDone = (attached: boolean) => {
+      toastSuccess(
+        addToast,
+        attached
+          ? `Updated ${recordset.recordset_name}'s download.`
+          : `${recordset.recordset_name}'s download already has this file.`,
+      );
+      onClose();
+    };
+    if (isDirect) {
+      update.mutate(target, { onSuccess: (r) => onDone(r.attached), onError });
+    } else {
+      attach.mutate(target, { onSuccess: (r) => onDone(r.attached), onError });
+    }
   }
 
+  const updating = update.isPending || attach.isPending;
+  const canUpdate = !state.page_current && (isDirect || hasManifest);
+
   return (
-    <div className={cell}>
-      {hasManifest ? (
-        <StatusBadge status="success" label="Generated" variant="success" />
-      ) : (
-        <StatusBadge status="none" label="Not generated" variant="neutral" />
-      )}
-      <Button
-        size="sm"
-        variant="ghost"
-        className="px-2"
-        loading={generate.isPending}
-        disabled={!releaseId}
-        aria-label={hasManifest ? "Regenerate manifest" : "Generate manifest"}
-        title={hasManifest ? "Regenerate manifest" : "Generate manifest"}
-        onClick={handleGenerate}
-      >
-        <RefreshIcon />
-      </Button>
-      {hasManifest && row?.downloadable_file_id && row?.security_hash && (
-        // Plain anchor, not ExternalLinkButton: `download` on a same-origin
-        // href is what saves the file rather than navigating to it. Matches
-        // the manifest link on transfers/Detail.tsx.
-        <a
-          className="btn btn-sm btn-ghost px-2"
-          href={`/papi/v1/download/file/${row.downloadable_file_id}/${row.security_hash}`}
-          download
-          aria-label="Download manifest"
-          title="Download manifest"
-        >
-          <DownloadIcon />
-        </a>
-      )}
-      {hasManifest && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="px-2"
-          loading={attach.isPending}
-          aria-label="Upload to WordPress"
-          title="Upload to WordPress"
-          onClick={handleAttach}
-        >
-          <UploadIcon />
-        </Button>
-      )}
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title={`${recordset.recordset_name} — download`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={updating}>
+            Close
+          </Button>
+          <Button
+            onClick={handleUpdatePage}
+            loading={updating}
+            disabled={!canUpdate}
+            title={
+              state.page_current
+                ? "The page already has this file."
+                : canUpdate
+                  ? undefined
+                  : "Generate the manifest first."
+            }
+          >
+            Update Page
+          </Button>
+        </>
+      }
+    >
+      <div className="mt-2 space-y-4 text-sm">
+        <div className="flex items-center gap-2">
+          {state.page_current ? (
+            <StatusBadge status="success" label="Page updated" variant="success" />
+          ) : (
+            <StatusBadge status="none" label="Page not updated" variant="warning" />
+          )}
+          <span style={{ color: "var(--muted)" }}>
+            {state.page_current
+              ? "The public page has this file."
+              : "Update Page changes the public page right away."}
+          </span>
+        </div>
+
+        {isDirect ? (
+          <div>
+            <p className="font-medium">Data file</p>
+            <p className="mt-1 break-all">{state.file_name ?? "—"}</p>
+            <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+              Uploaded to the media library by the WordPress transfer.
+            </p>
+          </div>
+        ) : isLoading ? (
+          <LoadingState />
+        ) : (
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-medium">Retriever manifest</p>
+              {hasManifest ? (
+                <StatusBadge status="success" label="Generated" variant="success" />
+              ) : (
+                <StatusBadge status="none" label="Not generated" variant="neutral" />
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={generate.isPending}
+                onClick={handleGenerate}
+              >
+                {hasManifest ? "Regenerate" : "Generate"}
+              </Button>
+              {manifestUrl && (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => setPreviewing(true)}>
+                    Preview
+                  </Button>
+                  {/* Plain anchor: `download` on a same-origin href is what saves
+                      the file rather than navigating to it. */}
+                  <a className="btn btn-sm btn-ghost" href={manifestUrl} download>
+                    Download
+                  </a>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <ManifestPreviewModal
+        url={previewing ? manifestUrl : null}
+        title={`${recordset.recordset_name} manifest`}
+        format={state.destination_abbr === "nbia" ? "text" : "csv"}
+        onClose={() => setPreviewing(false)}
+      />
+    </Modal>
   );
 }
 
@@ -260,6 +356,7 @@ export default function DisseminateStage() {
   const { addToast } = useToast();
   const release = cycle.dataset_release;
   const publish = usePublishRelease(datasetId, release?.dataset_release_id);
+  const wpPages = useWpPageStates(release?.dataset_release_id);
 
   if (!release) {
     return (
@@ -270,7 +367,7 @@ export default function DisseminateStage() {
   }
 
   const members = disseminationRecordsets(cycle);
-  const blockedReason = publishBlockedReason(cycle);
+  const blockedReason = publishBlockedReason(cycle, wpPages.data ?? []);
   const transfers = shippingTransfers(release);
   const delivered = transfers.filter(
     (t) => t.transfer_status === "success",
@@ -497,8 +594,8 @@ export default function DisseminateStage() {
             },
             {
               key: "manifest",
-              label: "Manifest",
-              render: (_v, row) => <ManifestCell recordset={row.recordset} />,
+              label: "Download",
+              render: (_v, row) => <DownloadPageCell recordset={row.recordset} />,
             },
           ]}
         />

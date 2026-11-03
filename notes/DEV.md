@@ -1132,6 +1132,33 @@ A draft release blocks distribution **in the UI only** (TECH_DEBT #5).
   cycle's `open_draft` carries its `recordset_release_id`); it used to offer
   only the latest *published* version, so a never-published recordset had
   no way back in.
+- **WordPress changes only at Disseminate (2026-11-03).** Until WordPress
+  versioning lands (WP_UPDATES §11/§12), WordPress can't stage a page change:
+  any write is public at once. So the **WordPress transfer only stages** --
+  `stage_wp_recordset` uploads each data file to the media library (deduped,
+  file → media mapped) and leaves the download page alone. **Disseminate does
+  every page write:** each recordset row has one Download Page status + Manage,
+  whose modal holds what goes on the page (retriever manifest: generate,
+  preview, download; or the transfer's data file) and Update Page --
+  `/transfers/{t}/recordsets/{rr}/wp/update-page` for a data file (the page
+  half of the old deliver), `manifest/attach` for a manifest. Page state is read
+  live for **every recordset's default destination**
+  (`GET /datasets/releases/{id}/wp/pages`: page points at the file's media?), so
+  a manifest regenerated with new content reads "Page not updated". Go live
+  refuses (409) while any page is stale, manifests included -- before, it never
+  checked that a manifest had been attached. The **IDC clinical
+  manifest's `download_url`** is now the staged media's file URL, so IDC links
+  the new file without waiting for the page -- CM's own `download_url` was
+  the wrong source anyway: it's empty for an attached (not linked) file. The
+  WordPress-before-IDC gate is unchanged; "delivered" now means "uploaded".
+- **Retriever manifest names (2026-11-03).** On WordPress:
+  `{dataset}-{recordset}-retriever-manifest.{csv|tcia}`, which is also what a
+  public download is called. No digest (WP handles collisions, dedup is by
+  `file_id`) and no version: identical bytes reuse one attachment across
+  releases, so a version could go out of date. A later file with different
+  bytes gets WP's `-1` suffix. Posda's Download buttons use the same name: the
+  server builds it (`retriever_manifest_filename`) and returns it as
+  `manifest_file_name` on the transfer's recordset list.
 - **One open draft per recordset.** Unlikely to have more than one; can be
   restricted. UI: hide/disable "New Draft" while a draft is open; Current
   Cycle panel is a singleton. ⚠ DB/API-level restriction (unique partial

@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch, type ItemEnvelope } from "@/lib/apiFetch";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch, type ItemEnvelope, type ListEnvelope } from "@/lib/apiFetch";
 import { transferRecordsetsKey } from "@/lib/transferForm";
 import { wpObjectQueryKey } from "@/lib/wpObjectMap";
 
@@ -112,6 +112,8 @@ export function useGenerateRetrieverManifest() {
       void queryClient.invalidateQueries({
         queryKey: transferRecordsetsKey(transferId),
       });
+      // A regenerated manifest isn't on the page yet.
+      void queryClient.invalidateQueries({ queryKey: ["wp-pages"] });
     },
   });
 }
@@ -153,6 +155,70 @@ export function useAttachRetrieverManifest() {
       void queryClient.invalidateQueries({
         queryKey: wpObjectQueryKey("recordset", result.recordset_id),
       });
+      void queryClient.invalidateQueries({ queryKey: ["wp-pages"] });
+    },
+  });
+}
+
+/** Whether a recordset's WordPress download page points at the file its
+ *  default destination puts there: a data file the WordPress transfer staged,
+ *  or a retriever manifest. Transfers only upload; pointing the page is
+ *  Disseminate's job, so the public site changes there. */
+export type WpPageState = {
+  transfer_id: number;
+  recordset_release_id: number;
+  recordset_id: number;
+  recordset_name: string;
+  destination_abbr: string;
+  /** The data file's name on a WordPress row; null for a manifest. */
+  file_name: string | null;
+  /** Null until the file is uploaded -- so also for a regenerated manifest. */
+  staged_media_id: number | null;
+  current_media_id: number | null;
+  page_current: boolean;
+};
+
+export function wpPagesKey(releaseId: number | undefined) {
+  return ["wp-pages", releaseId ?? null] as const;
+}
+
+/** Read live from WordPress, one read per page. */
+export function useWpPageStates(releaseId: number | undefined) {
+  return useQuery({
+    queryKey: wpPagesKey(releaseId),
+    enabled: releaseId != null,
+    queryFn: () =>
+      apiFetch<ListEnvelope<WpPageState>>(
+        `${BASE}/datasets/releases/${releaseId}/wp/pages`,
+      ),
+    select: (env) => env.data,
+  });
+}
+
+export type UpdateWpPageResult = {
+  recordset_id: number;
+  recordset_name: string;
+  wp_media_id: number;
+  download_post_id: number;
+  /** False when the page already pointed at that file. */
+  attached: boolean;
+};
+
+/** Point one recordset's WordPress download page at its staged file -- the
+ *  public change. Target per call, like the manifest hooks. */
+export function useUpdateWpPage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ transferId, recordsetReleaseId }: ManifestTarget) => {
+      const json = await apiFetch<ItemEnvelope<UpdateWpPageResult>>(
+        `${BASE}/transfers/${transferId}/recordsets/${recordsetReleaseId}/wp/update-page`,
+        { method: "POST" },
+      );
+      return json.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["wp-pages"] });
+      void queryClient.invalidateQueries({ queryKey: ["wp-object"] });
     },
   });
 }
