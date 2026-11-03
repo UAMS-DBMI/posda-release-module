@@ -119,7 +119,12 @@ by hand.
   - `base_gcs_url` = the **absolute** GCS location of the package/manifest,
     `gs://posda_submit/<dataset>/<version>`. This is the single absolute anchor;
     everything *inside* the manifests is relative to the manifest, so only this
-    value changes when the package is relocated during ETL.
+    value changes when the package is relocated during ETL. **Server-derived
+    (2026-11-03):** `<dataset>` is the dataset's WordPress slug and the bucket
+    is `IDC_TRANSFER_BUCKET`; `ensure_idc_base_gcs_url` fills it when the IDC
+    transfer is created (and on first read for older transfers), never
+    overwriting a set value. The UI shows it read-only -- curators don't need
+    it. Relocating a package is now a DB/API change, not a form edit.
   - `imaging_manifest_file_id`'s FK constraint was renamed alongside it
     (`fk_transfer_idc_file_imaging_manifest`, was the confusingly-named
     `fk_transfer_idc_file_recordset_manifest` — name lag from the old

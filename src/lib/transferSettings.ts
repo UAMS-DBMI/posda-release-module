@@ -27,6 +27,9 @@ export type TransferSettings = {
   dataset_release_transfer_id: number;
   published: boolean | null;
   public: boolean | null;
+  /** IDC only: what the manifests are of, for naming their downloads. */
+  dataset_name?: string | null;
+  release_number?: number | null;
   base_gcs_url?: string | null;
   dataset_manifest_file_id?: number | null;
   dataset_manifest_downloadable_file_id?: number | null;
@@ -96,7 +99,8 @@ export function settingsPayload(
   const shared = { published: v.published, public: v.public };
   switch (destinationAbbr) {
     case "idc":
-      return { ...shared, base_gcs_url: v.base_gcs_url.trim() || null };
+      // base_gcs_url is server-derived and read-only; omitting it keeps it.
+      return shared;
     case "asp":
       return { ...shared, faspex_url: v.faspex_url.trim() || null };
     case "nbia":
@@ -190,6 +194,30 @@ export function useGenerateIdcManifest(transferId: number | undefined) {
 
 /** The download URL for a generated manifest, or null when it hasn't been
  *  generated yet. */
+/** A meaningful name for a saved manifest, e.g.
+ *  `Pseudo-Clone-Test_v1_imaging_manifest.csv`. Undefined when the owner isn't
+ *  known, which leaves the server's default name. */
+export function manifestFileName(
+  ownerName: string | null | undefined,
+  version: number | null | undefined,
+  suffix: string,
+): string | undefined {
+  if (!ownerName) return undefined;
+  const owner = ownerName.trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return version != null ? `${owner}_v${version}_${suffix}` : `${owner}_${suffix}`;
+}
+
+/** The download route names the saved file from `filename`: its own header
+ *  outranks an anchor's `download` value, so the name has to go in the link. */
+export function namedDownloadUrl(
+  downloadableFileId: number | string,
+  securityHash: string,
+  filename?: string,
+): string {
+  const base = `/papi/v1/download/file/${downloadableFileId}/${securityHash}`;
+  return filename ? `${base}?filename=${encodeURIComponent(filename)}` : base;
+}
+
 export function manifestDownloadUrl(
   settings: TransferSettings | null | undefined,
   type: IdcManifestType,
@@ -198,7 +226,15 @@ export function manifestDownloadUrl(
   const dfId = settings[`${type}_manifest_downloadable_file_id`];
   const hash = settings[`${type}_manifest_security_hash`];
   if (dfId == null || hash == null) return null;
-  return `/papi/v1/download/file/${String(dfId)}/${String(hash)}`;
+  return namedDownloadUrl(
+    String(dfId),
+    String(hash),
+    manifestFileName(
+      settings.dataset_name,
+      settings.release_number,
+      `${type}_manifest.csv`,
+    ),
+  );
 }
 
 export function hasManifest(

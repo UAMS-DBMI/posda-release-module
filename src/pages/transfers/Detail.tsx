@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { extractApiError } from "@/lib/apiUtils";
 import TransferSettingsForm from "@/components/transfers/TransferSettingsForm";
+import { namedDownloadUrl } from "@/lib/transferSettings";
 import { LoadingState } from "@/components/ui/Spinner";
 
 type Transfer = {
@@ -32,6 +33,7 @@ type RecordsetRelease = {
   download_file_id: number | null;
   downloadable_file_id: number | null;
   security_hash: string | null;
+  manifest_file_name: string;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -268,7 +270,11 @@ export default function TransferDetail() {
                       {hasManifest && r.downloadable_file_id && r.security_hash && (
                         <a
                           className="btn btn-sm btn-ghost"
-                          href={`/papi/v1/download/file/${r.downloadable_file_id}/${r.security_hash}`}
+                          href={namedDownloadUrl(
+                            r.downloadable_file_id,
+                            r.security_hash,
+                            r.manifest_file_name,
+                          )}
                           download
                         >
                           Download

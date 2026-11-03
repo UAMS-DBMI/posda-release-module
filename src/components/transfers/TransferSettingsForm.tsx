@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ManifestPreviewModal from "@/components/ManifestPreviewModal";
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/Spinner";
 import { useToast } from "@/components/Toast";
@@ -37,6 +38,7 @@ export default function TransferSettingsForm({
   const generate = useGenerateIdcManifest(transferId);
 
   const [values, setValues] = useState<TransferSettingsValues>(emptyTransferSettings);
+  const [previewType, setPreviewType] = useState<IdcManifestType | null>(null);
 
   // Seed the form once the row arrives (and after a save replaces it).
   useEffect(() => {
@@ -92,135 +94,164 @@ export default function TransferSettingsForm({
     });
   }
 
+  const previewUrl = previewType ? manifestDownloadUrl(settings.data, previewType) : null;
+
   return (
-    <form onSubmit={handleSave} className="space-y-4">
-      {destinationAbbr === "idc" && (
-        <label className="block">
-          <span className={LABEL} style={{ color: "var(--muted)" }}>
-            GCS URL
-          </span>
-          <input
-            type="text"
-            value={values.base_gcs_url}
-            onChange={(e) => set("base_gcs_url", e.target.value)}
-            className="input mt-1 w-full"
-            placeholder="gs://bucket/path"
-          />
-        </label>
-      )}
+    <>
+      <form onSubmit={handleSave} className="space-y-4">
+        {/* Derived by the server (bucket / dataset slug / version) when the
+            transfer is created -- shown for reference, never typed. */}
+        {destinationAbbr === "idc" && (
+          <div>
+            <span className={LABEL} style={{ color: "var(--muted)" }}>
+              GCS URL
+            </span>
+            <p className="mt-1 break-all font-mono text-sm">
+              {values.base_gcs_url || (
+                <span className="font-sans" style={{ color: "var(--muted)" }}>
+                  Set automatically from the dataset&apos;s WordPress page.
+                </span>
+              )}
+            </p>
+          </div>
+        )}
 
-      {destinationAbbr === "asp" && (
-        <label className="block">
-          <span className={LABEL} style={{ color: "var(--muted)" }}>
-            Faspex URL
-          </span>
-          <input
-            type="text"
-            value={values.faspex_url}
-            onChange={(e) => set("faspex_url", e.target.value)}
-            className="input mt-1 w-full"
-            placeholder="https://faspex.example.com/..."
-          />
-        </label>
-      )}
-
-      {destinationAbbr === "nbia" && (
-        <>
+        {destinationAbbr === "asp" && (
           <label className="block">
             <span className={LABEL} style={{ color: "var(--muted)" }}>
-              Collection
+              Faspex URL
             </span>
             <input
               type="text"
-              value={values.collection}
-              onChange={(e) => set("collection", e.target.value)}
+              value={values.faspex_url}
+              onChange={(e) => set("faspex_url", e.target.value)}
               className="input mt-1 w-full"
+              placeholder="https://faspex.example.com/..."
             />
           </label>
-          <label className="block">
+        )}
+
+        {destinationAbbr === "nbia" && (
+          <>
+            <label className="block">
+              <span className={LABEL} style={{ color: "var(--muted)" }}>
+                Collection
+              </span>
+              <input
+                type="text"
+                value={values.collection}
+                onChange={(e) => set("collection", e.target.value)}
+                className="input mt-1 w-full"
+              />
+            </label>
+            <label className="block">
+              <span className={LABEL} style={{ color: "var(--muted)" }}>
+                Site
+              </span>
+              <input
+                type="text"
+                value={values.site}
+                onChange={(e) => set("site", e.target.value)}
+                className="input mt-1 w-full"
+              />
+            </label>
+          </>
+        )}
+
+        {destinationAbbr === "idc" && (
+          <div>
             <span className={LABEL} style={{ color: "var(--muted)" }}>
-              Site
+              IDC Manifests
             </span>
-            <input
-              type="text"
-              value={values.site}
-              onChange={(e) => set("site", e.target.value)}
-              className="input mt-1 w-full"
-            />
-          </label>
-        </>
-      )}
+            <p className="mb-1 text-xs" style={{ color: "var(--muted)" }}>
+              One set per transfer, covering the whole submission — not per
+              recordset.
+            </p>
+            <ul
+              className="divide-y text-sm"
+              style={{ borderColor: "var(--border-strong)" }}
+            >
+              {IDC_MANIFEST_TYPES.map((type) => {
+                const url = manifestDownloadUrl(settings.data, type);
+                const generated = hasManifest(settings.data, type);
+                const busy = generate.isPending && generate.variables === type;
+                return (
+                  <li
+                    key={type}
+                    className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0"
+                  >
+                    <span className="capitalize">{type}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        loading={busy}
+                        onClick={() => runGenerate(type)}
+                      >
+                        {generated ? "Replace" : "Generate"}
+                      </Button>
+                      {url && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPreviewType(type)}
+                        >
+                          Preview
+                        </Button>
+                      )}
+                      {url && (
+                        <a className="btn btn-sm btn-ghost" href={url} download>
+                          Download
+                        </a>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
-      {destinationAbbr === "idc" && (
-        <div>
-          <span className={LABEL} style={{ color: "var(--muted)" }}>
-            IDC Manifests
-          </span>
-          <p className="mb-1 text-xs" style={{ color: "var(--muted)" }}>
-            One set per transfer, covering the whole submission — not per
-            recordset.
-          </p>
-          <ul
-            className="divide-y text-sm"
-            style={{ borderColor: "var(--border-strong)" }}
-          >
-            {IDC_MANIFEST_TYPES.map((type) => {
-              const url = manifestDownloadUrl(settings.data, type);
-              const generated = hasManifest(settings.data, type);
-              const busy = generate.isPending && generate.variables === type;
-              return (
-                <li
-                  key={type}
-                  className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0"
-                >
-                  <span className="capitalize">{type}</span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      loading={busy}
-                      onClick={() => runGenerate(type)}
-                    >
-                      {generated ? "Replace" : "Generate"}
-                    </Button>
-                    {url && (
-                      <a className="btn btn-sm btn-ghost" href={url} download>
-                        Download
-                      </a>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
+        {/* IDC has nothing to save: its URL is server-derived and its manifests
+            save themselves. */}
+        {destinationAbbr !== "idc" && (
+          <>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={values.published}
+                onChange={(e) => set("published", e.target.checked)}
+                className="checkbox"
+              />
+              <span>Published</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={values.public}
+                onChange={(e) => set("public", e.target.checked)}
+                className="checkbox"
+              />
+              <span>Public</span>
+            </label>
 
-      <label className="flex cursor-pointer items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={values.published}
-          onChange={(e) => set("published", e.target.checked)}
-          className="checkbox"
-        />
-        <span>Published</span>
-      </label>
-      <label className="flex cursor-pointer items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={values.public}
-          onChange={(e) => set("public", e.target.checked)}
-          className="checkbox"
-        />
-        <span>Public</span>
-      </label>
+            <div>
+              <Button type="submit" loading={save.isPending}>
+                Save Settings
+              </Button>
+            </div>
+          </>
+        )}
+      </form>
 
-      <div>
-        <Button type="submit" loading={save.isPending}>
-          Save Settings
-        </Button>
-      </div>
-    </form>
+      {/* Outside the form, so its buttons can't submit it. */}
+      <ManifestPreviewModal
+        url={previewUrl ?? null}
+        title={previewType ? `${previewType[0].toUpperCase()}${previewType.slice(1)} manifest` : ""}
+        onClose={() => setPreviewType(null)}
+      />
+    </>
   );
 }
