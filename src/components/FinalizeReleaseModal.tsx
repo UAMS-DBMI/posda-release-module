@@ -20,6 +20,9 @@ type FinalizeReleaseModalProps = {
   bundled: BundledRecordset[];
   /** Frozen recordsets not included — the last chance to notice an omission. */
   omittedCount: number;
+  /** Members still on an unpublished draft. They block finalizing: they'd ship
+   *  nothing now, then appear inside the fixed release once published. */
+  unpublished: string[];
 };
 
 /** Finalize the draft dataset release: record notes/DOI and flip it to
@@ -32,6 +35,7 @@ export default function FinalizeReleaseModal({
   releaseNumber,
   bundled,
   omittedCount,
+  unpublished,
 }: FinalizeReleaseModalProps) {
   const { addToast } = useToast();
   const finalize = useFinalizeDatasetRelease(releaseId, datasetId);
@@ -62,11 +66,13 @@ export default function FinalizeReleaseModal({
   }
 
   const nothingBundled = bundled.length === 0;
+  const blocked = nothingBundled || unpublished.length > 0;
 
   return (
     <Modal
       open={open}
       onClose={handleClose}
+      size="xl"
       title={
         releaseNumber != null ? `Finalize v${releaseNumber}` : "Finalize Release"
       }
@@ -82,11 +88,13 @@ export default function FinalizeReleaseModal({
           <Button
             onClick={() => void handleFinalize()}
             loading={finalize.isPending}
-            disabled={nothingBundled}
+            disabled={blocked}
             title={
               nothingBundled
                 ? "Include at least one recordset before finalizing"
-                : undefined
+                : unpublished.length > 0
+                  ? "Publish or remove the unpublished recordsets first"
+                  : undefined
             }
           >
             Finalize
@@ -127,6 +135,22 @@ export default function FinalizeReleaseModal({
               </li>
             ))}
           </ul>
+        )}
+
+        {unpublished.length > 0 && (
+          <div className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+            <p>
+              ⚠ Not yet published — publish{" "}
+              {unpublished.length === 1 ? "it" : "them"} or remove{" "}
+              {unpublished.length === 1 ? "it" : "them"} from the release
+              before finalizing:
+            </p>
+            <ul className="mt-1 list-disc pl-5">
+              {unpublished.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {omittedCount > 0 && (

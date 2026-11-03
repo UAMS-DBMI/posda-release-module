@@ -17,6 +17,9 @@ export type CycleOpenDraft = {
    *  review_type='non_dicom' review that flows through the same QC UI). */
   has_dicom: boolean;
   has_non_dicom: boolean;
+  /** The draft's unpublished release -- what the dataset release carries for
+   *  this recordset while it is being drafted. */
+  recordset_release_id: number | null;
 };
 
 export type CycleQc = {
@@ -85,7 +88,14 @@ export type CycleRecordset = {
     recordset_release_id: number;
     release_number: number | null;
     release_status: string;
+    release_date: string | null;
+    who_created: number | null;
+    /** 0 for a draft release -- its files sit on the draft until publish. */
+    file_count: number;
   } | null;
+  /** How many published versions the recordset has -- Bundle offers to change
+   *  the version only when there is more than one. */
+  released_version_count: number;
   /** Highest dataset release number any of this recordset's releases were
    *  ever bundled into. Distinct from in_dataset_release, which only
    *  checks the dataset's *current* latest release -- can be ahead of or

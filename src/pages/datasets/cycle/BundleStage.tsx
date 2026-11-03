@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ExpandableTable from "@/components/ExpandableTable";
 import FinalizeReleaseModal from "@/components/FinalizeReleaseModal";
+import Modal from "@/components/ui/Modal";
 import PublishDraftModal from "@/components/PublishDraftModal";
 import RecordsetLink from "@/components/RecordsetLink";
 import { Button } from "@/components/ui/Button";
@@ -65,9 +66,6 @@ function VersionPicker({
 
   return (
     <div className="space-y-2 text-sm">
-      <p style={{ color: "var(--muted)" }}>
-        Which version this recordset contributes to the release.
-      </p>
       <ul
         className="divide-y overflow-hidden rounded-md"
         style={{
@@ -152,8 +150,9 @@ export default function BundleStage() {
   const include = useIncludeRecordsetRelease(releaseId, datasetId);
   const exclude = useExcludeRecordsetRelease(releaseId, datasetId);
 
-  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [publishFor, setPublishFor] = useState<CycleRecordset | null>(null);
+  const [changeFor, setChangeFor] = useState<CycleRecordset | null>(null);
+  const userMap = useUsers();
   const [showFinalize, setShowFinalize] = useState(false);
 
   // `bundled` is released-only, so it is what will actually ship -- right for
@@ -163,9 +162,12 @@ export default function BundleStage() {
 
   const busy = include.isPending || exclude.isPending;
 
-  function pick(recordsetReleaseId: number) {
+  function pick(recordsetReleaseId: number, onDone?: () => void) {
     include.mutate(recordsetReleaseId, {
-      onSuccess: () => toastSuccess(addToast, "Release updated."),
+      onSuccess: () => {
+        toastSuccess(addToast, "Release updated.");
+        onDone?.();
+      },
       onError: (e) =>
         toastError(
           addToast,
@@ -237,26 +239,24 @@ export default function BundleStage() {
       )}
 
       <ExpandableTable
-        headers={["Recordset", "In Release", ""]}
+        headers={["Recordset", "Recordset Version", ""]}
         rows={cycle.recordsets}
         getRowKey={(r) => r.recordset_id}
-        expandLabel="versions"
-        expandedKey={expandedId}
-        onExpandedKeyChange={(k) => setExpandedId(k as number | null)}
-        canExpand={(r) => r.latest_release !== null}
+        // One line per recordset: its version reads inline, and choosing a
+        // different one is the Change version modal -- so nothing expands.
+        alwaysExpanded
+        canExpand={() => false}
+        renderExpanded={() => null}
         emptyMessage="This dataset has no recordsets yet."
-        renderExpanded={(r) => (
-          <VersionPicker
-            recordsetId={r.recordset_id}
-            bundledReleaseId={r.release_in_cycle?.recordset_release_id ?? null}
-            disabled={!cycleActive || busy}
-            onPick={pick}
-          />
-        )}
         renderCells={(r) => {
           const inRelease = r.release_in_cycle;
           const latest = r.latest_release;
           const readyDraft = isPublishable(r) ? r.open_draft : null;
+          // What Include puts back: the draft's own release while one is open
+          // (what Remove took out), else the latest published version. A
+          // never-published recordset has only the former.
+          const includeTarget =
+            r.open_draft?.recordset_release_id ?? latest?.recordset_release_id ?? null;
           // A draft member has no number yet -- it is claimed at publish.
           const memberIsDraft = inRelease?.release_status === "draft";
           // Carrying a version older than the one just frozen is legitimate,
@@ -283,7 +283,24 @@ export default function BundleStage() {
                 {inRelease ? (
                   <div>
                     <div>
-                      {memberIsDraft ? "next version" : `v${inRelease.release_number}`}
+                      {memberIsDraft ? (
+                        "next version"
+                      ) : (
+                        <>
+                          v{inRelease.release_number}
+                          <span className="text-xs" style={{ color: "var(--muted)" }}>
+                            {" · "}
+                            {inRelease.file_count.toLocaleString()} file
+                            {inRelease.file_count === 1 ? "" : "s"}
+                            {inRelease.release_date
+                              ? ` · ${new Date(inRelease.release_date).toLocaleDateString()}`
+                              : ""}
+                            {inRelease.who_created != null
+                              ? ` · by ${userMap.get(inRelease.who_created) ?? "—"}`
+                              : ""}
+                          </span>
+                        </>
+                      )}
                     </div>
                     {memberIsDraft && (
                       <div className="text-xs text-amber-600 dark:text-amber-400">
@@ -313,12 +330,22 @@ export default function BundleStage() {
                       Publish
                     </Button>
                   )}
-                  {cycleActive && latest && !inRelease && (
+                  {cycleActive && r.released_version_count > 1 && (
                     <Button
                       size="sm"
                       variant="ghost"
                       disabled={busy}
-                      onClick={() => pick(latest.recordset_release_id)}
+                      onClick={() => setChangeFor(r)}
+                    >
+                      Change version
+                    </Button>
+                  )}
+                  {cycleActive && includeTarget != null && !inRelease && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => pick(includeTarget)}
                     >
                       Include
                     </Button>
@@ -340,6 +367,25 @@ export default function BundleStage() {
         }}
       />
 
+      <Modal
+        open={changeFor !== null}
+        onClose={() => setChangeFor(null)}
+        size="lg"
+        title={changeFor ? `Change version — ${changeFor.recordset_name}` : "Change version"}
+      >
+        <p className="mt-1 mb-3 text-sm" style={{ color: "var(--muted)" }}>
+          Recordset version contributing to this Dataset release:
+        </p>
+        {changeFor && (
+          <VersionPicker
+            recordsetId={changeFor.recordset_id}
+            bundledReleaseId={changeFor.release_in_cycle?.recordset_release_id ?? null}
+            disabled={busy}
+            onPick={(id) => pick(id, () => setChangeFor(null))}
+          />
+        )}
+      </Modal>
+
       <FinalizeReleaseModal
         open={showFinalize}
         onClose={() => setShowFinalize(false)}
@@ -348,6 +394,9 @@ export default function BundleStage() {
         releaseNumber={release?.release_number}
         bundled={bundled.data ?? []}
         omittedCount={unbundled.length}
+        unpublished={cycle.recordsets
+          .filter((r) => r.release_in_cycle?.release_status === "draft")
+          .map((r) => r.recordset_name)}
       />
 
       <PublishDraftModal
