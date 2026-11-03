@@ -136,6 +136,14 @@ so re-pulling an updated WP file left the old one beside it.
   behind the click-twice confirm (4 s lapse).
 - Closes the `QC_FILE_COMPARE` duplicate-name edge: with unique names its
   name join can't fan out.
+- **A WordPress pull records file → media (2026-11-03).** The WP transfer
+  dedups uploads through `wp_object_map` ('file', file_id) → ('media', id)
+  (`ensure_wp_media`), but `files/from-wp` never wrote that row, so syncing
+  an unchanged pulled file uploaded a copy (WordPress named it `…-1-1.csv`)
+  and re-pointed the download page at it. The pull now records the mapping
+  to the attachment it came from. Local fix-up: files 3398/3399 re-mapped to
+  the originals 56072/56074 (the copies were 56346/56348); a re-sync points
+  the download pages back without uploading.
 - ⚠ Found while testing: `db.fetch_one` returns `[]`, not `None`, on no rows,
   so `if x is None` never fires. `_require_timepoint` and three other
   timepoint checks in `distribution.py` use that pattern and never 404 --
@@ -1113,6 +1121,17 @@ A draft release blocks distribution **in the UI only** (TECH_DEBT #5).
   in the draft-detail Publish gate + `CurrentCycleCard` Publish stage
   ("Requires QC" when no reviews). Backend enforces it since 2026-10-29
   (publish → 422 `QC_INCOMPLETE`).
+- **Unpublished members block finalizing (2026-11-02).** A draft recordset
+  release in the dataset release ships nothing (transfers read released
+  versions only), and once its draft publishes, that same row flips to
+  `released` and appears inside the already-finalized release. So finalize
+  (PUT `release_status = 'released'`) returns 409 `UNPUBLISHED_MEMBERS` naming
+  them, and the Finalize modal lists them and disables Finalize: publish or
+  remove each first. Not auto-dropped -- silently changing what ships is the
+  problem. Bundle's Include also puts a removed draft member back now (the
+  cycle's `open_draft` carries its `recordset_release_id`); it used to offer
+  only the latest *published* version, so a never-published recordset had
+  no way back in.
 - **One open draft per recordset.** Unlikely to have more than one; can be
   restricted. UI: hide/disable "New Draft" while a draft is open; Current
   Cycle panel is a singleton. ⚠ DB/API-level restriction (unique partial
