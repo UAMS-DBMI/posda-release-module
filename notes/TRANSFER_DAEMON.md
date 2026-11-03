@@ -732,8 +732,14 @@ Recorded here rather than rediscovered during the build:
 - **No un-queue and no retry state.** `transfer_status` is
   `draft | queued | in_progress | success | failed` with no path back and no
   attempt counter at the transfer level (`transfer_file.attempts` exists per
-  file). A failed transfer currently has no defined recovery: re-queue? new
-  transfer? Undecided.
+  file). **Decided 2026-11-03: re-queue.** Queue stays on a finished IDC
+  transfer. From `failed`, the daemon retries only the failures. From
+  `success` it's a re-push: the queue transition resets the transfer's
+  `transfer_file` rows to `pending`, so the daemon re-verifies everything
+  (HEAD-then-MD5 skips identical objects) and replaces the manifests. Without
+  the reset every completed row is skipped and only the manifests upload.
+  ⚠ Nothing checks `status.json` / the per-version mutex yet, so a re-push can
+  race IDC's copy while it is processing that version.
 - **Partial failure has no representation.** If 3 of 500k files fail, the
   transfer is `failed` — but the other 499,997 uploaded. Whether a retry
   re-uploads everything or only the failures depends on `transfer_file` being

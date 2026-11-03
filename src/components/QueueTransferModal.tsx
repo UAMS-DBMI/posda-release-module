@@ -40,10 +40,10 @@ export default function QueueTransferModal({
   );
   const missing = isIdc ? (settings.data?.missing_manifests ?? []) : [];
 
-  // base_gcs_url is filled automatically when the dataset manifest is generated,
-  // but it stays editable so a package can be relocated -- and an edit can blank
-  // it. Every path the daemon uploads is relative to it. Only surfaced once the
-  // manifests exist, because before that the missing manifest is the real cause.
+  // base_gcs_url is derived by the server (at creation, or by the dataset
+  // manifest) and only stays empty if the dataset has no WordPress slug. Every
+  // path the daemon uploads is relative to it. Only surfaced once the manifests
+  // exist, because before that the missing manifest is the real cause.
   const noBaseUrl =
     isIdc && !!settings.data && missing.length === 0 && !settings.data.base_gcs_url;
 
@@ -100,12 +100,32 @@ export default function QueueTransferModal({
         </>
       }
     >
-      <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-        This hands the transfer to the delivery daemon, which begins uploading to{" "}
-        {transfer?.destination_name ?? "the destination"}.{" "}
-        <strong>There is no un-queue</strong> — once it starts there is no route
-        back through the transfer&apos;s status.
-      </p>
+      {transfer?.destination_abbr === "wp" ? (
+        // The WordPress transfer only stages: pages change at Disseminate.
+        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+          This uploads each recordset&apos;s file to the WordPress media library.
+          The download pages don&apos;t change until you update them in
+          Disseminate. Safe to run again — files already uploaded are reused.
+        </p>
+      ) : isIdc && transfer?.transfer_status === "success" ? (
+        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+          This re-pushes the transfer. The daemon re-checks every file against
+          the bucket: identical files are skipped, missing or changed ones are
+          uploaded, and the manifests are replaced.
+        </p>
+      ) : isIdc && transfer?.transfer_status === "failed" ? (
+        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+          This retries the files that failed. Files that already uploaded are
+          left as they are.
+        </p>
+      ) : (
+        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+          This hands the transfer to the delivery daemon, which begins uploading to{" "}
+          {transfer?.destination_name ?? "the destination"}.{" "}
+          <strong>There is no un-queue</strong> — once it starts there is no route
+          back through the transfer&apos;s status.
+        </p>
+      )}
 
       {transfer && (
         <p className="mt-3 text-sm">
@@ -137,8 +157,7 @@ export default function QueueTransferModal({
           {missing.includes("clinical") && (
             <p className="mt-1">
               The clinical manifest needs this release&apos;s WordPress transfer
-              to have delivered first, so Collection Manager holds the current
-              files rather than the previous version.
+              to have run first: IDC links the files it uploaded.
             </p>
           )}
         </div>

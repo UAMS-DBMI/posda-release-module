@@ -428,13 +428,13 @@ export default function TransferStage() {
                   )}
                   {/* Nothing routes to an unconfigured destination any more, so
                       there is nothing to queue -- Manage stays for cleanup. */}
-                  {/* A WordPress transfer can be run again once it has finished:
-                      it is idempotent (unchanged files reuse their attachment,
-                      pages are only re-pointed). Others upload for real, so
-                      they queue once. */}
+                  {/* WordPress and IDC can run again once finished, and both are
+                      idempotent: unchanged files reuse their attachment or are
+                      skipped by the daemon's MD5 check. The rest queue once --
+                      they have no daemon yet. */}
                   {r.configured &&
                     (t?.transfer_status === "draft" ||
-                      (r.destination_abbr === "wp" &&
+                      ((r.destination_abbr === "wp" || r.destination_abbr === "idc") &&
                         (t?.transfer_status === "success" ||
                           t?.transfer_status === "failed"))) && (
                     <Button size="sm" onClick={() => setQueueRow(r)}>
