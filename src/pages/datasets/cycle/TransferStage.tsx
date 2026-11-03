@@ -428,7 +428,15 @@ export default function TransferStage() {
                   )}
                   {/* Nothing routes to an unconfigured destination any more, so
                       there is nothing to queue -- Manage stays for cleanup. */}
-                  {t?.transfer_status === "draft" && r.configured && (
+                  {/* A WordPress transfer can be run again once it has finished:
+                      it is idempotent (unchanged files reuse their attachment,
+                      pages are only re-pointed). Others upload for real, so
+                      they queue once. */}
+                  {r.configured &&
+                    (t?.transfer_status === "draft" ||
+                      (r.destination_abbr === "wp" &&
+                        (t?.transfer_status === "success" ||
+                          t?.transfer_status === "failed"))) && (
                     <Button size="sm" onClick={() => setQueueRow(r)}>
                       Queue
                     </Button>
