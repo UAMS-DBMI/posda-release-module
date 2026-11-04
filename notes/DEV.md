@@ -1162,6 +1162,15 @@ A draft release blocks distribution **in the UI only** (TECH_DEBT #5).
   push a manifest again with identical contents (say, to pick up a new name),
   delete it in WordPress first, then Update Page. A Re-upload button was
   decided against; the delete-first path was tested 2026-11-03.
+- **Generated files go through the importer (2026-11-03).** The manifest
+  generators wrote bytes and `file` rows themselves, with no import event, no
+  `ready_to_process`, and their own storage-root setting
+  (`FILE_STORAGE_ROOT_ID` vs the importer's `FILE_STORAGE_ROOT`). They now call
+  `store_manifest` -> `importer.import_bytes`, and the WordPress pull calls
+  `importer.import_temp_file`; `import_file` shares the same code. Regenerating
+  identical bytes reuses the file and adds an import event. Existing rows aren't
+  repaired: a file recorded under the wrong root keeps that location. Production's
+  failure was never diagnosed, so this may not be all of it.
 - **IDC hand-off (2026-11-03).** An upload leaves the version at `Draft`; the
   curator ends the Transfer stage with **Set to Ready** on the IDC row, because
   that's where re-pushing happens and it changes nothing public. The API reads
