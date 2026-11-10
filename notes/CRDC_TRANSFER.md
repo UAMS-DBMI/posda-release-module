@@ -49,6 +49,86 @@ Sources:
 | Submission Request scope | **One request per commons** (user's understanding; matches one destination per commons). *Confirmed in practice 2026-10-14:* the form has no commons field — the SRC approves the study **for** a commons, and the submitter picks that commons when creating each Data Submission | 2026-10-07 |
 | GC | General Commons, under the CRDC umbrella. ⚠ **Inside Data Hub its model is still keyed `CDS`** (`cds-model`, `cache/CDS/`) — expect that code in model files and any API | 2026-10-07 |
 
+## Manual runbook *(2026-11-10)*
+
+How to get a dataset into GC or CTDC **entirely by hand** — no Posda automation.
+Automation is listed separately below (*Automating it, later*). A curator is
+doing the manual steps; Michael supplies the files Posda can't export yet.
+
+The portal is the **CRDC Submission Portal**, <https://hub.datacommons.cancer.gov>.
+Help desk: NCICRDC@mail.nih.gov.
+
+### A. Accounts — once per person
+
+| # | Step | Who | Where / how |
+|---|---|---|---|
+| A1 | Create a **Login.gov** account | curator | <https://www.login.gov/create-an-account/>. Use an institutional email; set up two-factor. Login.gov is only the sign-in — it issues nothing else |
+| A2 | Sign in to the portal | curator | Portal → **Log In** → Login.gov → **Grant** (consent to share with NIH). This creates a portal account with the plain *User* role — **enough to start a Submission Request** (B4) |
+| A3 | Stay active | curator | **Sign in at least every 60 days**, or the account is deactivated (help desk to restore) |
+
+### B. Once per dataset (one CRDC "study")
+
+| # | Step | Who | Where / how |
+|---|---|---|---|
+| B1 | Confirm access level and phs | curator | TCIA's controlled-access data policy page. **FACES** and **Biobank** each have an existing phs; **NCTN / NCORE** trials get theirs from CTEP. Open-access data goes to IDC instead (open-access CTDC annotations are an open question) |
+| B2 | Have the imaging **de-identification protocol / Risk Mitigation Form** ready | curator + Justin | Required before CRDC lets imaging data be submitted. Prepare once and reuse |
+| B3 | Fill in the **Submission Request** Excel | curator | Template: [reference/CRDC_Submission_Request_Template_v3.5_10142026.xlsx](reference/CRDC_Submission_Request_Template_v3.5_10142026.xlsx). Sheets: *PI and Contact*, *Program and Study*, *Data Access and Disease* (Controlled access; dbGaP: Yes + phs **with version**), *Data Types* (Imaging: Yes; de-identified: Yes; file type DICOM; counts and size). The request does **not** choose GC or CTDC |
+| B4 | Import and submit the request | Ramesh | Portal → **Submission Requests** → **Start a Submission Request** → **Import Form** → review → **Submit**. 4–6 weeks. Answer any *Inquired* questions; clear conditions (phs, de-id form) by emailing the help desk. ⚠ A request idle for 120 days is deleted |
+| B5 | Record the outcome | curator | CRDC says **GC or CTDC** and creates the study. Write down the commons and the study name (no Posda field for it yet). Route the dataset's recordsets in Posda to `gc` **or** `ctdc` — never both |
+| B6 | Request the **Submitter** role for the new study | curator | Click your name (top right) → **Request Access** → Role: *Submitter*; Institution: **UNIV OF ARKANSAS FOR MED SCIS** (in the portal's list); Studies: the new study; Additional Info: optional. A CRDC admin approves by email. Needed before you can create Data Submissions for it |
+| B7 | Download the **Uploader CLI Tool** | curator | Click your name → **Uploader CLI Tool** → download the Windows or Mac binary. No Python needed. Used only for data files (C6) |
+| B8 | Create an **API token** | curator | Click your name → **API Token** → **Create Token**. Store it somewhere safe; it goes in the uploader's config file. It belongs to your portal account — it is not your Login.gov password. Once per person, not per dataset |
+
+### C. For each release
+
+| # | Step | Who | Where / how |
+|---|---|---|---|
+| C1 | Finalize the dataset release in Posda | curator | As today |
+| C2 | Create the **Data Submission** | curator | Portal → **Data Submissions** → **Create a Data Submission**: Type *New/Update*; Data Type *Metadata and Data Files*; Data Commons (the approved one); Study; dbGaP ID (pre-filled); Name ≤ 25 characters, e.g. `<short name> v<release>`. Note the **Submission ID** and the assigned Data Concierge |
+| C3 | Get the data files | Michael → curator | **One ZIP per series**, named `<SeriesInstanceUID>.zip`, all in one flat folder, plus an **archive manifest** TSV (`archive_name`, `file_path`, `file_size`, `md5` — one row per file inside each ZIP). Posda can't export these yet; Michael provides them |
+| C4 | Download the templates | curator | Portal → **Model Navigator** → GC or CTDC → **Available Downloads** → *Submission Templates* (TSV), *Data Dictionary*, *Example Templates* |
+| C5 | Fill in the metadata TSVs | curator (Michael pre-fills what Posda knows) | GC: `program`, `study` (incl. `phs_accession`, `study_version`), `consent_group`, `participant`, `file` (one row per ZIP: name, size, MD5; **leave `file_id` empty**), `image` (top level only — **never the `NonDICOM*` nodes**). `file_description` = series description + study date + modality. TSV only, not Excel; don't edit the header row; keep the `type` column; parent links are columns like `study.study_id`. `participant_id` must match what goes to dbGaP exactly |
+| C6 | Upload the data files | curator | On the submission page → **Download Configuration File**: data folder (C3), file manifest = the `file` TSV, archive manifest (C3). Paste your API token into it. Run `uploader.exe --config <file>.yml`. It assigns file IDs, writes them into **`file-final.tsv`** and the other TSVs in that folder, and uploads those. ⚠ **Keep the `-final` files** — the IDs are needed for re-uploads and for TCIA's download manifest (C12). ⚠ It reports failure in its report (`./tmp/upload-report-*.tsv`), **not** with an error code — read the report |
+| C7 | Upload the remaining metadata TSVs | curator | Submission page → **Upload Metadata** → *Choose Files* → *Upload*. Don't mix new data for already-uploaded participants with new participants in one batch; one bad file fails the batch |
+| C8 | Validate and fix | curator (+ concierge) | **Validate Data** → *Both*, *All Uploaded Data* → **Validate**. Work through *Validation Results*: fix, re-upload, validate again until **zero errors** (warnings don't block). A value not in a field's permitted list needs a **Request New PV**, decided by the concierge |
+| C9 | Patient list into dbGaP | curator → ? | Download the **dbGaP sheets** from the submission page (available after the first metadata upload; best after validation). Send them to whoever adds subjects to the phs (Ramesh? CTEP for NCTN trials? — **open**). ⚠ **Must be done before C10** |
+| C10 | **Submit** | curator | The Submit button (enabled only at zero errors). Locks the submission and hands it to the concierge |
+| C11 | Review and release | CRDC + curator | Answer the concierge. Status on the Data Submissions list moves to *Released* / *Completed*. Data appears on the commons only after dbGaP releases the study |
+| C12 | TCIA download manifest | Michael → curator | From `file-final.tsv`: CSV `drs_uri,name,collection,patient_id,modality,file_size_bytes`, where `drs_uri` = `drs://nci-crdc.datacommons.io/` + the file ID and `name` = the ZIP name. Attach it to the WordPress download page, with a link to the CRDC page |
+
+**Later releases:** a new Data Submission against the same study (from C2).
+Re-uploading a file with the previous `-final` manifest keeps its file ID.
+**Removing series** needs a separate Data Submission of type *Delete* (*Metadata
+Only*) — do the first one with the concierge's help.
+
+### Open before the first run
+
+- Who adds patients to an existing phs in dbGaP (C9)?
+- Which dataset goes first — one a submitter is waiting on, or an open-access
+  CTDC annotation set if CTDC can host it (no dbGaP)?
+- API token lifetime (B8) — unknown.
+
+### Automating it, later
+
+Kept apart so the manual path stays clear. Details in *The Data Hub API* and
+*Direct upload* below.
+
+| Manual step | Automation | Blocked by |
+|---|---|---|
+| B8 token | none — but **CRDC must accept automation using a person's token** (only individual identities are allowed); whose token, and what happens when that person leaves | answer from Todd's team |
+| B3 | Posda generates the filled Excel | field mapping |
+| B5 | store/look up the study (`getMyUser { studies }`) | exploring the API with a token |
+| B5 routing | Posda blocks routing a recordset to both `gc` and `ctdc` | — |
+| C2 | Posda calls `createSubmission` when the transfer is created | token question |
+| C3 | Posda or the daemon builds ZIPs, size, MD5, archive manifest | `transfer_file` row decision |
+| C5 | Posda generates the TSVs | field mapping (use the curator's hand-filled TSVs as the target) |
+| C6–C7 | the daemon uploads directly and captures file IDs | token question |
+| C8 | Posda triggers validation and shows the errors | token question |
+| C9 | Posda fetches the dbGaP sheets (`downloadDBGaPLoadSheet`) | token question |
+| C10 | **stays manual** — decided | — |
+| C11 | Posda polls status; Go live waits for *Released* | token question |
+| C12 | Posda builds the manifest at Disseminate | file IDs stored |
+
 ## Meeting 2026-10-14 — CRDC workflow walkthrough
 
 With Justin (who has taken datasets through the full CRDC flow for both CTDC and
