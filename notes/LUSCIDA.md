@@ -343,15 +343,29 @@ slice; synced into the emptied one, which was kept).
 - `useSyncQcReview` invalidates the same keys Clone did (`["qc-reviews"]`,
   `["qc-assignments"]`).
 
-**3. Mirabelle: title-case statuses.** *(mirabelle)*
+**3. Mirabelle: title-case statuses.** *(mirabelle)* ✅ Built and checked
+2026-11-17 (QC tests + new title-case test pass, lint clean; Mirabelle
+f9fe22b).
+- As built: `titleCaseStatus()` in `RouteQCAssignment.jsx` normalises
+  `:qcStatus` (any case, default "All"), so every URL the route builds uses
+  title case. `qc.js` lowercases before the API call. No redirect rewrites
+  an old lowercase URL; the next navigation does.
 - The `QC_STATUS_OPTIONS` values become "All" / "Pending" / "Approved" /
   "Rejected" / "Flagged".
 - The route reads `:qcStatus` without regard to case, writes it title case in
   the URLs it builds, and lowercases it in `qc.js` only for the API.
-- **Must deploy before step 4.** Today's Mirabelle would send
-  `qc_status=Pending` to the API and match nothing.
+- **Deploys together with step 4.** The Mirabelle before this change would
+  send `qc_status=Pending` to the API and match nothing.
 
-**4. UI: the Review link lands on what's left.** *(release module)*
+**4. UI: the Review link lands on what's left.** *(release module)* ✅ Built
+and checked 2026-11-17. Deploys together with step 3. A finished slice has no
+pending series, so its link opens `/*/All/All` instead (`sliceDone`).
+- Checked on PSEUDO-CLONE-TEST, rolled back locally to Verify (review #1
+  split into a finished and an in-progress slice): Review links on finished,
+  in-progress and all-pending slices; a removed series synced away; the
+  series added back as pending in the only unfinished slice; new files
+  synced into a new slice, then a Replace All on the draft deleted that
+  slice when none of its files remained.
 - In `QcSliceActions.tsx`, the href becomes
   `/mira/qc/assignments/{id}/*/Pending/All`.
 

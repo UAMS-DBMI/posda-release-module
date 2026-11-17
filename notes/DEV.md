@@ -25,8 +25,10 @@ live in [LUSCIDA.md](LUSCIDA.md) §4, §5 and §7.
       detail's stale breakdown uses the plan. ⚠ New API endpoints, no schema
       change. Tested 2026-11-17 on throwaway rows.
 - [x] Step 2, UI: Sync replaces Clone. Checked in the app 2026-11-17.
-- [ ] Step 3, Mirabelle: title-case statuses (deploy before step 4)
-- [ ] Step 4, UI: Review link lands on `/*/Pending/All`
+- [x] Step 3, Mirabelle: title-case statuses (deploy before step 4). Checked
+      2026-11-17.
+- [x] Step 4, UI: Review link lands on `/*/Pending/All` (`/*/All/All` for a
+      finished slice). Checked 2026-11-17; deploys with step 3.
 - [ ] Step 5, LUSCIDA test
 
 ### 🔁 Verify stage + QC lifecycle rework (2026-10-29 → in progress)
