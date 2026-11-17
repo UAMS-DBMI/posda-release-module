@@ -16,6 +16,7 @@ decided yet.**
 5. [Decisions and open questions](#5-decisions-and-open-questions)
 6. [Other items from the walkthrough](#6-other-items-from-the-walkthrough)
 7. [Step plan](#7-step-plan)
+8. [Splitting and combining one slice](#8-splitting-and-combining-one-slice)
 
 ---
 
@@ -244,9 +245,11 @@ lost:
       oneposda changes ready to deploy.
 - [ ] Re-selecting the current preset doesn't reset it (you have to pick another
       and come back).
-- [ ] Reload Image doesn't reset the view-mode buttons.
-- [ ] After a refresh the left-click tool (window/level) isn't selected by
-      default.
+- [x] Reload Image doesn't reset the view-mode buttons. Done 2026-11-12
+      (Mirabelle 13a1fc7: `MaterialButtonSet` follows its value instead of
+      reading it only at mount).
+- [x] After a refresh the left-click tool (window/level) isn't selected by
+      default. Done 2026-11-12, same commit.
 
 **Posda**
 - [ ] `ApplyPrivateDispositions.py`: more verbose confirmation / a report of
@@ -372,3 +375,47 @@ pending series, so its link opens `/*/All/All` instead (`sliceDone`).
 **5. LUSCIDA test.** As agreed on the call (§6): the curators' next activity
 batch, ~10 decisions on #13 first, then sync, check, and back the decisions
 out. Then the live run with Erica.
+
+## 8. Splitting and combining one slice
+
+Decided 2026-11-17. Today's Split rebalances the **whole review**: it deals
+every unit, decided or not, evenly per modality into N new slices and deletes
+the old ones. Decisions survive (they live on the unit, with their history),
+but slice ids, reviewers and Review links don't, and decided units bunch into
+one new slice because the deal is by total, not by what's left. The UI
+therefore disables Split once any slice is complete, which after a Sync is the
+normal case: a finished slice plus a new batch can't be shared out.
+
+The fix works on **one unfinished slice at a time** and never touches finished
+slices or decided units unless asked.
+
+**Split slice #N into K** (`POST /qc/assignments/{id}/split`,
+`{ count, assignees? }`)
+- Only an unfinished slice. 422 if K is more than its pending series.
+- The original slice keeps its id, reviewer, Review link and decided series,
+  plus an even share of the pending ones.
+- The K-1 new slices take the rest of the pending series, evenly per
+  modality. Each can be given a reviewer in the modal; otherwise unclaimed.
+
+**Combine slice #A into slice #B** (`POST /qc/assignments/{id}/combine`,
+`{ target_assignment_id, include_decided }`)
+- Both slices unfinished, same review. Pending series always move.
+- **"Bring decided series too"**, off by default, because the two slices may
+  have had different reviewers:
+  - Off: #A keeps its decided series and reviewer and becomes complete, as the
+    record of that work. If it had none, it's empty and is deleted.
+  - On: everything moves to #B and #A is deleted (the modal warns first).
+
+**Both**
+- Recompute `share_percentage` from unit counts and settle slice and review
+  status, as Sync does. No schema change. ⚠ Two new API endpoints.
+- If the slice is claimed, the modal notes that its reviewer may need to
+  reload Mirabelle: a decision saved on a series that has moved is refused.
+- UI: Split and Combine become per-slice actions in the Manage modal and
+  replace the whole-review Split there. `POST /qc/reviews/{id}/split` stays in
+  the API for repairs.
+
+**Steps**
+- [ ] 6. Backend: split and combine endpoints *(oneposda)*.
+- [ ] 7. UI: per-slice Split and Combine in the Manage modal *(release
+      module)*.
