@@ -16,6 +16,9 @@ guidelines. Active feature work, decisions, and checklists live in `notes/`:
   ZIPs, `transfer_crdc`, the data models, download-manifest formats
 - [notes/CYCLE_WIZARD.md](notes/CYCLE_WIZARD.md) — the guided release cycle:
   routes-as-stages, modals-as-actions, shared form modules, step plan
+- [notes/LUSCIDA.md](notes/LUSCIDA.md) — a dataset whose recordsets gain files
+  while QC is in progress: why Clone breaks active slices, the in-place Sync
+  proposal (new files → new slice), walkthrough follow-ups
 
 ## Behavioral Guidelines
 
