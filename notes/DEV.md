@@ -1,4 +1,4 @@
-# DEV.md — posda-remote-module
+# DEV.md — posda-release-module
 
 Active development notes: in-flight feature checklists, decisions, and the
 workstream history. See [../CLAUDE.md](../CLAUDE.md) for the system overview,
