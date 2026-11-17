@@ -24,7 +24,7 @@ live in [LUSCIDA.md](LUSCIDA.md) §4, §5 and §7.
       `GET /qc/reviews/{id}/sync-preview`, `POST /qc/reviews/{id}/sync`; review
       detail's stale breakdown uses the plan. ⚠ New API endpoints, no schema
       change. Tested 2026-11-17 on throwaway rows.
-- [ ] Step 2, UI: Sync replaces Clone
+- [x] Step 2, UI: Sync replaces Clone. Checked in the app 2026-11-17.
 - [ ] Step 3, Mirabelle: title-case statuses (deploy before step 4)
 - [ ] Step 4, UI: Review link lands on `/*/Pending/All`
 - [ ] Step 5, LUSCIDA test

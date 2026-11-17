@@ -320,7 +320,16 @@ release module keep their current text case. Only Mirabelle changes casing.
   that was its last pending series. Remove every series in a slice and sync:
   the preview lists the slice, and the sync deletes it.
 
-**2. UI: Sync replaces Clone.** *(release module)*
+**2. UI: Sync replaces Clone.** *(release module)* ✅ Built and checked in
+the app 2026-11-17 (stale review with a finished, a claimed and an emptied
+slice; synced into the emptied one, which was kept).
+- As built: `useQcSyncPreview` (keyed under the review, fetched only while
+  the modal is open) and `useSyncQcReview` in `useQc.ts`; `useCloneQcReview`
+  and `CloneQcReviewBody` removed. The modal lists unfinished slices as
+  "Slice #N · assignee / Unclaimed · N series". The deletion warning drops
+  the chosen target when something moves to it. With nothing added or
+  changed, the target choice is hidden and no target is sent.
+  `ReviewDetail` no longer needs `useNavigate`.
 - In `QcReviewLifecycle`, the stale banner and the header action become
   **Sync**. The modal shows the counts ("N added, N changed, N removed from
   draft") and the target choice: new slice (default) or combine into an

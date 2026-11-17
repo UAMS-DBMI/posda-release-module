@@ -26,7 +26,7 @@ const REVIEW_COLS =
 /** The draft's reviews with their assignment slices, listed inline in the
  *  expanded row. Two lazy fetches (reviews + the draft's slices). Cancelled
  *  reviews sort to the bottom and show no slices (the slice query excludes
- *  them). Review lifecycle (complete / clone / cancel), split, and the series
+ *  them). Review lifecycle (complete / sync / cancel), split, and the series
  *  summary live in the Manage modal. */
 export default function ReviewList({
   draftId,
@@ -139,7 +139,7 @@ export default function ReviewList({
               <StatusBadge status={rev.review_status} />
               {rev.review_status === "stale" && (
                 <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
-                  open to re-clone
+                  open to sync
                 </span>
               )}
             </div>

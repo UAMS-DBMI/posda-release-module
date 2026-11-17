@@ -46,10 +46,6 @@ export default function QcReviewManageModal({
     review,
     stale,
     onChanged: () => invalidateCycle(),
-    onCloned: () => {
-      invalidateCycle();
-      onClose();
-    },
   });
 
   return (
