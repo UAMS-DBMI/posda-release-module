@@ -416,6 +416,26 @@ slices or decided units unless asked.
   the API for repairs.
 
 **Steps**
-- [ ] 6. Backend: split and combine endpoints *(oneposda)*.
+- [x] 6. Backend: split and combine endpoints *(oneposda)*. Built and tested
+      2026-11-17.
+      - As built: `split_qc_assignment` / `combine_qc_assignment` lock the
+        review row (`qc_lock_slice_review`: 409 for a finished slice or a
+        cancelled / complete / replaced review), then `qc_settle_review_slices`
+        recomputes shares and statuses. Both return `assignments` (the
+        review's slices with `series_total`); split adds `new_assignment_ids`,
+        combine adds `moved` and `deleted_assignment_ids`. Split's
+        `assignees` lists the new slices only (count - 1, null = unclaimed);
+        new slices start `needs_qc`, as in the whole-review split. The even
+        allocator (`qc_allocate_even`) and the share SQL (`QC_SHARE_UPDATE`)
+        are now shared with the whole-review split and Sync.
+      - Test (local reviews #1 / #2, backed up and restored after): splitting
+        a finished slice gave 409, too many slices 422, a short assignees list
+        422. Splitting #17 (4 decided, 10 pending) in 3 kept its 4 decided and
+        reviewer, with pending 4 / 3 / 3. Combining into a finished slice or a
+        slice of another review gave 409, into itself 422. An all-pending
+        slice combined away was deleted. With decided series left behind, the
+        source stayed with its reviewer and went complete; with
+        `include_decided` it was deleted. The whole-review split still
+        deals 7 / 7 / 6 / 6.
 - [ ] 7. UI: per-slice Split and Combine in the Manage modal *(release
       module)*.

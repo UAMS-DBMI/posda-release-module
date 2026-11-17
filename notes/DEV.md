@@ -30,10 +30,10 @@ live in [LUSCIDA.md](LUSCIDA.md) §4, §5 and §7.
 - [x] Step 4, UI: Review link lands on `/*/Pending/All` (`/*/All/All` for a
       finished slice). Checked 2026-11-17; deploys with step 3.
 - [ ] Step 5, LUSCIDA test
-- [ ] Step 6, backend: split one slice / combine two
+- [x] Step 6, backend: split one slice / combine two
       (`POST /qc/assignments/{id}/split`, `.../combine`). Finished slices and
       decided units stay put. ⚠ New API endpoints, no schema change.
-      Design in [LUSCIDA.md](LUSCIDA.md) §8.
+      Design in [LUSCIDA.md](LUSCIDA.md) §8. Tested 2026-11-17.
 - [ ] Step 7, UI: per-slice Split / Combine in the Manage modal, replacing
       the whole-review Split.
 
