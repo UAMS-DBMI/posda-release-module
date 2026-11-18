@@ -36,6 +36,15 @@ live in [LUSCIDA.md](LUSCIDA.md) §4, §5 and §7.
       Design in [LUSCIDA.md](LUSCIDA.md) §8. Tested 2026-11-17.
 - [x] Step 7, UI: per-slice Split / Combine in the Manage modal, replacing
       the whole-review Split. Checked in the app 2026-11-17.
+- [ ] Mirabelle Next is slow on production since the 2026-11-17 deploy: about
+      4 s waiting on `GET /qc/assignments/{id}/series/{uid}/files`
+      (`fetch_assignment_series_files`). Two rewrites of that query
+      (`1acb34ab`, `0d2ed33a`) made it 23 s, then 34.7 s, and are reverted in
+      `d3de98aa`, so the code matches `66d2c4da`. `explain analyze` with literal
+      values was fast (42–80 ms) for every version, so it is the wrong test: the
+      API sends parameters, and asyncpg switches a prepared statement to a
+      generic plan after about 5 runs. Reproduce with `prepare`, then `execute`
+      it 6+ times in one session, before changing code again.
 
 ### 🔁 Verify stage + QC lifecycle rework (2026-10-29 → in progress)
 
