@@ -103,11 +103,6 @@ function VersionPicker({
                     {r.release_notes}
                   </p>
                 )}
-                {r.release_doi && (
-                  <p className="mt-0.5 text-xs" style={{ color: "var(--muted)" }}>
-                    {r.release_doi}
-                  </p>
-                )}
               </div>
               <div className="shrink-0">
                 {current ? (
@@ -198,11 +193,6 @@ export default function BundleStage() {
                 ` · ${new Date(release.release_date).toLocaleDateString()}`}
             </span>
             <StatusBadge status={release.release_status} />
-            {release.release_doi && (
-              <span className="text-xs" style={{ color: "var(--muted)" }}>
-                {release.release_doi}
-              </span>
-            )}
           </>
         ) : (
           <span style={{ color: "var(--muted)" }}>No dataset release yet.</span>

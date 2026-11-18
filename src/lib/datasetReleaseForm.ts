@@ -82,18 +82,17 @@ export function useExcludeRecordsetRelease(
   });
 }
 
-/** Notes and DOI collected when a draft release is finalized. */
+/** Notes collected when a draft release is finalized. No DOI until version
+ *  DOIs are in use. */
 export type FinalizeFormValues = {
   release_notes: string;
-  release_doi: string;
 };
 
 export const emptyFinalizeForm: FinalizeFormValues = {
   release_notes: "",
-  release_doi: "",
 };
 
-/** Finalize the draft dataset release: record notes/DOI and flip it to
+/** Finalize the draft dataset release: record notes and flip it to
  *  `released`. The API stamps `release_date` on that transition, so nothing
  *  here sends a date. */
 export function useFinalizeDatasetRelease(
@@ -104,7 +103,6 @@ export function useFinalizeDatasetRelease(
   return useMutation({
     mutationFn: async (values: FinalizeFormValues) => {
       const notes = values.release_notes.trim();
-      const doi = values.release_doi.trim();
       const json = await apiFetch<ItemEnvelope<{ dataset_release_id: number }>>(
         `${BASE}/datasets/releases/${releaseId}`,
         {
@@ -112,7 +110,6 @@ export function useFinalizeDatasetRelease(
           body: JSON.stringify({
             release_status: "released",
             ...(notes ? { release_notes: notes } : {}),
-            ...(doi ? { release_doi: doi } : {}),
           }),
         },
       );

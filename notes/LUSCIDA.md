@@ -219,8 +219,12 @@ Notes-to-self from the call, not part of the sync work. Listed so they aren't
 lost:
 
 **Release module**
-- [ ] Remove the DOI field from the New Recordset modal until recordset-level
-      DOIs exist.
+- [x] Remove the DOI field from the New Recordset modal until recordset-level
+      DOIs exist. Done 2026-11-17 for every recordset form (create, edit page,
+      edit modal; `recordsetForm.ts`). An existing DOI still shows on the
+      recordset page and is kept on save. The version DOI (`release_doi`) is
+      gone too: no field in Finalize Release, no display in Bundle. The API
+      types still carry it.
 - [ ] Dataset DOI: strip an `https://doi.org/` prefix if one is pasted.
       Reconsider whether the dataset needs a DOI at all, since WP has it. The DOI
       and the short name are the two values kept in both places.

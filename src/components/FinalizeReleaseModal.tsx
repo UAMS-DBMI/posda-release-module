@@ -25,7 +25,7 @@ type FinalizeReleaseModalProps = {
   unpublished: string[];
 };
 
-/** Finalize the draft dataset release: record notes/DOI and flip it to
+/** Finalize the draft dataset release: record notes and flip it to
  *  `released`. Immutable afterwards, so the summary matters more than the form. */
 export default function FinalizeReleaseModal({
   open,
@@ -176,24 +176,6 @@ export default function FinalizeReleaseModal({
           }
           rows={3}
           className="textarea mt-1 w-full"
-          disabled={finalize.isPending}
-        />
-      </label>
-
-      <label className="mt-3 block">
-        <span className="block text-sm font-medium">
-          DOI{" "}
-          <span className="font-normal" style={{ color: "var(--muted)" }}>
-            (optional)
-          </span>
-        </span>
-        <input
-          type="text"
-          value={values.release_doi}
-          onChange={(e) =>
-            setValues((v) => ({ ...v, release_doi: e.target.value }))
-          }
-          className="input mt-1 w-full"
           disabled={finalize.isPending}
         />
       </label>
