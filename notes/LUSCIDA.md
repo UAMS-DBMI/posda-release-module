@@ -236,8 +236,14 @@ lost:
       The UI drops the field (create, edit modal), the list column and search
       hint, and the page's metadata strip; an existing value is kept on save.
       The prefix strip is set aside until the DOI comes back.
-- [ ] WP "Create new" from Setup: prefill the title (and slug) from the
+- [x] WP "Create new" from Setup: prefill the title (and slug) from the
       dataset's short name / the recordset name. It was meant to and didn't.
+      Done 2026-11-17 (`WpLinkModal` `defaultTitle` / `slugPrefix`, filled on
+      switching to Create New while the title is empty). Dataset: title = the
+      dataset name. Recordset (a Download): title = the recordset name, slug =
+      the dataset's live WP slug (or the slugified dataset name if the
+      collection isn't linked) + the slugified title. Same on the dataset and
+      recordset pages' WordPress control.
 - [ ] QC: stop auto-assigning the first review to its creator. The release-stage
       review is normally done by another team.
 - [x] Split modal: the slice-count input is too sensitive (it jumped to 15).

@@ -346,6 +346,7 @@ export default function DatasetDetail() {
             typeOptions={[
               wpTypeOptionForDataset(dataset?.dataset_type_name ?? ""),
             ]}
+            defaultTitle={dataset?.dataset_name}
           />
         }
       />

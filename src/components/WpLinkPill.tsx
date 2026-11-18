@@ -120,6 +120,9 @@ type WpLinkPillProps = {
   posdaObjectType: PosdaObjectType;
   posdaObjectId: number | undefined;
   typeOptions: WpObjectTypeOption[];
+  /** Passed to the modal's Create New. */
+  defaultTitle?: string;
+  slugPrefix?: string;
 };
 
 /** Compact WordPress link control for a detail page header: state badge plus
@@ -129,6 +132,8 @@ export default function WpLinkPill({
   posdaObjectType,
   posdaObjectId,
   typeOptions,
+  defaultTitle,
+  slugPrefix,
 }: WpLinkPillProps) {
   const [showModal, setShowModal] = useState(false);
   const { data: map, isLoading } = useWpMap(posdaObjectType, posdaObjectId);
@@ -186,6 +191,8 @@ export default function WpLinkPill({
         posdaObjectType={posdaObjectType}
         posdaObjectId={posdaObjectId}
         typeOptions={typeOptions}
+        defaultTitle={defaultTitle}
+        slugPrefix={slugPrefix}
       />
     </div>
   );
