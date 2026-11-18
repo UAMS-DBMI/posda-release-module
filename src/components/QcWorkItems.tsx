@@ -5,6 +5,8 @@ import { useAssignmentQueue, useMyFlags, useResolveFlag } from "@/lib/useQc";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import DynamicTable from "@/components/DynamicTable";
+import QcSliceActions from "@/components/qc/QcSliceActions";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 import { LoadingState } from "@/components/ui/Spinner";
@@ -103,7 +105,7 @@ export default function QcWorkItems() {
       */}
 
       <CardHeader className="mt-6 mb-0">
-        <CardTitle>My QC Queue</CardTitle>
+        <CardTitle>My QC</CardTitle>
         <LinkButton href="/qc/queue" size="sm">
           Pickup Queue
         </LinkButton>
@@ -116,28 +118,53 @@ export default function QcWorkItems() {
           </p>
         )}
         {myActive.length > 0 && (
-          <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
-            {myActive.map((a) => (
-              <li
-                key={a.assignment_id}
-                className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0"
-              >
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <DynamicTable
+            rows={myActive}
+            getRowKey={(row) => row.assignment_id}
+            hideSummary
+            columns={[
+              { key: "dataset_name", label: "Dataset", render: (v) => (v as string | null) ?? "—" },
+              { key: "recordset_name", label: "Recordset" },
+              {
+                key: "qc_review_id",
+                label: "Review",
+                render: (v) => (
                   <Link
-                    to={`/qc/reviews/${a.qc_review_id}`}
+                    to={`/qc/reviews/${v}`}
                     className="font-medium hover:text-accent"
                     style={{ color: "var(--accent)" }}
                   >
-                    {a.recordset_name} — {a.review_type} #{a.qc_review_id}
+                    #{String(v)}
                   </Link>
-                  <StatusBadge status={a.assignment_status} />
-                </div>
-                <span className="shrink-0 text-xs" style={{ color: "var(--muted)" }}>
-                  {a.series_approved}/{a.series_total} approved
-                </span>
-              </li>
-            ))}
-          </ul>
+                ),
+              },
+              {
+                key: "assignment_status",
+                label: "Status",
+                render: (v) => <StatusBadge status={String(v)} />,
+              },
+              {
+                key: "series_approved",
+                label: "Progress",
+                sortable: false,
+                render: (_v, a) => `${a.series_approved}/${a.series_total} approved`,
+              },
+              {
+                key: "assignment_id",
+                label: "",
+                sortable: false,
+                render: (_v, a) => (
+                  <QcSliceActions
+                    reviewOnly
+                    reviewId={String(a.qc_review_id)}
+                    assignment={a}
+                    reviewType={a.review_type}
+                    reviewStatus={a.review_status}
+                  />
+                ),
+              },
+            ]}
+          />
         )}
       </SectionCard>
     </>

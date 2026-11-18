@@ -67,6 +67,9 @@ export function useFavorites(): FavoritesResult {
         ...prev,
         { ...newFav, object_name: newFav.object_name || objectName },
       ]);
+      // The POST row lacks the parent dataset and updated date the Dashboard
+      // shows, so refetch the full list rather than wait for it to go stale.
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
     },
   });
 

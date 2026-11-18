@@ -99,9 +99,19 @@ export type CreateQcReviewBody = {
   assign_to_caller?: boolean;
 };
 
-export type CloneQcReviewBody = {
-  mode?: "carry_forward" | "resample";
-  review_notes?: string | null;
+/** A slice a sync can send its added / changed units to (an unfinished one). */
+export type QcSyncTarget = {
+  assignment_id: number;
+  assigned_to: number | null;
+  assignment_status: string;
+  unit_count: number;
+};
+
+/** What a sync would do: the stale counts, the slices it can combine into, and
+ *  the slices it would delete if the work goes to a new slice. */
+export type QcSyncPreview = QcStaleBreakdown & {
+  targets: QcSyncTarget[];
+  emptied_assignment_ids: number[];
 };
 
 export const qcKeys = {
@@ -203,21 +213,35 @@ export function useCancelQcReview(reviewId: string | undefined) {
   });
 }
 
-/** Clone a review (carry_forward or resample). Returns the new review. */
-export function useCloneQcReview(reviewId: string | undefined) {
+/** What syncing a stale review would do. Fetched only while the Sync modal is
+ *  open, so the counts are current when the curator acts. */
+export function useQcSyncPreview(reviewId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: [...qcKeys.review(reviewId ?? ""), "sync-preview"],
+    enabled: Boolean(reviewId) && enabled,
+    queryFn: () =>
+      apiFetch<ItemEnvelope<QcSyncPreview>>(
+        `${BASE}/qc/reviews/${reviewId}/sync-preview`,
+      ),
+    select: (env) => env.data,
+  });
+}
+
+/** Sync a stale review in place; null target = a new slice. */
+export function useSyncQcReview(reviewId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: CloneQcReviewBody) =>
+    mutationFn: (body: { target_assignment_id: number | null }) =>
       apiFetch<ItemEnvelope<{ review: QcReviewRow }>>(
-        `${BASE}/qc/reviews/${reviewId}/clone`,
+        `${BASE}/qc/reviews/${reviewId}/sync`,
         { method: "POST", body: JSON.stringify(body) },
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["qc-reviews"] });
-      // The clone brings its own assignment, and retires the source as
-      // 'replaced' -- refresh both, or the new row shows no assignment line.
+      // A sync can add, empty or delete slices and move units between them.
       void queryClient.invalidateQueries({ queryKey: ["qc-assignments"] });
       void queryClient.invalidateQueries({ queryKey: ["qc-review"] });
+      void queryClient.invalidateQueries({ queryKey: ["qc-review-files"] });
       // The cycle payload embeds a QC rollup per recordset, which drives the
       // Verify summary, the publish gate and the next-action banner. Any change
       // to a review or its units moves those numbers.
@@ -243,19 +267,51 @@ function useReviewInvalidation(reviewId: string | undefined) {
   };
 }
 
-/** Split / rebalance a review across N slices (by count or by user_ids). */
-export function useSplitReview(reviewId: string | undefined) {
+/** Split one unfinished slice into `count`: it keeps its decided series and
+ *  reviewer plus an even share of its pending ones; `assignees` names a
+ *  reviewer (or null, unclaimed) for each of the `count - 1` new slices. */
+export function useSplitQcAssignment(reviewId: string | undefined) {
   const invalidate = useReviewInvalidation(reviewId);
   return useMutation({
-    mutationFn: (body: {
-      user_ids?: number[];
-      count?: number;
-      force?: boolean;
+    mutationFn: ({
+      assignmentId,
+      ...body
+    }: {
+      assignmentId: number;
+      count: number;
+      assignees: (number | null)[];
     }) =>
-      apiFetch<ListEnvelope<QcAssignment>>(
-        `${BASE}/qc/reviews/${reviewId}/split`,
+      apiFetch<ItemEnvelope<{ assignments: QcAssignment[]; new_assignment_ids: number[] }>>(
+        `${BASE}/qc/assignments/${assignmentId}/split`,
         { method: "POST", body: JSON.stringify(body) },
       ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Move one unfinished slice's pending series (and its decided ones, with
+ *  `include_decided`) into another; the source is deleted if left empty. */
+export function useCombineQcAssignment(reviewId: string | undefined) {
+  const invalidate = useReviewInvalidation(reviewId);
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+      ...body
+    }: {
+      assignmentId: number;
+      target_assignment_id: number;
+      include_decided: boolean;
+    }) =>
+      apiFetch<
+        ItemEnvelope<{
+          assignments: QcAssignment[];
+          moved: number;
+          deleted_assignment_ids: number[];
+        }>
+      >(`${BASE}/qc/assignments/${assignmentId}/combine`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
     onSuccess: invalidate,
   });
 }

@@ -27,6 +27,10 @@ type WpLinkModalProps = {
   /** Offered in Link Existing while the search box is empty. */
   suggestions?: WpSearchResult[];
   suggestionsLabel?: string;
+  /** Prefills Create New's title (and so its slug) when the title is empty. */
+  defaultTitle?: string;
+  /** Leads the generated slug, e.g. a Download's dataset slug. */
+  slugPrefix?: string;
 };
 
 function slugify(title: string): string {
@@ -90,6 +94,8 @@ export default function WpLinkModal({
   subject,
   suggestions = [],
   suggestionsLabel = "Suggestions",
+  defaultTitle = "",
+  slugPrefix = "",
 }: WpLinkModalProps) {
   const { addToast } = useToast();
   const [mode, setMode] = useState<"link" | "create" | "unlink">("link");
@@ -147,6 +153,18 @@ export default function WpLinkModal({
     const timer = setTimeout(() => void runSearch(term), 300);
     return () => clearTimeout(timer);
   }, [mode, term, runSearch]);
+
+  function slugFor(text: string): string {
+    return [slugify(slugPrefix), slugify(text)].filter(Boolean).join("-");
+  }
+
+  function openCreate() {
+    setMode("create");
+    if (!title && defaultTitle) {
+      setTitle(defaultTitle);
+      if (!slugEdited) setSlug(slugFor(defaultTitle));
+    }
+  }
 
   function reset() {
     latestSearch.current++;
@@ -263,7 +281,7 @@ export default function WpLinkModal({
             size="sm"
             variant={mode === "create" ? "primary" : "ghost"}
             className={mode === "create" ? undefined : "bg-transparent!"}
-            onClick={() => setMode("create")}
+            onClick={openCreate}
           >
             Create New
           </Button>
@@ -377,7 +395,7 @@ export default function WpLinkModal({
                 value={title}
                 onChange={(e) => {
                   setTitle(e.target.value);
-                  if (!slugEdited) setSlug(slugify(e.target.value));
+                  if (!slugEdited) setSlug(slugFor(e.target.value));
                 }}
                 placeholder="Title for the new WordPress draft"
                 className="input mt-1 w-full"

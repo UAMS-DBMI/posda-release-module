@@ -420,6 +420,12 @@ export default function SetupStage() {
         }`}
         suggestions={cycle.orphaned_downloads}
         suggestionsLabel="Unlinked downloads on this dataset's WordPress page"
+        defaultTitle={
+          cycle.recordsets.find((r) => r.recordset_id === wpRecordsetId)?.recordset_name
+        }
+        // A Download's slug leads with its dataset's: the live WP slug once the
+        // collection is linked, else the dataset name.
+        slugPrefix={collectionObject?.slug ?? cycle.dataset_name}
       />
 
       <WpLinkModal
@@ -429,6 +435,7 @@ export default function SetupStage() {
         posdaObjectId={datasetId ? Number(datasetId) : undefined}
         typeOptions={[wpTypeOptionForDataset(cycle.dataset_type_name)]}
         subject={`Dataset · ${cycle.dataset_name}`}
+        defaultTitle={cycle.dataset_name}
       />
     </div>
   );

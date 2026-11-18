@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { isRetiredReview, useQcReview, useUpdateQcReview } from "@/lib/useQc";
 import { useUsers } from "@/lib/useUsers";
 import QcAssignments from "@/components/qc/QcAssignments";
@@ -21,7 +21,6 @@ function fmt(value?: string | null) {
 }
 
 export default function QcReviewDetail() {
-  const navigate = useNavigate();
   const { addToast } = useToast();
   const userMap = useUsers();
   const { review_id: reviewId } = useParams<{ review_id: string }>();
@@ -70,7 +69,6 @@ export default function QcReviewDetail() {
     reviewId: reviewId ?? "",
     review,
     stale,
-    onCloned: (id: number) => navigate(`/qc/reviews/${id}`),
   });
 
   async function saveNotes() {

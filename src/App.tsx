@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { ToastProvider } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
@@ -137,7 +137,10 @@ export default function App() {
         <Route path="datasets">
           <Route index element={<DatasetsList />} />
           <Route path="create" element={<DatasetCreate />} />
-          <Route path=":dataset_id" element={<DatasetById />} />
+          {/* A dataset opens on its release cycle; the details page has its own
+              path, reached from the cycle's Dataset Details button. */}
+          <Route path=":dataset_id" element={<Navigate to="cycle" replace />} />
+          <Route path=":dataset_id/details" element={<DatasetById />} />
           {/* Two forms of the same workspace. The pinned form is canonical --
               it keeps a shipping release reachable after the next cycle starts.
               The bare form is the entry point that resolves the latest release

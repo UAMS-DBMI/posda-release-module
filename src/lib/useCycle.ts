@@ -819,7 +819,7 @@ function stageMessage(
     case "verify": {
       const stale = withDraft.reduce((n, r) => n + r.qc.stale, 0);
       if (stale > 0) {
-        return `${plural(stale, "QC review")} went stale — the draft changed after sampling, so re-clone to pick up the new files.`;
+        return `${plural(stale, "QC review")} went stale — the draft changed after sampling, so sync to pick up the new files.`;
       }
       const noReviews = withDraft.filter((r) => r.qc.reviews_total === 0).length;
       if (noReviews > 0) {

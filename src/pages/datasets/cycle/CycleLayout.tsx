@@ -135,7 +135,7 @@ export default function CycleLayout() {
             ? [
                 {
                   label: data?.dataset_name ?? `Dataset ${datasetId}`,
-                  href: `/datasets/${datasetId}`,
+                  href: `/datasets/${datasetId}/details`,
                 },
               ]
             : []),
@@ -150,7 +150,7 @@ export default function CycleLayout() {
         }
         actions={
           datasetId ? (
-            <LinkButton size="sm" variant="ghost" href={`/datasets/${datasetId}`}>
+            <LinkButton size="sm" variant="ghost" href={`/datasets/${datasetId}/details`}>
               Dataset Details
             </LinkButton>
           ) : undefined

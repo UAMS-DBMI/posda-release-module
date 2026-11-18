@@ -1,4 +1,4 @@
-# TECH_DEBT.md — posda-remote-module
+# TECH_DEBT.md — posda-release-module
 
 Running log of shortcuts taken, deferred cleanup, and known rough edges.
 Each entry: what, why it was deferred, and what "done" looks like.

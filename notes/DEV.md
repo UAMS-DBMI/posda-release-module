@@ -1,4 +1,4 @@
-# DEV.md — posda-remote-module
+# DEV.md — posda-release-module
 
 Active development notes: in-flight feature checklists, decisions, and the
 workstream history. See [../CLAUDE.md](../CLAUDE.md) for the system overview,
@@ -12,6 +12,30 @@ behavioral guidelines, and links to the other notes files.
 > **Status: DISCUSSION ONLY — nothing below is approved for implementation yet.**
 >
 > **Sequencing (top to bottom):**
+
+### 🔁 QC Sync: stale reviews updated in place (2026-11-17 → in progress)
+
+Goal: a review whose draft gains, changes or loses files is brought up to date
+in place (new units to a target slice, changed ones back to pending, removed
+ones deleted), replacing Clone in the UI. Design, decisions and the step plan
+live in [LUSCIDA.md](LUSCIDA.md) §4, §5 and §7.
+
+- [x] Step 1, backend Sync (oneposda): `qc_sync_plan`,
+      `GET /qc/reviews/{id}/sync-preview`, `POST /qc/reviews/{id}/sync`; review
+      detail's stale breakdown uses the plan. ⚠ New API endpoints, no schema
+      change. Tested 2026-11-17 on throwaway rows.
+- [x] Step 2, UI: Sync replaces Clone. Checked in the app 2026-11-17.
+- [x] Step 3, Mirabelle: title-case statuses (deploy before step 4). Checked
+      2026-11-17.
+- [x] Step 4, UI: Review link lands on `/*/Pending/All` (`/*/All/All` for a
+      finished slice). Checked 2026-11-17; deploys with step 3.
+- [ ] Step 5, LUSCIDA test
+- [x] Step 6, backend: split one slice / combine two
+      (`POST /qc/assignments/{id}/split`, `.../combine`). Finished slices and
+      decided units stay put. ⚠ New API endpoints, no schema change.
+      Design in [LUSCIDA.md](LUSCIDA.md) §8. Tested 2026-11-17.
+- [x] Step 7, UI: per-slice Split / Combine in the Manage modal, replacing
+      the whole-review Split. Checked in the app 2026-11-17.
 
 ### 🔁 Verify stage + QC lifecycle rework (2026-10-29 → in progress)
 

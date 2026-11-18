@@ -1,4 +1,4 @@
-# CLAUDE.md — posda-remote-module
+# CLAUDE.md — posda-release-module
 
 Working notes for AI/dev collaboration on the POSDA Release & Distribution UI.
 This file holds the system overview, conventions, and general behavioral
@@ -16,6 +16,9 @@ guidelines. Active feature work, decisions, and checklists live in `notes/`:
   ZIPs, `transfer_crdc`, the data models, download-manifest formats
 - [notes/CYCLE_WIZARD.md](notes/CYCLE_WIZARD.md) — the guided release cycle:
   routes-as-stages, modals-as-actions, shared form modules, step plan
+- [notes/LUSCIDA.md](notes/LUSCIDA.md) — a dataset whose recordsets gain files
+  while QC is in progress: why Clone breaks active slices, the in-place Sync
+  proposal (new files → new slice), walkthrough follow-ups
 
 ## Behavioral Guidelines
 
@@ -113,7 +116,7 @@ releases, drafts, QC reviews, and multi-destination data transfers in POSDA.
 It is a thin client over the PAPI (FastAPI) backend that lives in the sibling
 `oneposda` repo.
 
-- **Frontend:** this repo (`posda-remote-module`), branch `dev`.
+- **Frontend:** this repo (`posda-release-module`), branch `dev`.
 - **Backend + DB:** `../oneposda` — FastAPI routes and Postgres migrations.
 
 ### ⭐ Main data-model DDL script

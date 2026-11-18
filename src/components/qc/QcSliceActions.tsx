@@ -202,7 +202,9 @@ export default function QcSliceActions({
             <ExternalLinkButton
               size="xs"
               variant="ghost"
-              href={`/mira/qc/assignments/${assignment.assignment_id}`}
+              // Land on the first pending series (after a sync, the new work);
+              // a finished slice has none, so it opens on all its series.
+              href={`/mira/qc/assignments/${assignment.assignment_id}/*/${sliceDone ? "All" : "Pending"}/All`}
               title="Review this slice's series in Mirabelle"
             >
               Review

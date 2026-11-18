@@ -202,7 +202,7 @@ export default function DatasetsList() {
     {
       key: "search",
       label: "Search",
-      placeholder: "DOI, name, or type",
+      placeholder: "Name or type",
       srOnlyLabel: true,
       className: "text-sm",
       controlClassName: "input-transparent",
@@ -297,7 +297,6 @@ export default function DatasetsList() {
               columns={[
                 { key: "dataset_id", label: "ID" },
                 { key: "dataset_name", label: "Name" },
-                { key: "dataset_doi", label: "DOI" },
                 { key: "dataset_type_name", label: "Type" },
                 { key: "active", label: "Active" },
                 { key: "when_updated", label: "Updated" },

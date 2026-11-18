@@ -16,7 +16,7 @@ import { CardHeader, CardTitle, SectionCard } from "@/components/ui/Card";
 import { PageDetailHeader, PageShell } from "@/components/ui/Page";
 import { useFavorites } from "@/lib/useFavorites";
 import { useSetDraftStatus } from "@/lib/useCycle";
-import { useWpMap } from "@/lib/wpObjectMap";
+import { useWpMap, useWpObject } from "@/lib/wpObjectMap";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useDestinationLookups, useRecordset } from "@/lib/recordsetForm";
 import {
@@ -152,6 +152,13 @@ export default function RecordsetDetail() {
   const { data: wpMap } = useWpMap(
     "recordset",
     recordsetId ? Number(recordsetId) : undefined,
+  );
+  // The dataset's live WP slug leads a new Download's slug.
+  const { data: datasetWpMap } = useWpMap("dataset", recordset?.dataset_id);
+  const { data: datasetWpObject } = useWpObject(
+    "dataset",
+    recordset?.dataset_id,
+    Boolean(datasetWpMap),
   );
   const [draftsPage, setDraftsPage] = useState(1);
   const [draftsItemsPerPage, setDraftsItemsPerPage] = useState(4);
@@ -415,6 +422,8 @@ export default function RecordsetDetail() {
                 searchEndpoint: "manager/downloads",
               },
             ]}
+            defaultTitle={recordset?.recordset_name}
+            slugPrefix={datasetWpObject?.slug ?? recordset?.dataset_name ?? ""}
           />
         }
       />

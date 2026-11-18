@@ -31,7 +31,6 @@ export default function DatasetCreate() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
-    dataset_doi: "",
     dataset_type_id: "",
     dataset_name: "",
     active: true,
@@ -71,9 +70,6 @@ export default function DatasetCreate() {
     if (!formData.dataset_type_id) {
       nextFieldErrors.dataset_type_id = "Type is required.";
     }
-    if (!formData.dataset_doi.trim()) {
-      nextFieldErrors.dataset_doi = "DOI is required.";
-    }
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
       setSaveError("Please fix the highlighted fields.");
@@ -91,7 +87,6 @@ export default function DatasetCreate() {
         body: JSON.stringify({
           dataset_type_id: Number(formData.dataset_type_id),
           dataset_name: formData.dataset_name,
-          dataset_doi: formData.dataset_doi,
           active: formData.active,
         }),
       });
@@ -125,12 +120,7 @@ export default function DatasetCreate() {
   }
 
   const fields: Array<DynamicFormField<typeof formData>> = [
-    {
-      key: "dataset_doi",
-      label: "DOI",
-      required: true,
-      controlClassName: "mt-1 input",
-    },
+    // No DOI field until dataset DOIs are in use (WordPress holds it).
     {
       key: "dataset_type_id",
       label: "Type",

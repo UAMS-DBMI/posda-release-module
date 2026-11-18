@@ -14,8 +14,6 @@ type QcReviewModalProps = {
   /** Non-DICOM mode: no sampling (there are no series to sample), creates a
    *  review_type='non_dicom' review covering every non-DICOM file in the draft. */
   nonDicom?: boolean;
-  /** Claim the initial slice for the caller (first review on a draft). */
-  assignToCaller?: boolean;
   /** Fired after a successful create, in addition to the hook's own list
    *  invalidation — Verify uses it to refresh the cycle rollup. */
   onCreated?: () => void;
@@ -30,7 +28,6 @@ export default function QcReviewModal({
   draftId,
   defaultType = "full",
   nonDicom = false,
-  assignToCaller = false,
   onCreated,
 }: QcReviewModalProps) {
   const { addToast } = useToast();
@@ -60,7 +57,6 @@ export default function QcReviewModal({
         review_type: reviewType,
         sample_percentage: reviewType === "partial" ? pctNum : null,
         review_notes: notes.trim() || null,
-        assign_to_caller: assignToCaller,
       });
       toastSuccess(addToast, "QC review created.");
       onCreated?.();

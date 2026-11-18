@@ -145,11 +145,7 @@ export function recordsetFormFields({
       ],
       controlClassName: "mt-1 select",
     },
-    {
-      key: "recordset_doi",
-      label: "DOI",
-      controlClassName: "mt-1 input",
-    },
+    // No DOI field until recordset-level DOIs are in use (the dataset has one).
     {
       key: "active",
       label: "Active",
@@ -246,7 +242,7 @@ export function recordsetToFormValues(recordset: RecordsetRecord): RecordsetEdit
   };
 }
 
-/** Compact 2-column layout for the edit modal: Dataset, Name, DOI and Type
+/** Compact 2-column layout for the edit modal: Dataset, Name and Type
  *  each span both columns on their own row; Active sits on the last. */
 export function recordsetEditFormFields({
   recordsetTypes,
@@ -278,12 +274,7 @@ export function recordsetEditFormFields({
       className: "col-span-2 block",
       controlClassName: "mt-1 input",
     },
-    {
-      key: "recordset_doi",
-      label: "DOI",
-      className: "col-span-2 block",
-      controlClassName: "mt-1 input",
-    },
+    // No DOI field until recordset-level DOIs are in use (the dataset has one).
     {
       key: "recordset_type_id",
       label: "Type",
