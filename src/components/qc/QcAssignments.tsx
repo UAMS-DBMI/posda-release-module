@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { useSplitReview, type QcAssignment, type QcReviewType } from "@/lib/useQc";
+import {
+  useCombineQcAssignment,
+  useSplitQcAssignment,
+  type QcAssignment,
+  type QcReviewType,
+} from "@/lib/useQc";
 import { useUsers } from "@/lib/useUsers";
 import DynamicTable from "@/components/DynamicTable";
 import QcSliceActions from "@/components/qc/QcSliceActions";
@@ -10,11 +15,12 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess } from "@/components/toastHelpers";
 
-/** Assignment slices for a QC review: table + Split, with per-slice actions
- *  (Claim / Release / Reassign / Open) delegated to the shared `QcSliceActions`.
- *  Self-contained on `reviewId`; shared by the review-detail page and the cycle's
- *  Verify Manage modal. `onChanged` fires after any successful mutation so a host
- *  can refresh its own rollup. */
+/** Assignment slices for a QC review, with per-slice actions: Claim / Release /
+ *  Assign / Review (the shared `QcSliceActions`) plus Split and Combine. Split and
+ *  Combine work on one unfinished slice at a time and leave finished slices and
+ *  decided series where they are. Self-contained on `reviewId`; shared by the
+ *  review-detail page and the cycle's Verify Manage modal. `onChanged` fires after
+ *  any successful mutation so a host can refresh its own rollup. */
 export default function QcAssignments({
   reviewId,
   assignments,
@@ -30,37 +36,15 @@ export default function QcAssignments({
   /** Parent review's status, forwarded so terminal reviews hide claim/assign. */
   reviewStatus?: string;
   /** False for a terminal review (e.g. cancelled): the table is read-only —
-   *  no per-slice actions and no Split. */
+   *  no per-slice actions. */
   canManage?: boolean;
   onChanged?: () => void;
 }) {
   const { addToast } = useToast();
   const userMap = useUsers();
+  const split = useSplitQcAssignment(reviewId);
+  const combine = useCombineQcAssignment(reviewId);
 
-  const split = useSplitReview(reviewId);
-
-  // Every unit belongs to exactly one slice, so the slices sum to the review's
-  // total. A slice with no units can never be worked or completed, so N is
-  // capped at the unit count -- but N = 1 is always allowed, since that is the
-  // documented *merge* (and the only way to repair an over-split review).
-  const unitTotal = assignments.reduce((sum, a) => sum + a.series_total, 0);
-  const canSplit = unitTotal >= 1;
-
-  const [showSplit, setShowSplit] = useState(false);
-  const [splitMode, setSplitMode] = useState<"count" | "users">("count");
-  const [splitCount, setSplitCount] = useState("2");
-  const [splitUsers, setSplitUsers] = useState<Set<number>>(new Set());
-
-  // A rebalance only moves units, but it destroys the slice boundaries -- and
-  // with them the assignee of finished work. Completed slices are therefore
-  // off-limits; merely claimed ones can still be rebalanced (force is sent for
-  // those, which is what the API's guard asks for).
-  const hasCompletedWork = assignments.some(
-    (a) => a.assignment_status === "complete",
-  );
-  const hasActiveWork = assignments.some(
-    (a) => a.assignment_status === "in_progress",
-  );
   const users = useMemo(
     () =>
       Array.from(userMap.entries())
@@ -68,50 +52,88 @@ export default function QcAssignments({
         .sort((a, b) => a.name.localeCompare(b.name)),
     [userMap],
   );
+  const unfinished = assignments.filter((a) => a.assignment_status !== "complete");
+
+  // Split: the slice being split, the total slice count after it (original
+  // included), and a reviewer per new slice ("" = unclaimed).
+  const [splitSlice, setSplitSlice] = useState<QcAssignment | null>(null);
+  const [splitCount, setSplitCount] = useState(2);
+  const [splitAssignees, setSplitAssignees] = useState<string[]>([""]);
+
+  // Combine: the source slice, the chosen target, and whether decided series go too.
+  const [combineSlice, setCombineSlice] = useState<QcAssignment | null>(null);
+  const [combineTarget, setCombineTarget] = useState<number | null>(null);
+  const [includeDecided, setIncludeDecided] = useState(false);
+
+  function userName(id: number | null): string {
+    return id != null ? (userMap.get(id) ?? `User ${id}`) : "Unclaimed";
+  }
+
+  function openSplit(a: QcAssignment) {
+    setSplitSlice(a);
+    changeSplitCount(2);
+  }
+
+  function changeSplitCount(n: number) {
+    setSplitCount(n);
+    setSplitAssignees((prev) => Array.from({ length: n - 1 }, (_, i) => prev[i] ?? ""));
+  }
+
+  function openCombine(a: QcAssignment) {
+    const targets = unfinished.filter((t) => t.assignment_id !== a.assignment_id);
+    setCombineSlice(a);
+    setCombineTarget(targets.length === 1 ? targets[0].assignment_id : null);
+    setIncludeDecided(false);
+  }
 
   async function handleSplit() {
-    const body =
-      splitMode === "count"
-        ? { count: Number(splitCount) }
-        : { user_ids: [...splitUsers] };
+    if (!splitSlice) return;
     try {
-      await split.mutateAsync(hasActiveWork ? { ...body, force: true } : body);
-      toastSuccess(addToast, "Review split.");
-      setShowSplit(false);
-      setSplitUsers(new Set());
+      await split.mutateAsync({
+        assignmentId: splitSlice.assignment_id,
+        count: splitCount,
+        assignees: splitAssignees.map((u) => (u ? Number(u) : null)),
+      });
+      toastSuccess(addToast, `Slice #${splitSlice.assignment_id} split.`);
+      setSplitSlice(null);
       onChanged?.();
     } catch (e) {
-      toastError(addToast, e instanceof Error ? e.message : "Could not split review.");
+      toastError(addToast, e instanceof Error ? e.message : "Could not split slice.");
     }
   }
+
+  async function handleCombine() {
+    if (!combineSlice || combineTarget == null) return;
+    try {
+      await combine.mutateAsync({
+        assignmentId: combineSlice.assignment_id,
+        target_assignment_id: combineTarget,
+        include_decided: includeDecided,
+      });
+      toastSuccess(
+        addToast,
+        `Slice #${combineSlice.assignment_id} combined into #${combineTarget}.`,
+      );
+      setCombineSlice(null);
+      onChanged?.();
+    } catch (e) {
+      toastError(addToast, e instanceof Error ? e.message : "Could not combine slices.");
+    }
+  }
+
+  const splitDecided = splitSlice ? splitSlice.series_total - splitSlice.series_pending : 0;
+  const combineDecided = combineSlice
+    ? combineSlice.series_total - combineSlice.series_pending
+    : 0;
+  const combineTargets = combineSlice
+    ? unfinished.filter((t) => t.assignment_id !== combineSlice.assignment_id)
+    : [];
+  const combineDeletesSource = combineDecided === 0 || includeDecided;
 
   return (
     <>
       <CardHeader className="mt-6">
         <CardTitle>Assignments</CardTitle>
-        {canManage && (
-          <Button
-            size="sm"
-            onClick={() => {
-              // Open on a value the cap allows, so a 1-unit review lands on the
-              // merge rather than a disabled Split button.
-              setSplitCount(String(Math.min(2, unitTotal)));
-              setShowSplit(true);
-            }}
-            disabled={!canSplit || hasCompletedWork}
-            title={
-              hasCompletedWork
-                ? "This review has completed slices; re-splitting would discard who did the work."
-                : canSplit
-                  ? unitTotal === 1
-                    ? "Only a merge to 1 slice is possible: this review has 1 unit."
-                    : undefined
-                  : "This review has no units to split."
-            }
-          >
-            Split
-          </Button>
-        )}
       </CardHeader>
       <div>
         {assignments.length === 0 ? (
@@ -132,10 +154,7 @@ export default function QcAssignments({
               {
                 key: "assigned_to",
                 label: "Assignee",
-                render: (v) =>
-                  v != null
-                    ? (userMap.get(v as number) ?? `User ${v}`)
-                    : "Unclaimed",
+                render: (v) => userName(v as number | null),
               },
               {
                 key: "assignment_status",
@@ -162,13 +181,45 @@ export default function QcAssignments({
                   !canManage ? (
                     <span style={{ color: "var(--muted)" }}>—</span>
                   ) : (
-                    <QcSliceActions
-                      reviewId={reviewId}
-                      assignment={a}
-                      reviewType={reviewType}
-                      reviewStatus={reviewStatus}
-                      onChanged={onChanged}
-                    />
+                    <div className="flex flex-wrap gap-2">
+                      <QcSliceActions
+                        reviewId={reviewId}
+                        assignment={a}
+                        reviewType={reviewType}
+                        reviewStatus={reviewStatus}
+                        onChanged={onChanged}
+                      />
+                      {a.assignment_status !== "complete" && (
+                        <>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            onClick={() => openSplit(a)}
+                            disabled={a.series_pending < 2}
+                            title={
+                              a.series_pending < 2
+                                ? "A slice needs at least 2 pending series to split."
+                                : "Share this slice's pending series with new slices"
+                            }
+                          >
+                            Split
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            onClick={() => openCombine(a)}
+                            disabled={unfinished.length < 2}
+                            title={
+                              unfinished.length < 2
+                                ? "There's no other unfinished slice to combine into."
+                                : "Move this slice's series into another unfinished slice"
+                            }
+                          >
+                            Combine
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   ),
               },
             ]}
@@ -176,108 +227,170 @@ export default function QcAssignments({
         )}
       </div>
 
-      {/* Split */}
+      {/* Split one slice */}
       <Modal
-        open={showSplit}
-        onClose={() => setShowSplit(false)}
-        title="Split Review"
+        open={splitSlice != null}
+        onClose={() => setSplitSlice(null)}
+        title={splitSlice ? `Split Slice #${splitSlice.assignment_id}` : "Split Slice"}
         footer={
           <>
             <Button
               variant="ghost"
-              onClick={() => setShowSplit(false)}
+              onClick={() => setSplitSlice(null)}
               disabled={split.isPending}
             >
               Cancel
             </Button>
-            <Button
-              onClick={() => void handleSplit()}
-              loading={split.isPending}
-              disabled={
-                (splitMode === "users" &&
-                  (splitUsers.size < 1 || splitUsers.size > unitTotal)) ||
-                (splitMode === "count" &&
-                  (!Number.isFinite(Number(splitCount)) ||
-                    Number(splitCount) < 1 ||
-                    Number(splitCount) > unitTotal))
-              }
-            >
+            <Button onClick={() => void handleSplit()} loading={split.isPending}>
               Split
             </Button>
           </>
         }
       >
-        <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-          Splitting rebalances the whole review across new slices, evenly per
-          modality. This replaces the current slices.{" "}
-          {`At most ${unitTotal} slice${unitTotal === 1 ? "" : "s"}`} — one per
-          unit — since an empty slice can never be completed. Splitting into 1
-          slice merges the review back together.
-        </p>
-        {hasActiveWork && (
-          <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-            Some slices are already in progress — splitting will reassign that
-            work.
-          </p>
-        )}
-        <div className="mt-4 space-y-3 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="split-mode"
-              checked={splitMode === "count"}
-              onChange={() => setSplitMode("count")}
-            />
-            <span>Into</span>
-            <input
-              type="number"
-              min={1}
-              max={unitTotal}
-              value={splitCount}
-              onChange={(e) => setSplitCount(e.target.value)}
-              className="input w-20"
-              disabled={splitMode !== "count"}
-            />
-            <span>unclaimed slices</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="split-mode"
-              checked={splitMode === "users"}
-              onChange={() => setSplitMode("users")}
-            />
-            <span>Assign to reviewers</span>
-          </label>
-          {splitMode === "users" && (
-            <div
-              className="max-h-48 overflow-y-auto rounded border p-2"
-              style={{ borderColor: "var(--border-strong)" }}
-            >
-              {users.length === 0 ? (
-                <p style={{ color: "var(--muted)" }}>No reviewers available.</p>
-              ) : (
-                users.map((u) => (
-                  <label key={u.id} className="flex items-center gap-2 py-1">
-                    <input
-                      type="checkbox"
-                      checked={splitUsers.has(u.id)}
-                      onChange={() =>
-                        setSplitUsers((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(u.id)) next.delete(u.id);
-                          else next.add(u.id);
-                          return next;
-                        })
-                      }
-                    />
-                    <span>{u.name}</span>
-                  </label>
-                ))
-              )}
+        {splitSlice && (
+          <>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm" style={{ color: "var(--muted)" }}>
+              <li>
+                Slice #{splitSlice.assignment_id} keeps
+                {splitSlice.assigned_to != null &&
+                  ` its reviewer (${userName(splitSlice.assigned_to)}),`}{" "}
+                its link
+                {splitDecided > 0 && `, its ${splitDecided} decided series`} and an even
+                share of its {splitSlice.series_pending} pending series.
+              </li>
+              <li>The new slices take the rest, evenly per modality.</li>
+              <li>Other slices aren't touched.</li>
+            </ul>
+            {splitSlice.assigned_to != null && (
+              <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                {userName(splitSlice.assigned_to)} may need to reload Mirabelle: a
+                decision on a series that has moved won't save.
+              </p>
+            )}
+            <label className="mt-4 flex items-center gap-2 text-sm">
+              <span className="font-medium">Split into</span>
+              <select
+                value={splitCount}
+                onChange={(e) => changeSplitCount(Number(e.target.value))}
+                className="select w-20"
+              >
+                {Array.from({ length: splitSlice.series_pending - 1 }, (_, i) => i + 2).map(
+                  (n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ),
+                )}
+              </select>
+              <span>slices, including this one</span>
+            </label>
+            <div className="mt-3 space-y-2 text-sm">
+              {splitAssignees.map((u, i) => (
+                <label key={i} className="flex items-center gap-2">
+                  <span className="w-24">New slice {i + 1}</span>
+                  <select
+                    value={u}
+                    onChange={(e) =>
+                      setSplitAssignees((prev) =>
+                        prev.map((v, j) => (j === i ? e.target.value : v)),
+                      )
+                    }
+                    className="select flex-1"
+                  >
+                    <option value="">Unclaimed</option>
+                    {users.map((usr) => (
+                      <option key={usr.id} value={usr.id}>
+                        {usr.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
             </div>
-          )}
-        </div>
+          </>
+        )}
+      </Modal>
+
+      {/* Combine one slice into another */}
+      <Modal
+        open={combineSlice != null}
+        onClose={() => setCombineSlice(null)}
+        title={
+          combineSlice ? `Combine Slice #${combineSlice.assignment_id}` : "Combine Slice"
+        }
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setCombineSlice(null)}
+              disabled={combine.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCombine()}
+              loading={combine.isPending}
+              disabled={combineTarget == null}
+            >
+              Combine
+            </Button>
+          </>
+        }
+      >
+        {combineSlice && (
+          <>
+            <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
+              Its {combineSlice.series_pending} pending series move to the slice you
+              pick.
+              {combineDecided > 0 &&
+                ` Its ${combineDecided} decided series stay with it unless you bring them too.`}
+            </p>
+            <fieldset className="mt-4 space-y-2 text-sm">
+              <legend className="mb-1 font-medium">Combine into</legend>
+              {combineTargets.map((t) => (
+                <label key={t.assignment_id} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="combine-target"
+                    checked={combineTarget === t.assignment_id}
+                    onChange={() => setCombineTarget(t.assignment_id)}
+                  />
+                  <span>
+                    Slice #{t.assignment_id} · {userName(t.assigned_to)} · {t.series_total}{" "}
+                    series
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {combineDecided > 0 && (
+              <label className="mt-4 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={includeDecided}
+                  onChange={(e) => setIncludeDecided(e.target.checked)}
+                />
+                <span>Bring decided series too</span>
+              </label>
+            )}
+            {combineDeletesSource ? (
+              <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+                Slice #{combineSlice.assignment_id} will be deleted: none of its series
+                remain in it.
+              </p>
+            ) : (
+              <p className="mt-3 text-sm" style={{ color: "var(--muted)" }}>
+                Slice #{combineSlice.assignment_id} keeps its decided series and its
+                reviewer, and is then complete.
+              </p>
+            )}
+            {combineSlice.assigned_to != null && (
+              <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                {userName(combineSlice.assigned_to)} may need to reload Mirabelle: a
+                decision on a series that has moved won't save.
+              </p>
+            )}
+          </>
+        )}
       </Modal>
     </>
   );

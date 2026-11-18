@@ -34,8 +34,8 @@ live in [LUSCIDA.md](LUSCIDA.md) §4, §5 and §7.
       (`POST /qc/assignments/{id}/split`, `.../combine`). Finished slices and
       decided units stay put. ⚠ New API endpoints, no schema change.
       Design in [LUSCIDA.md](LUSCIDA.md) §8. Tested 2026-11-17.
-- [ ] Step 7, UI: per-slice Split / Combine in the Manage modal, replacing
-      the whole-review Split.
+- [x] Step 7, UI: per-slice Split / Combine in the Manage modal, replacing
+      the whole-review Split. Checked in the app 2026-11-17.
 
 ### 🔁 Verify stage + QC lifecycle rework (2026-10-29 → in progress)
 

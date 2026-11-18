@@ -267,19 +267,51 @@ function useReviewInvalidation(reviewId: string | undefined) {
   };
 }
 
-/** Split / rebalance a review across N slices (by count or by user_ids). */
-export function useSplitReview(reviewId: string | undefined) {
+/** Split one unfinished slice into `count`: it keeps its decided series and
+ *  reviewer plus an even share of its pending ones; `assignees` names a
+ *  reviewer (or null, unclaimed) for each of the `count - 1` new slices. */
+export function useSplitQcAssignment(reviewId: string | undefined) {
   const invalidate = useReviewInvalidation(reviewId);
   return useMutation({
-    mutationFn: (body: {
-      user_ids?: number[];
-      count?: number;
-      force?: boolean;
+    mutationFn: ({
+      assignmentId,
+      ...body
+    }: {
+      assignmentId: number;
+      count: number;
+      assignees: (number | null)[];
     }) =>
-      apiFetch<ListEnvelope<QcAssignment>>(
-        `${BASE}/qc/reviews/${reviewId}/split`,
+      apiFetch<ItemEnvelope<{ assignments: QcAssignment[]; new_assignment_ids: number[] }>>(
+        `${BASE}/qc/assignments/${assignmentId}/split`,
         { method: "POST", body: JSON.stringify(body) },
       ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Move one unfinished slice's pending series (and its decided ones, with
+ *  `include_decided`) into another; the source is deleted if left empty. */
+export function useCombineQcAssignment(reviewId: string | undefined) {
+  const invalidate = useReviewInvalidation(reviewId);
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+      ...body
+    }: {
+      assignmentId: number;
+      target_assignment_id: number;
+      include_decided: boolean;
+    }) =>
+      apiFetch<
+        ItemEnvelope<{
+          assignments: QcAssignment[];
+          moved: number;
+          deleted_assignment_ids: number[];
+        }>
+      >(`${BASE}/qc/assignments/${assignmentId}/combine`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
     onSuccess: invalidate,
   });
 }

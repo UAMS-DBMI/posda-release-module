@@ -228,7 +228,8 @@ lost:
       dataset's short name / the recordset name. It was meant to and didn't.
 - [ ] QC: stop auto-assigning the first review to its creator. The release-stage
       review is normally done by another team.
-- [ ] Split modal: the slice-count input is too sensitive (it jumped to 15).
+- [x] Split modal: the slice-count input is too sensitive (it jumped to 15).
+      Now a select, with the per-slice Split (§8 step 7).
 - [ ] Activity picker on Create Draft: hint to click the result below the
       search.
 - [ ] Draft row expand queries live and is slow. Worry at ~1M files.
@@ -437,5 +438,17 @@ slices or decided units unless asked.
         source stayed with its reviewer and went complete; with
         `include_decided` it was deleted. The whole-review split still
         deals 7 / 7 / 6 / 6.
-- [ ] 7. UI: per-slice Split and Combine in the Manage modal *(release
-      module)*.
+- [x] 7. UI: per-slice Split and Combine in the Manage modal *(release
+      module)*. Built and checked in the app 2026-11-17.
+      - As built: `QcAssignments` (the Manage modal and review detail) drops
+        the header Split and its modal; each unfinished slice row gets Split
+        (disabled under 2 pending series) and Combine (disabled when there's
+        no other unfinished slice). Split picks the slice count from a select
+        of 2 to the slice's pending count (replacing the number field that
+        jumped, §6) and a reviewer or Unclaimed per new slice. Combine lists
+        the other unfinished slices ("Slice #N · assignee · N series",
+        pre-selected when there's one), shows "Bring decided series too" only
+        when the slice has decided series, and says whether the slice will be
+        deleted or kept as complete. Both warn the reviewer of a claimed slice
+        to reload Mirabelle. `useSplitReview` is replaced by
+        `useSplitQcAssignment` / `useCombineQcAssignment`.
