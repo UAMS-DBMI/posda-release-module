@@ -36,7 +36,7 @@ live in [LUSCIDA.md](LUSCIDA.md) §4, §5 and §7.
       Design in [LUSCIDA.md](LUSCIDA.md) §8. Tested 2026-11-17.
 - [x] Step 7, UI: per-slice Split / Combine in the Manage modal, replacing
       the whole-review Split. Checked in the app 2026-11-17.
-- [ ] Mirabelle Next is slow on production since the 2026-11-17 deploy: about
+- [x] Mirabelle Next is slow on production since the 2026-11-17 deploy: about
       4 s waiting on `GET /qc/assignments/{id}/series/{uid}/files`
       (`fetch_assignment_series_files`). Two rewrites of that query
       (`1acb34ab`, `0d2ed33a`) made it 23 s, then 34.7 s, and are reverted in
@@ -45,6 +45,26 @@ live in [LUSCIDA.md](LUSCIDA.md) §4, §5 and §7.
       API sends parameters, and asyncpg switches a prepared statement to a
       generic plan after about 5 runs. Reproduce with `prepare`, then `execute`
       it 6+ times in one session, before changing code again.
+      **Cause found 2026-11-18:** not the plan, cold disk reads. DevTools
+      Resend of the same request takes 50 ms, while the first load takes 2.5 s.
+      A cold production `explain` spent 356 of 418 ms reading 622 pages, mostly
+      from `file_series`: `file_series_uid_idx` holds only the UID, so each row
+      in a series costs one table-page read (~0.6 ms cold). Reproduced locally
+      (1M junk rows, series scattered one row per page, DB restarted and OS
+      cache dropped): 276 reads → 7 with
+      `(series_instance_uid) include (file_id)` (index-only scan). Inserts:
+      ~1 µs/row extra if it replaces `file_series_uid_idx`. The new index is
+      ~4.5× larger locally (no btree dedup with `include`).
+      **Fixed 2026-11-18:** built on production by hand (no migration script),
+      `create index concurrently file_series_uid_file_id_idx on
+      public.file_series using btree (series_instance_uid) include (file_id)`,
+      in 11 min (table 53 GB, 303M rows). Cold series lookup: 425 reads,
+      255 ms → 27 reads, 2.2 ms. Mirabelle Next "so much faster". Remaining
+      cold cost: ~7 ms per file across `file_location`, `file_image`,
+      `image`, `file_sop_common`, `image_geometry` (PK lookups). If big
+      series still lag, the fix is a Mirabelle prefetch of the next series.
+      ⚠ Schema change: add the index to the DbSchema model.
+      `file_series_uid_idx` is now redundant; drop it once confirmed.
 
 ### 🔁 Verify stage + QC lifecycle rework (2026-10-29 → in progress)
 
