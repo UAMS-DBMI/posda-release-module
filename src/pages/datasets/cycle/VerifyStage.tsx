@@ -28,7 +28,7 @@ function qcStatus(qc: CycleQc): string {
 
 // A non-DICOM-only draft samples nothing (no series), so its "Add Review" opens
 // the modal in non-DICOM mode. Mixed / DICOM drafts get the full/partial form.
-type CreateTarget = { draftId: number; assignToCaller: boolean; nonDicom: boolean };
+type CreateTarget = { draftId: number; nonDicom: boolean };
 
 export default function VerifyStage() {
   const { cycle, datasetId } = useCycleContext();
@@ -143,11 +143,7 @@ export default function VerifyStage() {
                               disabled={!draftReady}
                               title={notReadyReason}
                               onClick={() =>
-                                setCreateFor({
-                                  draftId,
-                                  assignToCaller: false,
-                                  nonDicom: nonDicomOnly,
-                                })
+                                setCreateFor({ draftId, nonDicom: nonDicomOnly })
                               }
                             >
                               Add Review
@@ -158,11 +154,9 @@ export default function VerifyStage() {
                               disabled={!draftReady}
                               title={notReadyReason}
                               onClick={() =>
-                                setCreateFor({
-                                  draftId,
-                                  assignToCaller: true,
-                                  nonDicom: nonDicomOnly,
-                                })
+                                // Unclaimed, like every review: the release-stage
+                                // QC is normally done by another team.
+                                setCreateFor({ draftId, nonDicom: nonDicomOnly })
                               }
                             >
                               Start QC
@@ -189,7 +183,6 @@ export default function VerifyStage() {
         draftId={createFor ? String(createFor.draftId) : undefined}
         defaultType="full"
         nonDicom={createFor?.nonDicom ?? false}
-        assignToCaller={createFor?.assignToCaller ?? false}
         onCreated={() =>
           void queryClient.invalidateQueries({
             queryKey: ["dataset-cycle", datasetId ?? ""],

@@ -244,8 +244,10 @@ lost:
       the dataset's live WP slug (or the slugified dataset name if the
       collection isn't linked) + the slugified title. Same on the dataset and
       recordset pages' WordPress control.
-- [ ] QC: stop auto-assigning the first review to its creator. The release-stage
-      review is normally done by another team.
+- [x] QC: stop auto-assigning the first review to its creator. The release-stage
+      review is normally done by another team. Done 2026-11-17: Verify's Start
+      QC no longer sends `assign_to_caller`, so the first slice is unclaimed
+      (`needs_qc`) in the pickup queue like any other. The API option stays.
 - [x] Split modal: the slice-count input is too sensitive (it jumped to 15).
       Now a select, with the per-slice Split (§8 step 7).
 - [ ] Activity picker on Create Draft: hint to click the result below the
