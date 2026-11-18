@@ -158,8 +158,7 @@ export default function ReviewList({
             />
             <div>
               <Button
-                size="xs"
-                variant="ghost"
+                size="sm"
                 onClick={() => onManage(rev.qc_review_id)}
               >
                 Manage
