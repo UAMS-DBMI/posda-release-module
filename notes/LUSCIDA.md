@@ -225,9 +225,17 @@ lost:
       recordset page and is kept on save. The version DOI (`release_doi`) is
       gone too: no field in Finalize Release, no display in Bundle. The API
       types still carry it.
-- [ ] Dataset DOI: strip an `https://doi.org/` prefix if one is pasted.
+- [x] Dataset DOI: strip an `https://doi.org/` prefix if one is pasted.
       Reconsider whether the dataset needs a DOI at all, since WP has it. The DOI
       and the short name are the two values kept in both places.
+      Decided 2026-11-17: optional and hidden, like the recordset DOI. A dataset
+      may enter the module before its DOI is minted, and nothing downstream
+      reads the column (the IDC manifest takes the DOI from WP).
+      `20261117_01_dataset_doi_optional.sql` drops NOT NULL (unique kept); the
+      API stores a missing or blank DOI as null and a blank update clears it.
+      The UI drops the field (create, edit modal), the list column and search
+      hint, and the page's metadata strip; an existing value is kept on save.
+      The prefix strip is set aside until the DOI comes back.
 - [ ] WP "Create new" from Setup: prefill the title (and slug) from the
       dataset's short name / the recordset name. It was meant to and didn't.
 - [ ] QC: stop auto-assigning the first review to its creator. The release-stage

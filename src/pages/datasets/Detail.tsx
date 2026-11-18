@@ -281,7 +281,6 @@ export default function DatasetDetail() {
   const metadataStrip = dataset
     ? [
         `#${dataset.dataset_id}`,
-        dataset.dataset_doi,
         dataset.dataset_type_name,
         `updated ${new Date(dataset.when_updated).toLocaleDateString()} by ${
           userMap.get(dataset.who_updated) ?? "—"

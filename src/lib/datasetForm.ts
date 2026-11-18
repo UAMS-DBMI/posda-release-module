@@ -16,7 +16,7 @@ export type DatasetRecord = {
   dataset_type_id: number;
   /** Joined lookup label; present on reads, not needed for the edit form. */
   dataset_type_name?: string;
-  dataset_doi: string;
+  dataset_doi: string | null;
   dataset_name: string;
   active: boolean;
   when_created: string;
@@ -69,8 +69,8 @@ export function datasetToFormValues(dataset: DatasetRecord): DatasetFormValues {
 
 const PLACEHOLDER = { value: "", label: "--- Select a value ---" };
 
-/** Compact 2-column layout for the edit modal: Name and DOI each span both
- *  columns, Type + Active share a row. */
+/** Compact 2-column layout for the edit modal: Name spans both columns,
+ *  Type + Active share a row. */
 export function datasetFormFields(
   datasetTypes: DatasetType[],
 ): Array<DynamicFormField<DatasetFormValues>> {
@@ -82,13 +82,7 @@ export function datasetFormFields(
       className: "col-span-2 block",
       controlClassName: "mt-1 input",
     },
-    {
-      key: "dataset_doi",
-      label: "DOI",
-      required: true,
-      className: "col-span-2 block",
-      controlClassName: "mt-1 input",
-    },
+    // No DOI field until dataset DOIs are in use (WordPress holds it).
     {
       key: "dataset_type_id",
       label: "Type",
@@ -117,7 +111,6 @@ export function validateDatasetForm(values: DatasetFormValues): Record<string, s
   const errors: Record<string, string> = {};
   if (!values.dataset_name.trim()) errors.dataset_name = "Name is required.";
   if (!values.dataset_type_id) errors.dataset_type_id = "Type is required.";
-  if (!values.dataset_doi.trim()) errors.dataset_doi = "DOI is required.";
   return errors;
 }
 
