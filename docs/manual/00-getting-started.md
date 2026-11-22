@@ -55,13 +55,15 @@ The dashboard has three parts.
 
 <!-- ![Dashboard sections](images/getting-started/04-dashboard-sections.png) -->
 
-### My QC Queue
+### My QC
 
-QC reviews assigned to you that aren't complete yet, up to eight. Each line
-shows the recordset, the review type and number, its status, and how many
-series have been approved so far.
+The QC slices assigned to you that aren't complete yet, up to eight. The table
+shows each slice's **Dataset**, **Recordset**, **Review** number, **Status**,
+and **Progress** (*12/40 approved*).
 
-- Click a review to open it.
+- Click **Review** on a row to open that slice in Mirabelle, on its first
+  series still to decide.
+- Click the review number to open the review's page.
 - Click **Pickup Queue** to find unassigned QC work. See
   [QC queue & reviews](11-qc.md).
 
@@ -72,7 +74,8 @@ If nothing is assigned to you, it says *Nothing assigned to you*.
 Datasets and recordsets you've starred, most recently updated first. The
 recordset table also shows which dataset each one belongs to.
 
-- Click a row to open that dataset or recordset.
+- Click a row to open it. A dataset opens on its
+  [release cycle](04-cycle-overview.md); a recordset opens on its own page.
 - Click the filled star to remove it from your favorites.
 
 ## Adding a favorite

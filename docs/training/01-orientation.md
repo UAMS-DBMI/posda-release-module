@@ -15,13 +15,13 @@
 1. Sign in and find your dashboard.
 2. Switch to dark theme and back.
 3. Find the training dataset and add it to your favorites.
-4. On the dataset page, find how many recordsets it has and the latest release's
-   version and status.
-5. Open one recordset. Name its destinations and say which is the Default
+4. Open the dataset. Which stage of the cycle view does it open on, and what
+   does the next-action banner say?
+5. Open the dataset's details page. Find how many recordsets it has and the
+   latest release's version and status.
+6. Open one recordset. Name its destinations and say which is the Default
    Display.
-6. Find that recordset's latest release and its file count.
-7. Open the dataset's cycle view. Which stage does it open on, and what does the
-   next-action banner say?
+7. Find that recordset's latest release and its file count.
 8. In your own words: what's the difference between a recordset release and a
    dataset release?
 
@@ -41,13 +41,13 @@
 1. Open `/release/` after logging into Posda. The dashboard is the landing page.
 2. Click the sun/moon icon at the top right.
 3. **Datasets** → search for it → click the star on its row.
-4. Click the dataset. The **Recordsets** table lists them; the **Releases** table
-   shows versions, with the highest number being the latest.
-5. Click a recordset row → **Destinations** section. **Default Display: Yes**
+4. Click the dataset. It opens on the cycle view, on the first stage that isn't
+   done; the banner names what that stage needs.
+5. Click **Dataset Details**. The **Recordsets** table lists them; the
+   **Releases** table shows versions, with the highest number being the latest.
+6. Click a recordset row → **Destinations** section. **Default Display: Yes**
    marks the default.
-6. The recordset's **Releases** section → highest **Version** → **File Count**.
-7. Click **Release Cycle**. It opens on the first stage that isn't done; the
-   banner names what that stage needs.
+7. The recordset's **Releases** section → highest **Version** → **File Count**.
 8. A recordset release is one frozen version of *one* recordset. A dataset
    release is one version of the whole dataset, carrying one version of each of
    its recordsets: some new this cycle, some carried forward.

@@ -45,7 +45,7 @@ There are two tables.
 ## Adding a recordset
 
 1. Click **Create a Recordset**.
-2. Enter **Name** and **Type** (and **DOI** if there is one).
+2. Enter **Name** and **Type**.
 3. Click **Create Recordset**.
 
 The recordset is added to the table. See [Recordsets](03-recordsets.md) for
@@ -80,8 +80,9 @@ dataset's page.
 2. In **Link WordPress**, either:
    - **Link Existing**: type part of the page title, then click the matching
      result; or
-   - **Create New**: enter a **Title** (and optionally a **Slug**) to create a
-     new WordPress *draft* page and link it.
+   - **Create New**: creates a new WordPress *draft* page and links it. The
+     **Title** starts as the dataset name and the **Slug** follows it; change
+     either before you create.
 
 <!-- ![Link WordPress dialog](images/cycle-setup/03-wp-link.png) -->
 
@@ -97,7 +98,9 @@ link to an **Analysis Result** page.
    until the dataset itself is linked.
 2. **Link Existing** lists *Unlinked downloads on this dataset's WordPress page*
    before you type anything. Pick the right one, or search by title.
-   **Create New** makes a new draft download page instead.
+   **Create New** makes a new draft download page instead. Its **Title**
+   starts as the recordset name, and its **Slug** starts with the dataset's
+   WordPress slug, for example `my-collection-ct-images`.
 
 ## Unlinking
 

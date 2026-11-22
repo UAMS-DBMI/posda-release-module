@@ -29,7 +29,7 @@ a live release.
 
 ## Check your work
 
-- [ ] The dataset page's **Releases** table shows the new version as **live**
+- [ ] The dataset details page's **Releases** table shows the new version as **live**
 - [ ] The recordset you changed has a new version; the others don't
 - [ ] Every Transfer row shows delivered (IDC: **Processed**)
 - [ ] Every Disseminate row shows **Page updated**

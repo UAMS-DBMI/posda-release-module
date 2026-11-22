@@ -53,7 +53,7 @@ can't be changed. A correction means a new cycle.
 
 1. Click **Finalize Release**.
 2. Check the summary of every recordset version the release contains.
-3. Optionally add **Release Notes** and a **DOI**.
+3. Optionally add **Release Notes**.
 4. Click **Finalize**.
 
 <!-- ![Finalize dialog](images/cycle-bundle/03-finalize.png) -->
@@ -65,8 +65,6 @@ Finalize is blocked when:
   from the release, first.
 
 It warns, but doesn't block, if a frozen recordset is left out.
-
-<!-- Q: DOI format / who assigns it; see QUESTIONS.md Q10 -->
 
 After finalizing, the banner moves you on to [Transfer](09-cycle-transfer.md).
 
