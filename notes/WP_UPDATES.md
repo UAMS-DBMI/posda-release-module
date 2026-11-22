@@ -2,9 +2,11 @@
 
 What the TCIA WordPress site (Collection Manager / Pods) needs so that Posda's
 dataset and recordset versioning can drive it. Started 2026-09-24.
-**Direction agreed 2026-10-06 (Jeff's publish-to-master model, option A4); details
-pending a staging prototype.** See [section 11](#11-2026-10-06-meeting-direction);
-Michael's follow-up proposal is [section 12](#12-proposal-version-pods-at-both-levels).
+**Undecided (November follow-up meeting): Option 1, copy versions onto the live
+post, or Option 2, the live post points at a version.** See
+[section 12](#12-proposal-two-options-for-version-pods). The 2026-10-06 direction
+(Jeff's publish-to-master model, A4) is [section 11](#11-2026-10-06-meeting-direction);
+Option 1 is that model.
 Sections 5–8 are the options as first written up, kept for the record.
 
 Shared pages (private until shared from each page's Share menu):
@@ -12,7 +14,7 @@ Shared pages (private until shared from each page's Share menu):
   https://claude.ai/artifact/Trs8eft514uaTGGQKQHv5P
 - 2026-10-06 meeting: decision and open questions (section 11):
   https://claude.ai/artifact/NPsJ8om2gomw9s3oNQXyVk
-- Proposal: version pods at both levels (section 12):
+- Proposal: two options for version pods (section 12):
   https://claude.ai/artifact/AhVTpWqpsX2cDEKhag1Pf6
 
 Sources: the **Pods export** (Pods 2.9.19.5, taken 2026-09-24), live REST
@@ -32,7 +34,8 @@ responses from `https://www.cancerimagingarchive.net/api/v1/…`, and
 9. [Open questions](#9-open-questions)
 10. [Side notes on `wp.py`](#10-side-notes-on-oneposda-wppy)
 11. [2026-10-06 meeting: direction](#11-2026-10-06-meeting-direction)
-12. [Proposal: version pods at both levels](#12-proposal-version-pods-at-both-levels)
+12. [Proposal: two options for version pods](#12-proposal-two-options-for-version-pods)
+13. [Final solution (draft)](#13-final-solution-draft-version-pods-version-pages-preview)
 
 ---
 
@@ -694,390 +697,540 @@ Rejected: **A3's pointer** (see the note under section 7).
 
 ---
 
-## 12. Proposal: version pods at both levels
+## 12. Proposal: two options for version pods
 
-**Michael's proposal for the next discussion (2026-10-07).** It builds on the
-direction agreed in [section 11](#11-2026-10-06-meeting-direction) and answers
-open questions 3 (where recordset versions live) and, for now, 1 (version DOIs).
-Pod and field names are placeholders for Jeff to choose.
+**First proposed 2026-10-07; revised 2026-11-20 after a follow-up meeting.
+Still undecided between two options.** Examples use collections; analysis
+results get the same design ([12.3](#123-shared-analysis-results)). Pod and
+field names are placeholders.
 
-### 12.0 Two kinds of version
+- **Option 1 — copy to the live post.** Versions live in walled-off pods.
+  Publish copies them onto `tcia_collection`. Templates and API unchanged.
+- **Option 2 — the live post points at a version.** All fields live only on
+  the version. `tcia_collection` keeps identity and a `current_version`
+  pointer. Templates, API and search change.
 
-This proposal adds versions to **recordsets** (downloads) as well as datasets
-(collections). The two numbers are independent:
+Concerns raised at the follow-up meeting, which both options must meet:
+working versions walled off from the public while being edited; a submitter
+can review and approve before go-live; nothing crawled or indexed before
+release.
 
-- **Dataset version**: a version of the whole collection page, e.g.
-  **TCGA-XYZ v3**. Posda calls it a `dataset_release`.
-- **Recordset version**: a version of one download, e.g. **Clinical v2**. Posda
-  calls it a `recordset_release`.
+### 12.1 At a glance
 
-A dataset version is made of specific recordset versions. TCGA-XYZ v3 might be
-Imaging v1 + Clinical v2 + Pathology v1. A recordset that doesn't change keeps
-its version number and is carried into the next dataset version as-is. That's
-Tracy's example from the meeting: a collection at v15 whose pathology hasn't
-changed since collection v10.
-
-### 12.1 The idea in one picture
-
-Apply the pattern agreed for collections a second time, one level down. At both
-levels a **public, locked post is the anchor** that everything reads, and a
-**walled-off pod holds the versions** that curators edit. Publish to Live copies
-a version onto its anchor.
+Option 1: publish copies the version onto the live post.
 
 ```mermaid
 flowchart LR
-    subgraph walled["Walled off · curators + reviewers"]
-        CV["Dataset version<br/>TCGA-XYZ v3 (working)"]
-        DV["Recordset version<br/>Clinical v2 (working)"]
-    end
-    subgraph public["Public · locked · written only by Publish to Live"]
-        C["tcia_collection<br/>TCGA-XYZ"]
-        D["tcia_downloads<br/>Clinical"]
-    end
-    CV -- "publish: copy fields" --> C
-    DV -- "publish: copy fields" --> D
-    CV -. "contains" .-> DV
-    C -. "lists" .-> D
-    C --> R["templates · REST API · Data Explorer · Google"]
+    V["Collection Versions<br/>TCGA-XYZ v3<br/>all fields"] -- "Publish = copy every field" --> C["tcia_collection<br/>TCGA-XYZ<br/>full copy of v3"]
+    C --> R["live page · REST · search<br/>unchanged"]
 ```
 
-| Level | Anchor (public, locked) | Versions (walled off) |
+Option 2: the live post points at the version.
+
+```mermaid
+flowchart LR
+    R["live page · REST · search<br/>rewritten to follow the pointer"] --> C["tcia_collection<br/>TCGA-XYZ<br/>slug · DOI · current_version"]
+    C -- "current_version<br/>(Publish = move it)" --> V["Collection Versions<br/>TCGA-XYZ v3<br/>all fields"]
+```
+
+| | Option 1 · copy | Option 2 · pointer |
 |---|---|---|
-| Dataset | `tcia_collection` / `tcia_analysis_result` | **Collection Versions** / **Analysis Result Versions** (new clones) |
-| Recordset | `tcia_downloads` | **Download Versions** (new clone of `tcia_downloads`) |
+| Where fields live | on the version and copied to the live post | on the version only |
+| Templates | no change (optional "v2" labels) | Collection / Analysis Result Template A and list templates read through `current_version` |
+| REST API, Data Explorer, `wp.py` | no change | follow the pointer, or a compatibility endpoint returns the live version flattened |
+| Site search, caching | no change | index only released versions; clear cache when the pointer moves |
+| Working versions hidden by | the whole version pod is walled off | per-post status (draft / pending) plus `noindex` |
+| Publish | copy every field (one PHP transaction) | move one pointer, set v3 to published |
+| Rollback | republish the older version (copy again) | move the pointer back |
+| Old versions on the public site | a version picker renders them from the walled-off pod | every released version is a real public page |
+| Version DOI landing page | needs a third, public pod later | built in: the released version's own page |
+| Data stored twice | yes: every field, version + live post | no |
+| Migration | make one version post from each live post | move every field off each live post into a version post |
+| Jeff's work | 3 cloned pods, 3 hooks, lockdown, picker | Option 1's pods and hooks, plus templates, REST, search, migration |
+| Main risk | the copy and the version drift apart | size of the change; every consumer of the API is touched |
 
-Why an anchor at the recordset level: curators think of "the Clinical download"
-as one thing. Keeping `tcia_downloads` as that one thing, with its versions
-hanging off it, is what they'd expect, and it's the same pattern they'll use for
-collections. Nothing existing is repurposed; `versions` and `tcia_version_dnlds`
-retire (see [12.10](#1210-existing-data)).
+### 12.2 Shared: the version pods
 
-### 12.2 The pods
-
-```mermaid
-erDiagram
-    tcia_collection ||--o{ tcia_downloads : "collection_downloads (unchanged)"
-    tcia_collection ||--o{ collection_version : "anchor (one-way, NEW)"
-    collection_version }o--o{ download_version : "contains (NEW)"
-    tcia_downloads ||--o{ download_version : "anchor (one-way, NEW)"
-
-    tcia_collection {
-        text collection_doi "canonical DOI"
-        number version_number "dataset version now live"
-        any every_other_field "copied from the live dataset version"
-    }
-    collection_version {
-        any every_collection_field "cloned pod"
-        number version_number "NEW: dataset version"
-        date version_date "NEW"
-        wysiwyg version_change_log "NEW"
-        pick state "NEW: working, live, superseded"
-        wysiwyg reviewer_notes "NEW, never copied"
-    }
-    tcia_downloads {
-        number version_number "NEW: recordset version now live"
-        any every_download_field "copied from the live recordset version"
-    }
-    download_version {
-        any every_download_field "cloned pod"
-        number version_number "NEW: recordset version, set by Posda"
-        date version_date "NEW"
-        wysiwyg version_change_log "NEW"
-        pick state "NEW: working, released"
-    }
-```
-
-`collection_version` holds dataset versions; `download_version` holds recordset
-versions. Analysis results get the same pair (`tcia_analysis_result` ↔ Analysis
-Result Versions), with `result_downloads` and the reused `collection_downloads`
-both pointing at Download Versions on the version side.
-
-Changes to the cloned pods:
-- The downloads pick (`collection_downloads` / `result_downloads`) on a dataset
-  version points at **Download Versions**, not at `tcia_downloads`. A dataset
-  version must list recordset *versions*, or editing a download would rewrite
-  its history.
-- Every pick is **one-way**. If `program` or the related-collection picks stayed
-  two-way (sister) fields, working versions would appear on Program and
-  related-collection pages ([11.3 item 4](#113-open)).
-- New fields: the anchor link, version number, date and change log, a state,
-  and reviewer notes.
-
-The anchor pods (`tcia_collection`, `tcia_analysis_result`, `tcia_downloads`)
-change only in permissions, plus a `version_number` on `tcia_downloads` so the
-live page can show "Clinical v2". Curators can't edit anchors; only the publish
-hook writes to them.
-
-### 12.3 The rules
-
-1. **A dataset version lists recordset versions, never anchors.** The live
-   collection lists anchors, so templates and Data Explorer keep working
-   unchanged.
-2. **Every recordset version links its anchor.** This is the back-link that's
-   missing today between a version download and its download.
-3. **Only the publish hook writes to anchors.**
-4. **Anything an older dataset version uses is frozen.** The live dataset
-   version, and any recordset version used only by it, can be tweaked and
-   republished ("stone tablet") without a new version number. A recordset
-   version that an earlier dataset version also lists can't be edited, because
-   that would change the earlier one. Changing it means making the next
-   recordset version.
-
-A dataset version's states:
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> working: start dataset version
-    working --> live: Publish to Live
-    live --> live: tweak + republish
-    live --> superseded: a newer version goes live
-    superseded --> live: rollback (republish)
-```
-
-A recordset version is `working` until the first dataset version that contains
-it goes live, then `released`. Rule 4 decides whether a released one can still
-be tweaked.
-
-### 12.4 A dataset version's lifecycle
-
-```mermaid
-flowchart TB
-    S["1 · Start dataset version v3<br/>clone v2's record;<br/>same recordset versions"] --> E
-    E["2 · Edit page fields<br/>in the v3 record"] --> R
-    R{"3 · For each recordset"}
-    R -- unchanged --> K["keep its version<br/>(Imaging stays v1)"]
-    R -- changed --> N["new recordset version:<br/>clone it, swap it in, edit<br/>(Clinical v1 → v2)"]
-    R -- "new recordset" --> NN["its v1, with no anchor yet<br/>(Pathology v1)"]
-    R -- removed --> U["drop it from v3"]
-    K --> P
-    N --> P
-    NN --> P
-    U --> P
-    P["4 · Preview + review<br/>(non-public link)"] --> L["5 · Publish to Live"]
-    L --> T["6 · Optional: tweak + republish"]
-```
-
-- **A brand-new recordset** has no anchor until its first publish. The hook
-  creates the `tcia_downloads` post then, so nothing unreleased ever appears in
-  a public pod.
-- **A brand-new collection** works the same way: v1 is drafted as a dataset
-  version record, and the first publish creates the `tcia_collection` post.
-  (Today new collections are drafted in `tcia_collection` itself, with draft
-  status.)
-
-### 12.5 Publish to Live
-
-One hook, run inside WordPress as a single transaction, so a failure leaves the
-live site untouched.
-
-```mermaid
-sequenceDiagram
-    participant P as Posda (or a WP button)
-    participant H as publish hook
-    participant WP as WordPress pods
-    P->>H: publish(TCGA-XYZ v3)
-    H->>WP: for each recordset version in v3 not yet released: create its anchor if missing, copy it → anchor, state = released
-    H->>WP: copy v3's fields → tcia_collection (skipping anchor-only fields)
-    H->>WP: tcia_collection.collection_downloads = anchors of v3's recordset versions
-    H->>WP: v3.state = live, v2.state = superseded
-    H-->>P: OK + IDs of anchors created
-    Note over P,WP: rollback = publish(TCGA-XYZ v2)
-```
-
-Which fields the copy skips:
-
-| Kind | Fields | On publish |
+| Pod | Holds | Status |
 |---|---|---|
-| Versioned | title, short title, summary, abstract, methods, acknowledgements, funding, citations, cancer types, counts, file, size, … (everything else) | copied to the anchor |
-| Version bookkeeping | version number, version date, change log | copied (the live page shows them, as today) |
-| Anchor only | post ID, slug, **canonical DOI**, the list of versions | never overwritten |
-| Version only | state, reviewer notes, the anchor link | never copied |
+| **Collection Versions** | one post per collection version (TCGA-XYZ v1, v2, v3) | NEW, cloned from `tcia_collection` |
+| **Analysis Result Versions** | one post per analysis result version | NEW, cloned from `tcia_analysis_result` |
+| **Download Versions** | one post per download version (Clinical v1, v2) | NEW, cloned from `tcia_downloads` |
+| `versions`, `tcia_version_dnlds` | today's copies | retire ([12.9](#129-existing-data)) |
 
-The canonical DOI stays on the anchor. A per-version DOI, if added later, is a
-separate version-only field ([12.7](#127-previous-versions-on-the-public-site)).
+New fields on the version pods:
 
-### 12.6 Worked example
+| Field | Type | Purpose |
+|---|---|---|
+| `live_post` | pick, one-way | the `tcia_collection` / `tcia_downloads` post it belongs to |
+| `version_number`, `version_date`, `version_change_log` | number, date, wysiwyg | version bookkeeping |
+| `state` | pick | `working` → `in review` → `approved` → `live` → `superseded` |
+| `submitter_approval` | text + date | who approved, when ([12.5](#125-shared-submitter-review)) |
+| `reviewer_notes` | wysiwyg | internal; never public |
 
-TCGA-XYZ starts with Imaging and Clinical. Dataset v2 changes only Clinical.
-Dataset v3 adds Pathology.
+Rules:
+1. `collection_downloads` on a Collection Versions post lists **Download
+   Versions** posts.
+2. Every pick on a version pod is **one-way** (no sister fields), so working
+   versions never appear on Program or related pages.
+3. An unchanged download is **listed again, never copied**.
+4. A download version that an older collection version lists is **frozen**. A
+   fix means the next download version.
 
-| Dataset version | Imaging | Clinical | Pathology |
+Worked example:
+
+| Collection Versions post | Imaging | Clinical | Pathology |
 |---|---|---|---|
 | TCGA-XYZ v1 | v1 | v1 | — |
 | TCGA-XYZ v2 | v1 | **v2** | — |
 | TCGA-XYZ v3 (live) | v1 | v2 | **v1** |
 
-Bold = a new recordset version in that dataset version. Everything else is
-carried forward as-is.
+Bold = a new Download Versions post. Four Download Versions posts in total;
+Imaging v1 is listed three times and stored once.
 
-The posts, by pod (each recordset version points at the anchor it's a version
-of; the public collection lists the anchors):
+Lifecycle:
 
 ```mermaid
 flowchart LR
-    subgraph DSV["Collection Versions · dataset versions"]
-        X1["TCGA-XYZ v1<br/>superseded"]
-        X2["TCGA-XYZ v2<br/>superseded"]
-        X3["TCGA-XYZ v3<br/>live"]
-    end
-    subgraph RSV["Download Versions · recordset versions"]
-        I1["Imaging v1"]
-        C1["Clinical v1"]
-        C2["Clinical v2"]
-        P1["Pathology v1"]
-    end
-    subgraph ANC["tcia_downloads · public recordsets"]
-        DI["Imaging<br/>shows v1"]
-        DC["Clinical<br/>shows v2"]
-        DP["Pathology<br/>shows v1"]
-    end
-    subgraph COL["tcia_collection · public page"]
-        C["TCGA-XYZ<br/>shows v3"]
-    end
-    X1 --> I1
-    X1 --> C1
-    X2 --> I1
-    X2 --> C2
-    X3 --> I1
-    X3 --> C2
-    X3 --> P1
-    I1 -. "version of" .-> DI
-    C1 -. "version of" .-> DC
-    C2 -. "version of" .-> DC
-    P1 -. "version of" .-> DP
-    DI -- "listed on" --> C
-    DC -- "listed on" --> C
-    DP -- "listed on" --> C
+    S["start_version<br/>clone v2 → v3"] --> E["edit v3<br/>+ new_download_version<br/>for changed downloads"]
+    E --> RV["submitter review<br/>private link"]
+    RV -- "changes" --> E
+    RV -- "approve" --> P["Publish"]
+    P --> T["tweak + republish<br/>(same version number)"]
 ```
 
-(Each dataset version also links its anchor, the TCGA-XYZ collection; left out
-to keep the picture readable.)
+### 12.3 Shared: analysis results
 
-- Imaging v1 is listed by all three dataset versions and never copied.
-- Clinical v1 is frozen (v1 uses it). Clinical v2 is frozen too, since dataset
-  v2 and v3 both use it. A fix to Clinical now means Clinical v3.
-- The `tcia_downloads` Pathology post didn't exist until v3 was published.
+| Collections | Analysis results |
+|---|---|
+| `tcia_collection` | `tcia_analysis_result` |
+| Collection Versions | Analysis Result Versions |
+| `collection_downloads` | `result_downloads` |
+| `collection_doi` | `result_doi` |
+| Collection Template A | Analysis Result Template A |
 
-**Which link answers which question:**
-- *What does the public page show?* `tcia_collection` and the anchors it lists,
-  as today, now labeled with their versions ("Clinical v2").
-- *What was in TCGA-XYZ v2?* that record's recordset versions: Imaging v1,
-  Clinical v2.
-- *What's the history of Clinical?* recordset versions whose anchor is Clinical:
-  v1, v2.
-- *What changed between TCGA-XYZ v2 and v3?* compare the two records field by
-  field; a recordset version listed in both didn't change.
+- Both share the one Download Versions pod.
+- **The one difference:** an analysis result's reused `collection_downloads`
+  (other collections' downloads) point at the Download Versions posts the
+  analysis used, so they stay frozen. What the live page shows is
+  [12.10 question 6](#1210-questions-for-jeff).
 
-### 12.7 Previous versions on the public site
+### 12.4 Shared: keeping working versions private
 
-- **Now (two pods):** the live page gets a version picker (Jeff's idea). Picking
-  TCGA-XYZ v1 draws a page from that record and its recordset versions, with
-  download links to those versions' files. Nothing in the walled-off pods is
-  public by itself. The page can also show each download's own history
-  ("Clinical: v1, v2").
-- **Later, if Justin wants version DOIs (three pods):** the publish hook also
-  writes a public page per dataset version, with a version DOI on it. Every
-  version is already kept in full, so this is one more write in the hook plus a
-  one-time copy of existing versions. Nothing in 12.2–12.6 changes.
+| Leak path | Protection |
+|---|---|
+| Direct URL to the post | Option 1: pod not publicly viewable · Option 2: post status draft / pending. Either way: login or a preview token only |
+| Google and other crawlers | `noindex, nofollow` meta tag and `X-Robots-Tag` header on every preview; never linked from a public page |
+| XML sitemaps | version pods excluded (or only released versions, Option 2) |
+| REST API (`/wp-json/…`) | working versions need authentication; public REST returns only live / released |
+| Site search, Data Explorer | read only live posts (Option 1) or released versions (Option 2) |
+| Program and related pages | one-way picks on version pods (rule 2) |
+| **Download files** | a file in `/wp-content/uploads` is public to anyone with the URL. Unreleased files stay out of the public uploads folder (or behind access control) until Publish |
 
-### 12.8 How Posda maps
+`robots.txt` alone isn't enough: it asks crawlers not to fetch, but a linked
+URL can still be indexed. Use `noindex` plus access control.
 
-| Posda | WordPress | `wp_object_map` |
-|---|---|---|
-| `dataset` | `tcia_collection` / `tcia_analysis_result` (anchor) | as today |
-| `dataset_release` (dataset version) | Collection / Analysis Result Version | **new** |
-| `recordset` | `tcia_downloads` (anchor) | as today |
-| `recordset_release` (recordset version) | Download Version | **new** (deferred until now) |
-| `dataset_release_recordset` | the recordset versions a dataset version lists | — (it's the links themselves) |
-| `file` | media attachment | as today |
-
-Posda's square ([section 2](#2-posdas-release-model)) and WordPress now have the
-same shape, so every Posda link has exactly one WordPress counterpart, and the
-version numbers match on both sides.
+### 12.5 Shared: submitter review
 
 ```mermaid
-sequenceDiagram
-    participant U as Curator
-    participant P as Posda
-    participant WP as WordPress hooks
-    U->>P: start dataset version TCGA-XYZ v3
-    P->>WP: start_version(TCGA-XYZ) → v3 record
-    U->>P: publish recordset version Pathology v1
-    P->>WP: new_recordset_version(v3, no anchor) → Pathology v1, then upload files and set counts
-    U->>WP: edit page text in the v3 record (WP admin)
-    U->>P: QC and review
-    P-->>U: preview link for v3
-    U->>P: Disseminate
-    P->>WP: publish(v3) → new anchor IDs
-    P->>P: store mappings (Pathology → its new anchor)
+stateDiagram-v2
+    direction LR
+    [*] --> working: start_version
+    working --> in_review: send to submitter
+    in_review --> working: changes requested
+    in_review --> approved: submitter approves
+    approved --> live: Publish
+    live --> superseded: newer version goes live
+    superseded --> live: rollback
 ```
 
-### 12.9 What Jeff would build
-
-**Pods** (cloned, picks one-way, downloads picks retargeted):
-- Collection Versions, Analysis Result Versions, Download Versions.
-- `version_number` on `tcia_downloads`.
-- Admin lockdown on `tcia_collection`, `tcia_analysis_result`, `tcia_downloads`.
-
-**Hooks** (PHP, each one transaction, callable from a WP admin button and from
-Posda over an authenticated REST route):
-
-| Hook | Does | Returns |
+| How the submitter sees it | Needs a WP account | Notes |
 |---|---|---|
-| `start_version(anchor)` | clone the live dataset version, `state = working`, number + 1 | dataset version ID |
-| `new_recordset_version(dataset_version, from?)` | clone recordset version `from` with number + 1 (or start at v1 for a new recordset) and swap it into the dataset version | recordset version ID |
-| `publish(dataset_version)` | [12.5](#125-publish-to-live) | IDs of anchors created |
+| **Secret preview link** (token, expires) | no | easiest for submitters; page sends `noindex`; link can be revoked |
+| Reviewer account (read-only role) | yes | strongest control; an account per submitter |
+| Password-protected post (WP core) | no | shared password; Option 2 only (Option 1's pod is walled off anyway) |
 
-Dropping a recordset or reordering downloads is an ordinary edit of the dataset
-version record, so it needs no hook.
+- Approval records `submitter_approval` (who, when).
+- Publish requires `state = approved`.
 
-**Template work:** "v2" labels on downloads if wanted; otherwise none for the
-live page. The version picker and the preview page are new.
+### 12.6 Option 1: copy to the live post
 
-### 12.10 Existing data
+Least disruption. Live posts and everything that reads them stay as they are.
 
-1. **Current state:** for each collection, create a dataset version record from
-   its current fields (`state = live`, its current version number). For each
-   `tcia_downloads` post, create recordset version **v1** from its current
-   fields, anchored to it and listed by that new dataset version.
-2. **Old `versions` + `tcia_version_dnlds`:** still
-   [11.3 item 2](#113-open). Either:
-   - copy them in as `superseded` dataset versions marked "pre-versioning",
-     with each `tcia_version_dnlds` post becoming a recordset version (matched
-     to its anchor by title and collection; unmatched ones get no anchor).
-     Recordset version numbers would have to be worked out by comparing the
-     copies, since today every copy is labeled with the dataset version; or
-   - leave them where they are, and have the version picker read both.
+```mermaid
+flowchart LR
+    subgraph walled["Version pods (walled off)"]
+        CV["Collection Versions<br/>TCGA-XYZ v3<br/>collection_downloads: Clinical v2"]
+        DV["Download Versions<br/>Clinical v2"]
+    end
+    subgraph public["Live posts (public, locked)"]
+        C["tcia_collection<br/>TCGA-XYZ<br/>collection_downloads: Clinical"]
+        D["tcia_downloads<br/>Clinical"]
+    end
+    CV -- "Publish to Live" --> C
+    DV -- "Publish to Live" --> D
+    C --> R["templates · REST API<br/>Data Explorer · search"]
+```
 
-### 12.11 Phasing
+Publish (one PHP transaction):
+1. Each Download Versions post v3 lists that's still working: create its
+   `tcia_downloads` post if missing, copy fields onto it.
+2. Copy v3's fields onto `tcia_collection`.
+3. Set `tcia_collection.collection_downloads` to those `tcia_downloads` posts.
+4. v3 → `live`, v2 → `superseded`.
 
-| When | What | Who |
+| Fields | On publish |
+|---|---|
+| everything versioned (title, summary, methods, citations, counts, file, size, …) | copied |
+| `version_number`, `version_date`, `version_change_log` | copied |
+| post ID, slug, `collection_doi` | never overwritten |
+| `state`, `reviewer_notes`, `submitter_approval`, `live_post` | never copied |
+
+Changes to live pods:
+- `tcia_collection`, `tcia_analysis_result`, `tcia_downloads`: locked in
+  admin; only Publish writes.
+- `tcia_downloads` gains `version_number` ("Clinical v2").
+- A brand-new download or collection gets its live post at its first Publish.
+
+| Pros | Cons |
+|---|---|
+| templates, REST, Data Explorer, search untouched | every field stored twice |
+| smallest build; can start next quarter | old versions and version DOIs need extra work (picker, third pod) |
+| whole pod walled off: simple privacy | rollback re-copies |
+
+### 12.7 Option 2: the live post points at a version
+
+The "correct" model: one copy of every field, on the version. It's A3 + B3
+([sections 5](#5-need-a--draft-the-next-version-without-touching-the-live-one)
+and [6](#6-need-b--version-the-downloads-recordsets)), built on the version
+pods above.
+
+```mermaid
+flowchart LR
+    C["tcia_collection<br/>TCGA-XYZ<br/>slug · DOI"] -- "current_version" --> V3["Collection Versions<br/>TCGA-XYZ v3<br/>published"]
+    V3 -- "collection_downloads" --> DV["Download Versions<br/>Imaging v1 · Clinical v2<br/>Pathology v1"]
+    DV -- "live_post" --> D["tcia_downloads<br/>Imaging · Clinical · Pathology<br/>identity only"]
+```
+
+| Post | Keeps |
+|---|---|
+| `tcia_collection` | post ID, slug, `collection_doi`, `current_version` (NEW pick) |
+| Collection Versions | every other collection field |
+| `tcia_downloads` | identity: title, `download_type`, `data_type`, `file_type` |
+| Download Versions | file, URL, counts, size, license, access, description, date |
+
+Publish:
+1. v3 and its working Download Versions posts → WP status **publish**,
+   `state = live` / `released`.
+2. `tcia_collection.current_version` = v3.
+3. v2 → `superseded` (stays public as the v2 page).
+4. Clear the page cache for TCGA-XYZ.
+
+Rollback = set `current_version` back to v2.
+
+| Area | Change |
+|---|---|
+| Templates | Collection Template A, Analysis Result Template A, list templates read `current_version`'s fields |
+| REST API | consumers follow the pointer, or a compatibility endpoint returns the live version flattened (keeps Data Explorer and `wp.py` working) |
+| Search | index released Collection Versions posts, mapped back to the collection URL |
+| Caching | flush the collection page when `current_version` moves |
+| Version URLs | each released version gets a public page, e.g. `…/tcga-xyz/v2`: the version DOI landing page |
+| Migration | move every field off each live post into a version post ([12.9](#129-existing-data)) |
+
+| Pros | Cons |
+|---|---|
+| one source of truth, nothing copied | templates, REST, search, cache all change |
+| publish and rollback are one switch | privacy is per post (status), not per pod |
+| old versions and version DOIs come free | bigger migration; the reasons A3 was turned down on 2026-10-06 still apply |
+| matches Posda's model exactly | |
+
+### 12.8 Path and phasing
+
+**Option 1 can become Option 2 later.** The version pods, fields, hooks and
+review flow are the same. Moving to Option 2 means: stop copying, add
+`current_version`, switch templates and REST. No version data is redone.
+
+| When | What |
+|---|---|
+| Now | Stopgap: Make New Version (WPCode 46851) stops copying unchanged downloads |
+| Now | Staging clone, Pods upgrade, privacy test ([12.4](#124-shared-keeping-working-versions-private)) |
+| Next quarter | Version pods, hooks, submitter review; publish as Option 1 |
+| Later (if chosen) | Switch to Option 2: pointer, templates, REST, search |
+
+Hooks (both options; PHP, one transaction each, callable from an admin button
+and an authenticated REST route):
+
+| Hook | Does |
+|---|---|
+| `start_version(live_post)` | clone the live version, `state = working`, number + 1 |
+| `new_download_version(collection_version, from?)` | clone a Download Versions post (or start v1) and swap it in |
+| `publish(collection_version)` | Option 1: copy · Option 2: move pointer |
+
+### 12.9 Existing data
+
+| Data | Option 1 | Option 2 |
 |---|---|---|
-| Now | Stopgap: WPCode 46851 stops copying unchanged downloads (unblocks Posda's dissemination step under today's model) | Jeff |
-| Now | Staging clone, Pods upgrade | Jeff, Scott |
-| Next quarter | 12.2–12.9 on staging with Posda pointed at it, then production | Jeff, Michael |
-| Later | Public dataset version pages and version DOIs (12.7) | if Justin asks |
+| each `tcia_collection` | make a Collection Versions post from its fields (`state = live`) | same, then strip the live post to identity and set `current_version` |
+| each `tcia_downloads` | make Download Versions v1 from its fields | same, then strip it to identity |
+| old `versions` + `tcia_version_dnlds` | undecided ([11.3 item 2](#113-open)): copy in as `superseded`, marked "pre-versioning" (download numbers worked out by comparing copies), or leave in place and have the picker read both | same |
 
-### 12.12 Alternatives considered
+### 12.10 Questions for Jeff
 
-| | This proposal | Freeze `tcia_downloads` (copy on change) | Repurpose `tcia_version_dnlds` as recordset versions |
+1. **Privacy:** can a working version be hidden on every path in
+   [12.4](#124-shared-keeping-working-versions-private)? (pod lockdown for
+   Option 1, post status for Option 2)
+2. **Download files:** where do unreleased files go so their URLs aren't
+   public?
+3. **Submitter review:** preview link or reviewer account?
+4. **Option 2 size:** which templates and REST consumers read collection
+   fields directly?
+5. **Option 2 search/cache:** can they work from the current version post?
+6. Analysis results: should reused `collection_downloads` follow the other
+   collection's latest download, or the version the analysis used?
+7. Rule 4 (frozen download versions): enforced in Pods, or in the hooks?
+8. Custom REST routes for the hooks: OK?
+
+### 12.11 Appendix: Posda and alternatives
+
+How Posda calls the hooks (either option):
+
+| Curator in Posda… | Posda calls | Posda stores |
+|---|---|---|
+| starts the next release | `start_version` | Collection Versions post ID |
+| releases a new / changed download | `new_download_version`, then uploads files and counts | Download Versions post ID |
+| disseminates | `publish` | IDs of any new `tcia_downloads` posts |
+
+In `wp_object_map` terms: `dataset_release` → Collection / Analysis Result
+Versions post and `recordset_release` → Download Versions post are new;
+`dataset` and `recordset` map to the live posts as today.
+
+Download alternatives considered:
+
+| | Download Versions pod | Freeze `tcia_downloads` | Repurpose `tcia_version_dnlds` |
 |---|---|---|---|
-| Recordset anchor | ✓ `tcia_downloads` | ✗ each download post is one version | ✓ |
-| Unreleased downloads hidden | ✓ walled-off pod | ✗ in the public pod unless draft status | only if an existing pod can be walled off |
-| Same pattern at both levels | ✓ | ✗ | partly |
-| New pods | 3 | 2 | 2 |
+| One post per download | ✓ | ✗ | ✓ |
+| Unreleased downloads hidden | ✓ | ✗ | only if walled off |
+| Same pattern as collections | ✓ | ✗ | partly |
 | Repurposes an existing pod | no | no | yes (Jeff wasn't keen on that for `versions`) |
 
-### 12.13 Questions for Jeff
+---
 
-1. Can Download Versions be walled off the same way as the collection version
-   pods (the same test as [11.3 item 1](#113-open))?
-2. Is rule 4 (anything an older dataset version uses is frozen) enforceable in
-   Pods, or does it live in the hooks and admin UI?
-3. Any objection to retargeting the cloned downloads picks to Download Versions?
-4. On the live page, should an analysis result's reused `collection_downloads`
-   follow the other collection's latest recordset version (the anchor, today's
-   behavior) or the version the analysis actually used?
-5. Are custom REST routes for the three hooks fine, or would you rather Posda
-   trigger them another way?
+## 13. Final solution (draft): version pods, version pages, preview
+
+Standalone; details to finalize are in [13.10](#1310-to-finalize). Built on
+Option 1 ([12.6](#126-option-1-copy-to-the-live-post)): least disruption to
+templates and API, with previous-version pages and submitter preview added.
+Examples use collections; analysis results are the same with the swaps in
+[13.9](#139-analysis-results).
+
+### 13.1 Anchors and versions
+
+Each anchor pod gets one version pod, cloned from it:
+
+| Anchor pod (public, locked) | Version pod (walled off, NEW) | Label | One anchor per… |
+|---|---|---|---|
+| `tcia_collection` | `collection_ver` | Collection Versions | collection |
+| `tcia_analysis_result` | `analysis_result_ver` | Analysis Result Versions | analysis result |
+| `tcia_downloads` | `download_ver` | Download Versions | download (shared by collections and analysis results) |
+
+Post type names are capped at 20 characters by WordPress.
+
+```mermaid
+flowchart LR
+    subgraph walled["collection_ver (walled off)"]
+        V1["TCGA-XYZ v1<br/>superseded"]
+        V2["TCGA-XYZ v2<br/>superseded"]
+        V3["TCGA-XYZ v3<br/>live"]
+    end
+    A["tcia_collection<br/>TCGA-XYZ (anchor)<br/>copy of v3"]
+    V1 -- "live_post" --> A
+    V2 -- "live_post" --> A
+    V3 -- "Publish: copy" --> A
+```
+
+The same shape for analysis results (`analysis_result_ver` → `tcia_analysis_result`)
+and downloads (`download_ver` → `tcia_downloads`).
+
+| Post | How many | Public | Holds |
+|---|---|---|---|
+| `tcia_collection` / `tcia_analysis_result` (anchor) | **one per collection / analysis result, forever** | yes, locked | a copy of the live version; same ID, slug, DOI |
+| `collection_ver` / `analysis_result_ver` | one per version | no | every field of that version |
+| `tcia_downloads` (anchor) | **one per download, forever** | yes, locked | a copy of the live download version |
+| `download_ver` | one per download version | no | every field of that download version |
+
+- Only Publish writes to an anchor.
+- A brand-new collection, analysis result or download gets its anchor at its
+  first Publish.
+- Templates, REST and Data Explorer keep reading anchors, unchanged.
+
+### 13.2 Fields added to the version pods (on top of the cloned anchor fields)
+
+Each version pod starts as a clone of its anchor pod, so it has every anchor
+field. Added:
+
+| Field | Purpose | `collection_ver` / `analysis_result_ver` | `download_ver` |
+|---|---|---|---|
+| `version_number` | version | already on the anchor | **new** |
+| `date_updated` | version date | already on the anchor | already on the anchor |
+| `version_change_log` | what changed | already on the anchor | **new** |
+| `live_post` | the anchor (one-way pick) | **new** | **new** |
+| `state` | `working`, `in review`, `approved`, `live`, `superseded` | **new** | **new** |
+| `approved_by`, `approved_date` | who approved, and when | **new** | **new** |
+| `preview_token`, `preview_expires` | the submitter's preview link | **new** | **new** |
+| `reviewer_notes` | internal, never public | **new** | **new** |
+
+`version_number` is also added to `tcia_downloads` ("Clinical v2").
+
+**Keeping the pods in step:** a field added to an anchor pod is added to its
+version pod too.
+
+### 13.3 Rules
+
+1. A `collection_ver` post's `collection_downloads` lists **`download_ver`**
+   posts.
+2. Every pick on a version pod is **one-way**, so working versions never show
+   up on Program or related pages.
+3. An unchanged download is **listed again, never copied**.
+4. A download version that an older collection version lists is **frozen**. A
+   fix means a new download version.
+
+### 13.4 Three views, one renderer
+
+The version page and preview reuse the existing templates. A **route** (PHP)
+loads the version post, checks who may see it, and fills the template from it.
+Only who can see the page differs.
+
+```mermaid
+flowchart LR
+    subgraph ver["collection_ver (walled off)"]
+        S["TCGA-XYZ v2<br/>superseded"]
+        L["TCGA-XYZ v3<br/>live"]
+        W["TCGA-XYZ v4<br/>working / in review / approved"]
+    end
+    subgraph anc["tcia_collection (public)"]
+        A["TCGA-XYZ anchor<br/>copy of v3"]
+    end
+    S --> R2["route<br/>anyone"] --> VP["Version page<br/>…/tcga-xyz/v2"]
+    L -- "Publish: copy" --> A -- "anyone" --> LP["Live page<br/>(…/tcga-xyz/v3 redirects here)"]
+    W --> R4["route<br/>token or login"] --> PV["Preview page"]
+```
+
+| View | Pod | Post state | Who | Search engines |
+|---|---|---|---|---|
+| Live page | `tcia_collection` | the anchor | everyone | indexed; current version first |
+| Version page `…/tcga-xyz/v2` | `collection_ver` | `superseded` | everyone | TBD; canonical → live page |
+| Preview page | `collection_ver` | `working` / `in review` / `approved` | submitter (token), curators (login) | `noindex`, not cached, not linked |
+
+For analysis results, swap in `tcia_analysis_result` / `analysis_result_ver`.
+Downloads on each page come from `download_ver` (version page, preview) or
+`tcia_downloads` (live page).
+
+- **Version page:** starts with that version's downloads (today's display).
+  Grows into the full page and "what changed" without new architecture. Its
+  URL is stable, so a version DOI can point at it.
+- **Preview:** exactly what goes public after Publish, with downloads.
+- **One check:** the route is the only way into a version post. For
+  `…/tcga-xyz/vN`:
+
+  | When vN is | Route does |
+  |---|---|
+  | `live` | redirect to the live page (the anchor) |
+  | `superseded` | version page |
+  | `working` / `in review` / `approved` | preview with token or login; otherwise "not found" |
+
+### 13.5 Flow
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> working: start_version
+    working --> in_review: send_preview
+    in_review --> working: changes needed
+    in_review --> approved: record_approval
+    approved --> live: publish
+    live --> superseded: next version goes live
+    superseded --> live: rollback
+```
+
+| Hook | Does | Caller |
+|---|---|---|
+| `start_version` | clone the live version, number + 1 | WP button or Posda |
+| `new_download_version` | clone a download version (or start v1), swap it in | WP button or Posda |
+| `send_preview` | make a token link, `state = in review` | curator |
+| `record_approval` | `state = approved`, sets `approved_by`, `approved_date` | TBD (see 13.10) |
+| `publish` | requires `approved`; see 13.6 | WP button or Posda |
+
+### 13.6 Publish (one PHP transaction)
+
+0. **Drift guard:** if an anchor pod has a field its version pod lacks, stop
+   and name the field. Nothing is written.
+1. Each new download version: create its `tcia_downloads` anchor if missing,
+   copy fields, make its files public.
+2. Copy the version's fields onto `tcia_collection`; set its
+   `collection_downloads` to the download anchors.
+3. New version → `live`; previous → `superseded` (its version page goes
+   public).
+4. Expire the preview token.
+
+Never copied: `state`, `approved_*`, `preview_*`, `reviewer_notes`,
+`live_post`. Never overwritten: anchor ID, slug, `collection_doi`.
+
+### 13.7 Privacy and files
+
+| Path | Rule |
+|---|---|
+| Version posts | no public URL, archive, search, sitemap or public REST; the route is the only way in, and it checks state |
+| Search, sitemap | version pods excluded |
+| REST | released versions: public, read-only · earlier states: authenticated |
+| Preview page | `noindex`, `X-Robots-Tag`, no page cache |
+| Files, unreleased | private storage, downloadable only with token or login |
+| Files, released | public; moved at Publish |
+| Link-out downloads (NBIA, Aspera, IDC) | the link shows only in preview until Publish; the external system must also hold the data until release |
+
+### 13.8 Old and new side by side
+
+| Collection | Versions handled by |
+|---|---|
+| New collection | new method only |
+| Existing, next update | new method from then on: `start_version` makes the first `collection_ver` post from the anchor |
+| Existing, not yet updated | old method, unchanged |
+| Versions made before the switch | stay in `versions` / `tcia_version_dnlds`; shown as today |
+
+- The previous-versions list reads both sources: old versions from `versions`,
+  new ones from `collection_ver`.
+- Make New Version (WPCode 46851) is turned off per collection once it has
+  switched.
+- `versions` and `tcia_version_dnlds` retire when no live collection needs
+  them; migrating them is optional and later.
+
+### 13.9 Analysis results
+
+| Collections | Analysis results | Desc |
+|---|---|---|
+| `tcia_collection` | `tcia_analysis_result` | anchor pod (public, locked) |
+| `collection_ver` | `analysis_result_ver` | version pod (walled off) |
+| `collection_downloads` | `result_downloads` | the page's own downloads |
+| `collection_doi` | `result_doi` | canonical DOI, kept on the anchor |
+
+Shared `download_ver` pod. Analysis results have two downloads picks:
+
+| Field | Lists | On `analysis_result_ver` it points at |
+|---|---|---|
+| `result_downloads` | the analysis result's own downloads | its own `download_ver` posts |
+| `collection_downloads` | other collections' downloads it reused | the `download_ver` posts of the versions it used (frozen by rule 4) |
+
+### 13.10 To finalize
+
+| # | Detail | Question | Options |
+|---|---|---|---|
+| 1 | Version page indexing | Should Google list old version pages (`…/tcga-xyz/v2`)? | **A.** Index, canonical → live page: findable, but Google treats the live page as the main one. **B.** `noindex` + canonical → live page: never in search; reached from the live page or a DOI. **C.** Index on its own: v2 could outrank the current version (rules out "current first"). |
+| 2 | Version page content | What does a version page show? | **A.** Downloads only (today's display) at first. **B.** The full page as it was, plus what changed from the previous version. A can grow into B without changing the architecture. |
+| 3 | Private file storage | Where does an unreleased download's file live, so it can't be fetched by URL before release, but the preview can still serve it? | **A.** Outside public media; the Publish hook uploads it to public media at release. **B.** One storage place, with files served through a download endpoint that checks the token or login until release. |
+| 4 | Preview token | How does the submitter's preview link behave? | How long it lasts; whether it can be revoked or reissued; one link per version or one per submitter. |
+| 5 | Who records approval | Who calls `record_approval`? | **A.** A curator, after the submitter says OK by email. **B.** The submitter, with an Approve button on the preview page (the token identifies them). |
+| 6 | Walled-off pods | Can the version pods really be hidden on every path in 13.7? | Test on staging: direct URL, archive, search, sitemap, REST, feeds. |
+| 7 | Rule 4 (frozen download versions) | Where is it enforced that a download version used by an older collection version can't be edited? | **A.** In Pods (field or admin restrictions). **B.** In the hooks and admin screens (block the save, offer "make a new version"). |
+| 8 | Field drift | How do the anchor and version pods keep the same fields? | Drift guard in Publish (stops and names a missing field) + a checklist step whenever a field is added to an anchor pod. |
+| 9 | `version_change_log` on `tcia_downloads` | Should the live page show what changed in each download? | **A.** Yes: add the field to the anchor, and Publish copies it. **B.** No: the change log shows only on version pages. |
+| 10 | Reused downloads on a live analysis result | When another collection releases a new download version, what does the analysis result's live page show? | **A.** Follow the latest: list the other collection's download anchor (today's behavior). **B.** The version used: list what the analysis actually used, even if it's older. |
+| 11 | Migrating old `versions` | Do pre-switch versions (`versions` / `tcia_version_dnlds`) move into the new pods? | **A.** Never: show them from the old pods for good. **B.** Later, when convenient: copy them in, marked "pre-versioning". **C.** Before the old pods retire. |
