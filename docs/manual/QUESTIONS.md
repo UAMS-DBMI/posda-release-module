@@ -21,7 +21,6 @@ it's resolved and the text is updated.
 | Q6 | Which destination(s) should each recordset type normally get, and which should be the Default Display? (e.g. radiology → IDC, pathology → Aspera, clinical → IDC + WordPress?) | [05 Setup](05-cycle-setup.md#setting-a-recordsets-destinations) |
 | Q8 | When should a curator choose a full vs. partial QC review, and what sample percentage is standard? | [07 Verify](07-cycle-verify.md#starting-qc) |
 | Q9 | Mirabelle steps: how a reviewer approves, rejects, and flags a series there, and how they get back. Screenshots needed from Mirabelle | [07 Verify](07-cycle-verify.md#dicom-in-mirabelle) |
-| Q10 | The dataset-release DOI at Finalize: what format, who mints it, and should it ever be left blank? | [08 Bundle](08-cycle-bundle.md#finalizing-the-release) |
 | Q12 | What does a curator do when a retried transfer fails again? Who do they escalate to? | [09 Transfer](09-cycle-transfer.md#failed-transfers) |
 | Q13 | IDC: typical processing time; who to contact on **Errored**; what to do when the status reads *unknown* | [09 Transfer](09-cycle-transfer.md#idc-after-the-upload), [13](13-troubleshooting.md) |
 | Q15 | Support contact for "still stuck" | [13 Troubleshooting](13-troubleshooting.md#still-stuck) |
@@ -32,7 +31,6 @@ it's resolved and the text is updated.
 |---|---|---|
 | Q11 | Confirm: only IDC and WordPress transfers actually deliver today; NBIA, Aspera and CRDC can be created but not sent (per `notes/*_TRANSFER.md`). Should training hide those destinations, or should the manual say less about them? | [09 Transfer](09-cycle-transfer.md) warning |
 | Q14 | `/transfers` and `/recordsets` lists have no navbar link. Is that intended, or should the manual not mention them? | [12 Transfers](12-transfers.md) |
-| Q16 | Splitting a review whose first slice is already claimed (Verify's first review is assigned to its creator): what happens to that claim? The code allows rebalancing claimed slices with `force`, but what the user sees isn't clear | [Exercise 3](../training/03-qc-review.md) step 2 |
 
 ## UI issues found while writing (not manual questions)
 

@@ -18,7 +18,7 @@ Dataset
 ## Dataset
 
 The top-level thing you publish: a collection or an analysis result. A
-dataset has a name, a type, an optional DOI, and an **Active** flag. It is
+dataset has a name, a type, and an **Active** flag. It is
 linked to one WordPress page — its *collection* page or *analysis result* page,
 depending on its type.
 
@@ -77,7 +77,7 @@ at once. DICOM slices are reviewed in Mirabelle.
 
 A review becomes **complete** automatically when every unit is approved. If the
 draft's files change after the review was drawn, the review goes **stale** and
-must be cloned to pick up the changes.
+must be synced to pick up the changes.
 
 ## Transfer and destination
 

@@ -32,10 +32,13 @@ Common problems and what to do. Most disabled buttons explain themselves:
 | Problem | Cause and fix |
 |---|---|
 | **Start QC** disabled | Mark the draft ready in Assemble first |
-| Tab shows *N stale* | The draft changed after sampling. **Manage** → **Clone** → **Carry forward** |
+| Tab shows *N stale* | The draft changed after sampling. **Manage** → **Sync** |
 | Tab shows *N rejected* | A rejection keeps the review open. Fix the draft (Reopen → change → Mark Ready) and re-review |
-| Can't re-split a review | A slice is already complete; re-splitting would lose who did it |
-| Can't release or reassign a slice | It's finished |
+| **Split** disabled | The slice has fewer than 2 pending series |
+| **Combine** disabled | There's no other unfinished slice to combine into |
+| Can't release, reassign, split or combine a slice | It's finished |
+| A reviewer's decision won't save in Mirabelle | The series moved to another slice in a split, combine or sync. Reload Mirabelle |
+| A new review isn't in anyone's **My QC** | Reviews start unclaimed. Claim or assign the slice, or have a reviewer pick it up from the QC queue |
 
 ## Bundle
 

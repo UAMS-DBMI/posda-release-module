@@ -15,8 +15,9 @@ Do this one in pairs.
 ## Tasks
 
 1. Trainee A: start a **partial** QC review of the draft at 50%.
-2. Trainee A: split the review into 2 unclaimed slices.
-3. Trainee B: claim one slice from the pickup queue.
+2. Trainee A: claim the review's slice, then split it into 2, leaving the new
+   slice unclaimed.
+3. Trainee B: claim the new slice from the pickup queue.
 4. Both: review your slices. Trainee B rejects one series with a reason.
 5. Trainee A: reopen the draft in Assemble, remove the rejected series, and mark
    it ready again.
@@ -25,9 +26,9 @@ Do this one in pairs.
 
 ## Check your work
 
-- [ ] Trainee B's dashboard showed the slice under **My QC Queue** after claiming
+- [ ] Trainee B's dashboard showed the slice under **My QC** after claiming
 - [ ] After step 5, the Verify tab showed **stale**
-- [ ] After step 6, earlier approvals were kept
+- [ ] After step 6, earlier approvals were kept and the rejected series was gone
 - [ ] **Publish Gate** shows **Ready**
 
 ## Answer key
@@ -36,18 +37,19 @@ Do this one in pairs.
 <summary>Show steps</summary>
 
 1. **Verify** → **Start QC** → Type **Partial (sampled)** → Sample percentage
-   **50** → **Create Review**.
-2. Expand the row → **Manage** on the review → **Split** → **Into 2 unclaimed
-   slices** → confirm. <!-- Q16: what happens to A's claimed first slice -->
-
+   **50** → **Create Review**. The review starts as one unclaimed slice.
+2. Expand the row → **Manage** on the review → **Claim** on the slice →
+   **Split** on the same slice → **Split into 2** → leave **New slice 1** as
+   **Unclaimed** → **Split**.
 3. **QC** in the navbar → **Claim** on the slice.
-4. **Review** on your slice → decide each series in Mirabelle.
+4. **Review** on your slice (or on its row under **My QC**) → decide each
+   series in Mirabelle.
 5. **Assemble** → **Reopen** → **Manage** → **Remove** tab → search by the
    series UID → remove it → close → **Mark Ready**.
-6. The review is now **stale**. **Verify** → expand → **Manage** → **Clone** →
-   **Carry forward** → confirm. Earlier decisions are kept, and changed series
-   go back to pending.
-7. Review any pending series. The new review completes when every unit is
+6. The review is now **stale**. **Verify** → expand → **Manage** → **Sync**.
+   The dialog shows 1 removed; confirm with **Sync**. The removed series goes
+   with its rejection, and every other decision stays where it was.
+7. Review any series still pending. The review completes when every unit is
    approved.
 
 </details>

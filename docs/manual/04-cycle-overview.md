@@ -3,7 +3,7 @@
 Each dataset release goes through a cycle of six stages. The cycle view walks
 you through them, and each stage has its own tab.
 
-**Where:** a dataset page → **Release Cycle**
+**Where:** click a dataset anywhere
 (`/release/datasets/:dataset_id/releases/:release_id/cycle/<stage>`)
 
 <!-- ![Cycle view: header, next-action banner, stage tabs](images/cycle-overview/01-cycle-view.png) -->
@@ -19,16 +19,17 @@ you through them, and each stage has its own tab.
 
 ## Opening the cycle view
 
-1. Open the dataset (**Datasets** → click it).
-2. Click **Release Cycle**.
-
-The view opens on the first stage that isn't finished.
+Click a dataset in the **Datasets** list or among your dashboard favorites.
+A dataset always opens on the cycle view for its latest release, on the first
+stage that isn't finished.
 
 ## The header
 
 The title is *Dataset name — Release Cycle*. Under it you see the dataset type,
 how many recordsets it has, and the release you're looking at, for example
-`v3 (draft)`. **Dataset Details** goes back to the dataset page.
+`v3 (draft)`. **Dataset Details** (and the dataset name in the breadcrumb)
+opens the [dataset details page](02-datasets.md#the-dataset-details-page),
+with its full list of recordsets and releases.
 
 ## The next-action banner
 
@@ -58,7 +59,7 @@ assemble, verify or bundle without one.
 <!-- ![Start Next Cycle](images/cycle-overview/03-start-next-cycle.png) -->
 
 This creates the next version number as a draft release. You don't enter notes
-or a DOI yet; you add them when you finalize in [Bundle](08-cycle-bundle.md).
+yet; you add them when you finalize in [Bundle](08-cycle-bundle.md).
 
 > **Note:** A dataset can have only one draft release at a time. **Start Next
 > Cycle** appears only when no cycle is in progress, or when the previous
@@ -90,7 +91,7 @@ a disabled button says why.
 Each dataset release keeps its own cycle view, so a release that's still
 shipping stays reachable after the next cycle starts.
 
-1. On the dataset page, find the release under **Releases**.
+1. Click **Dataset Details**, then find the release under **Releases**.
 2. Click **Cycle** on its row.
 
 An amber note says you're looking at an older release, with a **Go to the

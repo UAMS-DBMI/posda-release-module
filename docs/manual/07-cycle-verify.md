@@ -43,8 +43,10 @@ A draft can be published only when it has **at least one complete review** and
 
 <!-- ![New QC Review dialog](images/cycle-verify/02-new-review.png) -->
 
-The first review on a draft is assigned to you. Later reviews (**Add Review**)
-are created unassigned.
+The review starts as one unclaimed slice, because release QC is normally done
+by another team. A reviewer picks it up from the [QC queue](11-qc.md), or you
+can **Claim** it or **Assign** it from the slice's row. Later reviews (**Add
+Review**) start the same way.
 
 A draft with only non-DICOM files gets a **New Non-DICOM Review** instead.
 There's no sampling; it covers every file.
@@ -56,8 +58,8 @@ There's no sampling; it covers every file.
 ### DICOM: in Mirabelle
 
 1. Expand the row and click **Review** on your slice.
-2. Mirabelle opens with that slice's series. Approve, reject or flag each one
-   there.
+2. Mirabelle opens with that slice's series, on the first one still to decide.
+   Approve, reject or flag each one there.
 
 <!-- Q: Mirabelle steps; see QUESTIONS.md Q9 -->
 
@@ -82,19 +84,46 @@ Assemble (**Reopen**, change the files, **Mark Ready**), then re-review.
 
 ## Sharing the work: slices
 
-A big review can be split so several people work on it at once.
+A big review can be shared so several people work on it at once. You split
+and combine one slice at a time; other slices aren't touched.
+
+### Splitting a slice
 
 1. Expand the row and click **Manage** on the review.
-2. Under the slices, click **Split**.
-3. Choose either:
-   - **Into *N* unclaimed slices** — others pick them up from the
-     [QC queue](11-qc.md); or
-   - **Assign to reviewers** — tick the people, one slice each.
-4. Confirm.
+2. On the slice's row, click **Split**.
+3. In **Split into**, choose how many slices you want, counting this one.
+4. For each new slice, pick a reviewer, or leave it **Unclaimed** so others
+   pick it up from the [QC queue](11-qc.md).
+5. Click **Split**.
 
-<!-- ![Split Review](images/cycle-verify/04-split.png) -->
+<!-- ![Split Slice](images/cycle-verify/04-split.png) -->
 
-Per slice, you can:
+The original slice keeps its reviewer, its review link, any series already
+decided, and an even share of the pending series. The new slices share the
+rest, evenly per modality.
+
+**Split** is disabled when the slice has fewer than 2 pending series.
+
+### Combining slices
+
+Use this to hand a slice's remaining work to another slice, for example when a
+reviewer drops out.
+
+1. On the slice's row, click **Combine**.
+2. Under **Combine into**, pick the slice to move its series to.
+3. If the slice already has decided series, tick **Bring decided series too**
+   to move those as well.
+4. Click **Combine**.
+
+If nothing is left in the original slice, it's deleted. Otherwise it keeps its
+decided series and its reviewer, and is then complete. **Combine** is disabled
+when there's no other unfinished slice.
+
+> **Note:** If the slice belongs to someone, they may need to reload
+> Mirabelle after a split or combine. A decision on a series that has moved
+> won't save.
+
+### Other slice actions
 
 | Action | What it does |
 |---|---|
@@ -103,26 +132,34 @@ Per slice, you can:
 | **Assign** | Give the slice to someone else |
 | **Review** | Open it (Mirabelle, or the non-DICOM dialog) |
 
-- Splitting into 1 slice merges them back together.
-- Once any slice is complete, the review can't be re-split, because that would
-  lose who did the work.
-- A finished slice can't be released or reassigned.
+A finished slice can't be released, reassigned, split or combined.
 
 ## Stale reviews
 
 If a draft's files change after a review was drawn, the review goes **stale**.
-The Verify tab shows **blocked** and the banner says to re-clone. The review
-shows how many series changed, need adding, or need dropping.
+The Verify tab shows **blocked**, the banner says to sync, and the review row
+says *open to sync*.
+
+Syncing updates the same review in place:
+
+- **Added** series start pending.
+- **Changed** series go back to pending.
+- **Removed** series are deleted, with their decisions.
+- Everything else keeps its slice and its decision.
 
 1. Expand the row, click **Manage** on the stale review.
-2. Click **Clone**, and choose:
-   - **Carry forward** — re-sample the current draft with the same seed and
-     keep earlier decisions. Changed series go back to pending. This is usually
-     what you want.
-   - **Resample** — a fresh draw with no decisions carried over.
-3. Confirm.
+2. Click **Sync**. The dialog shows how many series were added, changed and
+   removed.
+3. If there's new work (added or changed series), choose where to **Send the
+   new work to**:
+   - **A new slice**, unclaimed, with its own review link; or
+   - an existing unfinished slice, listed with its reviewer and size.
+4. Click **Sync**.
 
-Non-DICOM reviews always carry forward.
+<!-- ![Sync QC Review](images/cycle-verify/05-sync.png) -->
+
+The dialog warns you if a slice will be deleted because none of its series
+remain in it. Non-DICOM reviews sync the same way, by file.
 
 ## Cancelling a review
 

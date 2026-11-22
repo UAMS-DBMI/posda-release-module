@@ -44,7 +44,7 @@ can:
 
 ## The dataset release page
 
-**Where:** dataset page → **Releases** → click a release
+**Where:** **Dataset Details** → **Releases** → click a release
 (`/release/datasets/releases/:release_id`)
 
 Shows the release's number, status, date and notes, with **Transfers** and

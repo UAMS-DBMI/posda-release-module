@@ -2,7 +2,7 @@
 
 Recordsets, their destinations, drafts, and releases, outside the cycle view.
 
-**Where:** a dataset page → **Recordsets** → click a recordset
+**Where:** **Dataset Details** → **Recordsets** → click a recordset
 (`/release/recordsets/:recordset_id`)
 
 > **Tip:** During a release you'll do most of this from the cycle stages:
@@ -12,15 +12,14 @@ Recordsets, their destinations, drafts, and releases, outside the cycle view.
 
 ## Creating a recordset
 
-1. Open the dataset, then click **New Recordset**. (Or **Create a Recordset**
-   in the cycle's Setup stage.)
+1. In the cycle's Setup stage, click **Create a Recordset**. (Or **New
+   Recordset** on the dataset details page.)
 2. Fill in:
 
    | Field | Notes |
    |---|---|
    | **Name** | Required |
    | **Type** | Required. What kind of data it holds |
-   | **DOI** | Optional |
    | **Active** | |
 
 3. Click **Create Recordset**.
