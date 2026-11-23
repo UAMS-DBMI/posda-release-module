@@ -14,7 +14,7 @@ new contents.
 
 ## The Assemble table
 
-<!-- ![Assemble table](images/cycle-assemble/01-table.png) -->
+![Assemble table](images/cycle-assemble/01-table.png)
 
 One row per recordset:
 
@@ -52,7 +52,7 @@ row. **Add Back** reverses that.
 
 3. Click **Create Draft**.
 
-<!-- ![Create Draft dialog](images/cycle-assemble/02-create-draft.png) -->
+![Create Draft dialog](images/cycle-assemble/02-create-draft.png)
 
 The row now shows the draft, its status (open), and file count.
 
@@ -60,7 +60,7 @@ The row now shows the draft, its status (open), and file count.
 
 Click **Manage** on the row. The dialog has three tabs.
 
-<!-- ![Manage Files dialog](images/cycle-assemble/03-manage.png) -->
+![Manage Files dialog](images/cycle-assemble/03-manage.png)
 
 ### Add
 
@@ -82,7 +82,8 @@ same sources as Create Draft. Each source offers two operations:
 ### Remove
 
 Search the draft by **Patient**, **Study UID**, **Series UID**, **SOP UID** or
-**File ID**, then remove whole series. Nothing is listed until you enter a
+**File ID**, then remove whole series: click **Remove** on a match, then
+**Confirm remove?** within a few seconds. Nothing is listed until you enter a
 search.
 
 ### Details

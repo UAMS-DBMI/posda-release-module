@@ -6,7 +6,7 @@ you through them, and each stage has its own tab.
 **Where:** click a dataset anywhere
 (`/release/datasets/:dataset_id/releases/:release_id/cycle/<stage>`)
 
-<!-- ![Cycle view: header, next-action banner, stage tabs](images/cycle-overview/01-cycle-view.png) -->
+![Cycle view: header, next-action banner, stage tabs](images/cycle-overview/01-cycle-view.png)
 
 | Stage | You do this | Which produces |
 |---|---|---|
@@ -36,7 +36,7 @@ with its full list of recordsets and releases.
 The banner under the header says, in one sentence, what the cycle needs next,
 and gives you a button to go there.
 
-<!-- ![Next-action banner](images/cycle-overview/02-banner.png) -->
+![Next-action banner](images/cycle-overview/02-banner.png)
 
 - **Next:** — the earliest stage with work to do. The button opens it
   (**Open Setup**, **Assemble**, **Review QC**, **Bundle Release**,
@@ -44,6 +44,8 @@ and gives you a button to go there.
 - **Blocked:** (amber) — something is wrong and needs fixing first, such as a
   stale QC review or a failed transfer. Blocked problems are shown ahead of
   ordinary next steps.
+
+  ![Blocked banner](images/cycle-overview/05-blocked-banner.png)
 - No button — you're waiting on something outside the module, such as IDC
   processing.
 
@@ -56,7 +58,7 @@ assemble, verify or bundle without one.
    currently in progress*, with the last release's version if there is one.
 2. Click **Start Next Cycle**.
 
-<!-- ![Start Next Cycle](images/cycle-overview/03-start-next-cycle.png) -->
+![Start Next Cycle](images/cycle-overview/03-start-next-cycle.png)
 
 This creates the next version number as a draft release. You don't enter notes
 yet; you add them when you finalize in [Bundle](08-cycle-bundle.md).
@@ -80,7 +82,7 @@ Some example statuses: *2 no destination*, *1/3 ready*, *45% reviewed*,
 *1 stale*, *2 to publish*, *v3 finalize*, *1 in flight*, *Set to Ready*,
 *Waiting on IDC*, *v3 live*.
 
-<!-- ![Stage tabs with states](images/cycle-overview/04-tabs.png) -->
+![Stage tabs with states](images/cycle-overview/04-tabs.png)
 
 You can open any tab at any time. Stages don't lock each other; each stage's
 own buttons are disabled when their step isn't possible yet, and hovering over
@@ -96,6 +98,8 @@ shipping stays reachable after the next cycle starts.
 
 An amber note says you're looking at an older release, with a **Go to the
 current cycle** link.
+
+![Older-release note](images/cycle-overview/06-older-release.png)
 
 > **Note:** On an older release, Bundle, Transfer and Disseminate show *that*
 > release. Setup, Assemble and Verify always show the recordsets' current state,

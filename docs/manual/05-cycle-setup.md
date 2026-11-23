@@ -5,7 +5,7 @@ the WordPress pages they're published on.
 
 **Where:** cycle view → **Setup** tab
 
-<!-- ![Setup stage](images/cycle-setup/01-overview.png) -->
+![Setup stage](images/cycle-setup/01-overview.png)
 
 ## When Setup is done
 
@@ -62,7 +62,7 @@ release is transferred.
    should point at.
 4. Click **Save**.
 
-<!-- ![New Destination dialog](images/cycle-setup/02-destination.png) -->
+![New Destination dialog](images/cycle-setup/02-destination.png)
 
 - The first destination you add is always the default.
 - Click a destination pill to edit it, for example to change which one is the
@@ -84,7 +84,9 @@ dataset's page.
      **Title** starts as the dataset name and the **Slug** follows it; change
      either before you create.
 
-<!-- ![Link WordPress dialog](images/cycle-setup/03-wp-link.png) -->
+![Link WordPress dialog](images/cycle-setup/03-wp-link.png)
+
+![Create New, prefilled](images/cycle-setup/04-wp-create.png)
 
 The badge changes to show the page's status. Icons next to it open the page on
 WordPress (view) or in the WordPress editor (edit).

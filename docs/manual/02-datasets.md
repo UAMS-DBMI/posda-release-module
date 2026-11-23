@@ -12,7 +12,7 @@ Finding, creating, and working with datasets.
 4. Click a row. The dataset opens on its [release cycle](04-cycle-overview.md),
    where most of the work happens.
 
-<!-- ![Dataset list with filters](images/datasets/01-list.png) -->
+![Dataset list with filters](images/datasets/01-list.png)
 
 Click **Clear** to reset the filters. The star at the end of each row adds the
 dataset to your favorites.
@@ -30,7 +30,7 @@ dataset to your favorites.
 
 3. Click **Create Dataset**.
 
-<!-- ![Create Dataset form](images/datasets/02-create.png) -->
+![Create Dataset form](images/datasets/02-create.png)
 
 The new dataset opens on its release cycle. Next, add recordsets and link the
 dataset to WordPress, both in the cycle's [Setup stage](05-cycle-setup.md).
@@ -40,7 +40,7 @@ dataset to WordPress, both in the cycle's [Setup stage](05-cycle-setup.md).
 **Where:** **Dataset Details** in the cycle header
 (`/release/datasets/:dataset_id/details`)
 
-<!-- ![Dataset details page](images/datasets/03-detail.png) -->
+![Dataset details page](images/datasets/03-detail.png)
 
 The header shows the dataset's name, an **Active**/**Inactive** badge, and:
 

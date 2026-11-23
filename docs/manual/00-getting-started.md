@@ -18,13 +18,13 @@ Signing in, finding your way around, and using your dashboard.
 
 The module opens on your dashboard.
 
-<!-- ![Dashboard after signing in](images/getting-started/01-dashboard.png) -->
+![Dashboard after signing in](images/getting-started/01-dashboard.png)
 
 ## If you see "You're not logged into Posda" or "Can't reach Posda"
 
 Both messages usually mean your Posda session has expired.
 
-<!-- ![Not-logged-in notice](images/getting-started/02-not-logged-in.png) -->
+![Not-logged-in notice](images/getting-started/02-not-logged-in.png)
 
 1. Log into Posda again in another tab.
 2. Come back and click **Reload**.
@@ -36,7 +36,7 @@ administrator.
 
 The bar across the top of every page.
 
-<!-- ![Navbar](images/getting-started/03-navbar.png) -->
+![Navbar](images/getting-started/03-navbar.png)
 
 | Item | What it does |
 |---|---|
@@ -53,7 +53,7 @@ The section you're in is underlined.
 
 The dashboard has three parts.
 
-<!-- ![Dashboard sections](images/getting-started/04-dashboard-sections.png) -->
+![Dashboard sections](images/getting-started/04-dashboard-sections.png)
 
 ### My QC
 
@@ -85,7 +85,7 @@ Favorites are a shortcut to the datasets and recordsets you work on most.
 1. Open the **Datasets** list, or the page for a dataset or recordset.
 2. Click the star next to its name. A filled star means it's a favorite.
 
-<!-- ![Star on the dataset list](images/getting-started/05-favorite-star.png) -->
+![Star on the dataset list](images/getting-started/05-favorite-star.png)
 
 It now appears on your dashboard. Favorites belong to you; other users don't
 see them.

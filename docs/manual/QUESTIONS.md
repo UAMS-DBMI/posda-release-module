@@ -20,7 +20,6 @@ it's resolved and the text is updated.
 |---|---|---|
 | Q6 | Which destination(s) should each recordset type normally get, and which should be the Default Display? (e.g. radiology → IDC, pathology → Aspera, clinical → IDC + WordPress?) | [05 Setup](05-cycle-setup.md#setting-a-recordsets-destinations) |
 | Q8 | When should a curator choose a full vs. partial QC review, and what sample percentage is standard? | [07 Verify](07-cycle-verify.md#starting-qc) |
-| Q9 | Mirabelle steps: how a reviewer approves, rejects, and flags a series there, and how they get back. Screenshots needed from Mirabelle | [07 Verify](07-cycle-verify.md#dicom-in-mirabelle) |
 | Q12 | What does a curator do when a retried transfer fails again? Who do they escalate to? | [09 Transfer](09-cycle-transfer.md#failed-transfers) |
 | Q13 | IDC: typical processing time; who to contact on **Errored**; what to do when the status reads *unknown* | [09 Transfer](09-cycle-transfer.md#idc-after-the-upload), [13](13-troubleshooting.md) |
 | Q15 | Support contact for "still stuck" | [13 Troubleshooting](13-troubleshooting.md#still-stuck) |
@@ -43,3 +42,12 @@ write.
 | Q17 | The Datasets and Recordsets lists label their filter checkbox with the raw key `active_only`; the Transfers list says **Active only** |
 | Q18 | Recordset release diffs (`recordsets/releases/{id}/diff/...`) exist in the API but nothing in the UI uses them, so the outline's "Comparing two releases" section was dropped. Is a diff view planned? |
 | Q19 | The transfer status labels on the transfer pages (`draft / queued / submitted / failed`) don't match the statuses the cycle uses (`draft / queued / in_progress / success / failed`). `success` and `in_progress` show raw on those pages |
+| Q20 | The test helper **Complete** (yellow) shows on every unfinished slice in the Manage dialog and on the review page. It approves the whole slice without review. Hide it outside dev? (Screenshots were taken with it hidden) |
+| Q21 | A slice's **Share** shows unrounded percentages (*53.8462%*) |
+| Q22 | The Transfers list search placeholder still says *Dataset name or DOI* |
+| Q23 | Viewing an older release after the next cycle has started still shows *No cycle is currently in progress* and **Start Next Cycle** |
+| Q24 | Assemble labels v1's drafts *published this cycle* while v2 is the cycle in progress |
+| Q25 | With one open review on v2, the Verify tab said *51% reviewed* while the banner said *QC is 0% reviewed* |
+| Q26 | While a recordset has an open draft, its page's **Releases** table shows an extra *draft* row with no version and 0 files |
+| Q27 | The IDC transfer row showed *3,386 files* for two recordsets that hold 3,386 + 1,586 files |
+| Q28 | The transfer name on the Transfer stage and a draft's name on the recordset page open in a new tab |

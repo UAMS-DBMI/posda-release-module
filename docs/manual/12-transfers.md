@@ -8,7 +8,7 @@ looking up a transfer directly.
 
 **Where:** `/release/transfers` <!-- Q: no navbar link; see QUESTIONS.md Q14 -->
 
-<!-- ![Transfers list](images/transfers/01-list.png) -->
+![Transfers list](images/transfers/01-list.png)
 
 1. Find the dataset with **Search**, ticking **Active only** if you like.
 2. Click the dataset. Its releases appear below.
@@ -34,7 +34,7 @@ can:
 
 **Where:** `/release/transfers/:transfer_id`
 
-<!-- ![Transfer page](images/transfers/02-detail.png) -->
+![Transfer page](images/transfers/02-detail.png)
 
 - **Details** — transfer ID, dataset release, destination, status, notes.
 - **Recordset Releases** — what it carries, with per-recordset manifest

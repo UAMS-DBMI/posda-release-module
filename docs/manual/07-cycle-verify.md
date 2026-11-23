@@ -12,7 +12,7 @@ Quality-check each draft. A draft can't be published until it passes QC.
 
 ## The Verify table
 
-<!-- ![Verify table](images/cycle-verify/01-table.png) -->
+![Verify table](images/cycle-verify/01-table.png)
 
 One row per recordset being changed this cycle:
 
@@ -41,7 +41,7 @@ A draft can be published only when it has **at least one complete review** and
 3. Optionally add **Notes**.
 4. Click **Create Review**.
 
-<!-- ![New QC Review dialog](images/cycle-verify/02-new-review.png) -->
+![New QC Review dialog](images/cycle-verify/02-new-review.png)
 
 The review starts as one unclaimed slice, because release QC is normally done
 by another team. A reviewer picks it up from the [QC queue](11-qc.md), or you
@@ -59,11 +59,36 @@ There's no sampling; it covers every file.
 
 1. Expand the row and click **Review** on your slice.
 2. Mirabelle opens with that slice's series, on the first one still to decide.
-   Approve, reject or flag each one there.
 
-<!-- Q: Mirabelle steps; see QUESTIONS.md Q9 -->
+![Mirabelle QC Review](images/cycle-verify/06-mirabelle.png)
 
-Progress comes back to the **Approved** bar as you work.
+The top bar shows where you are (*Series 1 of 24*) and running counts:
+*remaining*, *approved*, *rejected*, *flagged*. **Status** and **Modality**
+narrow the list, for example to **Pending** only. The viewer is on the left,
+the DICOM header on the right.
+
+For each series:
+
+1. Look through it in the viewer. **Window / Level** and **Pan** change what
+   dragging does; the scroll wheel steps through frames.
+2. Optionally type a note. A note is **required** to reject or flag.
+3. Click **Approve**, **Reject** or **Flag**.
+
+![Note and decision buttons](images/cycle-verify/07-mirabelle-decide.png)
+
+Mirabelle moves on to the next series still to decide. **Previous** and
+**Next** move without deciding.
+
+| Key | Action |
+|---|---|
+| **A** / **R** / **F** | Approve / Reject / Flag |
+| **Tab** / **Shift+Tab** | Next / previous series |
+| **← →** | Step frame |
+| **Space** | Play / pause |
+| **+** / **−** | Zoom |
+
+**Shortcuts** in the top right lists them. Progress comes back to the
+**Approved** bar in the release module as you work.
 
 ### Non-DICOM files
 
@@ -72,7 +97,7 @@ Progress comes back to the **Approved** bar as you work.
 2. Download each file (download icon) and check it.
 3. Click **Approve All**, or **Reject All** and give a reason.
 
-<!-- ![Review Non-DICOM Files](images/cycle-verify/03-non-dicom.png) -->
+![Review Non-DICOM Files](images/cycle-verify/03-non-dicom.png)
 
 ### When a review is complete
 
@@ -96,7 +121,7 @@ and combine one slice at a time; other slices aren't touched.
    pick it up from the [QC queue](11-qc.md).
 5. Click **Split**.
 
-<!-- ![Split Slice](images/cycle-verify/04-split.png) -->
+![Split Slice](images/cycle-verify/04-split.png)
 
 The original slice keeps its reviewer, its review link, any series already
 decided, and an even share of the pending series. The new slices share the
@@ -156,7 +181,7 @@ Syncing updates the same review in place:
    - an existing unfinished slice, listed with its reviewer and size.
 4. Click **Sync**.
 
-<!-- ![Sync QC Review](images/cycle-verify/05-sync.png) -->
+![Sync QC Review](images/cycle-verify/05-sync.png)
 
 The dialog warns you if a slice will be deleted because none of its series
 remain in it. Non-DICOM reviews sync the same way, by file.
