@@ -28,7 +28,6 @@ it's resolved and the text is updated.
 
 | # | Question | Where |
 |---|---|---|
-| Q11 | Confirm: only IDC and WordPress transfers actually deliver today; NBIA, Aspera and CRDC can be created but not sent (per `notes/*_TRANSFER.md`). Should training hide those destinations, or should the manual say less about them? | [09 Transfer](09-cycle-transfer.md) warning |
 | Q14 | `/transfers` and `/recordsets` lists have no navbar link. Is that intended, or should the manual not mention them? | [12 Transfers](12-transfers.md) |
 
 ## UI issues found while writing (not manual questions)

@@ -100,6 +100,7 @@ link to an **Analysis Result** page.
    until the dataset itself is linked.
 2. **Link Existing** lists *Unlinked downloads on this dataset's WordPress page*
    before you type anything. Pick the right one, or search by title.
+   
    **Create New** makes a new draft download page instead. Its **Title**
    starts as the recordset name, and its **Slug** starts with the dataset's
    WordPress slug, for example `my-collection-ct-images`.

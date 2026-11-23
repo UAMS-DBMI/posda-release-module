@@ -8,7 +8,7 @@ Common problems and what to do. Most disabled buttons explain themselves:
 | You see | Do this |
 |---|---|
 | *You're not logged into Posda* | Log into Posda in another tab, then click **Reload** |
-| *Can't reach Posda* | Same. If it persists after logging in, contact your Posda administrator |
+| *Can't reach Posda* | Same. If it persists after logging in, contact Posda support (posda_support@uams.edu) |
 
 ## Cycle
 

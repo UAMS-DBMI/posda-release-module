@@ -11,11 +11,6 @@ Send the finalized release to each of its destinations.
 - Each recordset in the release needs a destination, set in
   [Setup](05-cycle-setup.md#setting-a-recordsets-destinations).
 
-> **Warning — what's working today:** only **IDC** and **WordPress** transfers
-> are delivered automatically. NBIA, Aspera and CRDC (GC / CTDC) transfers can
-> be created and configured, but nothing sends them yet.
-<!-- Q: confirm destination status before training; see QUESTIONS.md Q11 -->
-
 ## The Transfer table
 
 ![Transfer stage](images/cycle-transfer/01-table.png)
