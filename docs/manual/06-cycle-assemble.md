@@ -54,6 +54,8 @@ row. **Add Back** reverses that.
 
 ![Create Draft dialog](images/cycle-assemble/02-create-draft.png)
 
+![Create Draft, Upload tab](images/cycle-assemble/04-upload.png)
+
 The row now shows the draft, its status (open), and file count.
 
 ## Managing a draft's files

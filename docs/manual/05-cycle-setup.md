@@ -104,6 +104,8 @@ link to an **Analysis Result** page.
    starts as the recordset name, and its **Slug** starts with the dataset's
    WordPress slug, for example `my-collection-ct-images`.
 
+![Unlinked downloads offered as suggestions](images/cycle-setup/05-download-link.png)
+
 ## Unlinking
 
 Open **Link WordPress** again and choose **Unlink** → **Confirm Unlink**. This

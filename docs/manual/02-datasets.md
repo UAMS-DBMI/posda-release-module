@@ -35,6 +35,8 @@ dataset to your favorites.
 The new dataset opens on its release cycle. Next, add recordsets and link the
 dataset to WordPress, both in the cycle's [Setup stage](05-cycle-setup.md).
 
+![A new dataset's cycle view](images/datasets/04-new-dataset-cycle.png)
+
 ## The dataset details page
 
 **Where:** **Dataset Details** in the cycle header
