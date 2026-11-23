@@ -32,6 +32,20 @@
                 "uriFormat": "%s",
                 "webRoot": "${workspaceFolder}"
             }
+        },
+        {
+            "name": "BookStack: sync manual (dry run)",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "python scripts/sync_bookstack.py",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "BookStack: sync manual (apply)",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "python scripts/sync_bookstack.py --apply",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
