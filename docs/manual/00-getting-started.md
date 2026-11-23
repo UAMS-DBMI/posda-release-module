@@ -13,8 +13,10 @@ Signing in, finding your way around, and using your dashboard.
 
 ## Signing in
 
-1. Log into Posda as you normally do.
-2. In the same browser, open `https://<posda-server>/release/`.
+1. Log into Posda as you normally do, and open an Activity Based Curation
+   (ABC) window.
+2. Click the **Release Module** link in the sidebar, or open
+   `https://<posda-server>/release/` in the same browser.
 
 The module opens on your dashboard.
 
@@ -26,11 +28,11 @@ Both messages usually mean your Posda session has expired.
 
 ![Not-logged-in notice](images/getting-started/02-not-logged-in.png)
 
-1. Log into Posda again in another tab.
+1. Log into Posda again in another tab, and open an ABC window.
 2. Come back and click **Reload**.
 
-If **Can't reach Posda** keeps appearing after you log in, contact your Posda
-administrator.
+If **Can't reach Posda** keeps appearing after you log in, contact Posda
+support (posda_support@uams.edu).
 
 ## The navbar
 
@@ -44,7 +46,7 @@ The bar across the top of every page.
 | **Dashboard** | Your favorites and your QC work (below) |
 | **Datasets** | The dataset list. Recordsets, releases and transfers are all reached from a dataset |
 | **QC** | The QC pickup queue; see [QC queue & reviews](11-qc.md) |
-| **Logged in as:** | The Posda user you're signed in as (wide screens only) |
+| **Logged in as:** | The Posda user you're signed in as |
 | Sun / moon icon | Switches between light and dark theme. Your choice is remembered in this browser |
 
 The section you're in is underlined.
