@@ -22,7 +22,7 @@ click **Update Page** or **Publish All & Go Live**.
 
 ## The Disseminate page
 
-<!-- ![Disseminate stage](images/cycle-disseminate/01-overview.png) -->
+![Disseminate stage](images/cycle-disseminate/01-overview.png)
 
 **Dataset**: the dataset's WordPress page, its **Version**, and its
 **Publication** status (draft or published in WordPress).
@@ -48,7 +48,7 @@ click **Update Page** or **Publish All & Go Live**.
      transfer. Nothing to generate.
 3. Click **Update Page**.
 
-<!-- ![Download Manage dialog](images/cycle-disseminate/02-manage.png) -->
+![Download Manage dialog](images/cycle-disseminate/02-manage.png)
 
 > **Warning:** **Update Page** changes the public page right away.
 

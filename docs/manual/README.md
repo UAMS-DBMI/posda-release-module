@@ -46,6 +46,7 @@ Training exercises are in [../training/](../training/README.md).
 - Use `> **Note:**`, `> **Tip:**` and `> **Warning:**` for callouts.
 - Copy [_TEMPLATE.md](_TEMPLATE.md) to start a new section.
 - Screenshot slots are commented out (`<!-- ![…](images/…) -->`). Uncomment
-  them once the image file exists.
+  them once the image file exists. [SCREENSHOTS.md](SCREENSHOTS.md) lists
+  every slot in capture order.
 - Open questions are marked `<!-- Q… -->` in the text and collected in
   [QUESTIONS.md](QUESTIONS.md).

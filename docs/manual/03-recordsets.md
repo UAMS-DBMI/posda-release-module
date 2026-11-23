@@ -24,7 +24,7 @@ Recordsets, their destinations, drafts, and releases, outside the cycle view.
 
 3. Click **Create Recordset**.
 
-<!-- ![New Recordset dialog](images/recordsets/01-create.png) -->
+![New Recordset dialog](images/recordsets/01-create.png)
 
 A new recordset has no destinations, no WordPress download page, and no
 releases. Set up the first two in [Setup](05-cycle-setup.md); its first release
@@ -32,7 +32,7 @@ comes from a draft in [Assemble](06-cycle-assemble.md).
 
 ## The recordset page
 
-<!-- ![Recordset page](images/recordsets/02-detail.png) -->
+![Recordset page](images/recordsets/02-detail.png)
 
 The breadcrumb shows the dataset it belongs to. The header has the
 **Active**/**Inactive** badge, a favorite star, **Edit Recordset**, and the
@@ -69,7 +69,7 @@ Every published version: **Version**, **Status**, **Date**, **Notes** and
 
 `/release/recordsets/drafts/:draft_id`
 
-<!-- ![Draft page](images/recordsets/03-draft.png) -->
+![Draft page](images/recordsets/03-draft.png)
 
 Shows the draft's notes and **File Summary** (patients, studies, series, file
 types, modalities). The header has:

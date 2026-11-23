@@ -11,7 +11,7 @@ it.
 
 ## The Bundle page
 
-<!-- ![Bundle stage](images/cycle-bundle/01-overview.png) -->
+![Bundle stage](images/cycle-bundle/01-overview.png)
 
 The top line shows the dataset release's version and status, with
 **Finalize Release**.
@@ -30,7 +30,7 @@ Publishing freezes a draft's files into a new, unchangeable recordset release.
 2. Optionally add **Release Notes**.
 3. Click **Publish**.
 
-<!-- ![Publish dialog](images/cycle-bundle/02-publish.png) -->
+![Publish dialog](images/cycle-bundle/02-publish.png)
 
 The version number and date are assigned automatically. The row now shows the
 new version.
@@ -56,7 +56,7 @@ can't be changed. A correction means a new cycle.
 3. Optionally add **Release Notes**.
 4. Click **Finalize**.
 
-<!-- ![Finalize dialog](images/cycle-bundle/03-finalize.png) -->
+![Finalize dialog](images/cycle-bundle/03-finalize.png)
 
 Finalize is blocked when:
 

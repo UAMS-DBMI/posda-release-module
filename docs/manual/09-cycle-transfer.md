@@ -18,7 +18,7 @@ Send the finalized release to each of its destinations.
 
 ## The Transfer table
 
-<!-- ![Transfer stage](images/cycle-transfer/01-table.png) -->
+![Transfer stage](images/cycle-transfer/01-table.png)
 
 One row per **destination** the release ships to: not per recordset. A transfer
 carries every recordset in the release that's routed to that destination.
@@ -53,7 +53,7 @@ it to bring the transfer up to date.
 
 Click **Manage** on the row.
 
-<!-- ![Transfer Manage dialog](images/cycle-transfer/02-manage.png) -->
+![Transfer Manage dialog](images/cycle-transfer/02-manage.png)
 
 | Destination | Settings |
 |---|---|
@@ -85,7 +85,7 @@ Queueing hands the transfer to the delivery service, which starts uploading.
 2. Read the confirmation and fix any warnings it shows.
 3. Click **Queue Transfer**.
 
-<!-- ![Queue confirmation](images/cycle-transfer/03-queue.png) -->
+![Queue confirmation](images/cycle-transfer/03-queue.png)
 
 > **Warning:** There is no un-queue. Once a transfer starts, its status can't be
 > sent back.
