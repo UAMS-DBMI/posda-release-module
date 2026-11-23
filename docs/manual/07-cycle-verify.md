@@ -51,6 +51,8 @@ Review**) start the same way.
 A draft with only non-DICOM files gets a **New Non-DICOM Review** instead.
 There's no sampling; it covers every file.
 
+![New Non-DICOM Review dialog](images/cycle-verify/08-new-non-dicom-review.png)
+
 <!-- Q: when to use full vs partial, and what percentage; see QUESTIONS.md Q8 -->
 
 ## Reviewing

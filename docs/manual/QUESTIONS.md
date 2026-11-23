@@ -49,5 +49,4 @@ write.
 | Q24 | Assemble labels v1's drafts *published this cycle* while v2 is the cycle in progress |
 | Q25 | With one open review on v2, the Verify tab said *51% reviewed* while the banner said *QC is 0% reviewed* |
 | Q26 | While a recordset has an open draft, its page's **Releases** table shows an extra *draft* row with no version and 0 files |
-| Q27 | The IDC transfer row showed *3,386 files* for two recordsets that hold 3,386 + 1,586 files |
 | Q28 | The transfer name on the Transfer stage and a draft's name on the recordset page open in a new tab |
