@@ -1,189 +1,126 @@
 # CROISSANT.md — Croissant metadata for a dataset release
 
-Notes for generating a [Croissant](https://docs.mlcommons.org/croissant/docs/croissant-spec-1.1.html)
-JSON-LD document (plus per-recordset CSVs) for each released dataset, so the
-TCIA Data Retriever (TDR) and ML tooling can discover and download it. Started
-2026-11-12. **Nothing here is built yet. Nothing is decided yet.** The working
-assumption is that this happens at the **end of the release cycle, during
-Disseminate**.
+Generating one [Croissant](https://docs.mlcommons.org/croissant/docs/croissant-spec-1.1.html)
+JSON-LD file per dataset release, so the TCIA Data Retriever (TDR) can download
+the whole dataset from one file. Started 2026-11-12. **Not built yet.**
 
-Related: [CYCLE_WIZARD.md](CYCLE_WIZARD.md) step 7 (Disseminate, retriever
-manifests), [CRDC_TRANSFER.md](CRDC_TRANSFER.md) *Download manifests* (the
-per-destination retriever formats), [ASPERA_TRANSFER.md](ASPERA_TRANSFER.md)
-(TDR skips Aspera rows), [WP_UPDATES.md](WP_UPDATES.md) (download pages, version
-DOIs).
+Related: [CYCLE_WIZARD.md](CYCLE_WIZARD.md) step 7 (Disseminate),
+[CRDC_TRANSFER.md](CRDC_TRANSFER.md) *Croissant* (2026-10-14 meeting notes),
+[WP_UPDATES.md](WP_UPDATES.md) (the WordPress pods).
 
-Sources (read 2026-11-12):
-- `kirbyju/tcia-croissant-odrl`: `docs/implementation-guide.md` (the TCIA
-  team's current plan, dated 2026-11-12, which takes precedence over the repo's
-  other docs), `docs/recordset-manifest-design.md`, and
-  `examples/recordset-manifests/`. The CMB-AML example has three recordsets:
-  public DICOM, controlled DRS, and Aspera pathology.
-- `TCIA/data-retriever`: `README.md` and `core/app/croissant.go`.
+## ✅ Decisions *(2026-11-23)*
 
-## What TCIA is proposing
+- **Posda generates the file** at **Disseminate**, and uploads it to the
+  dataset page's new WordPress field **`croissant_manifest`**.
+- **Built from WordPress data.** It reads the collection or analysis result
+  page and its download pages.
+- **Port `generate_tcia_croissant.py`** from `kirbyju/tcia-croissant-odrl`. It
+  already builds this document from WordPress records. Swap its SQLite snapshot
+  input for WordPress REST reads through `util/wp.py`. Keep the
+  document-building functions as they are.
+- **One JSON file, no CSVs.** Each download page's existing `download_url` /
+  `download_file` is the payload link, whatever its format. The repo's other
+  script, `generate_recordset_examples.py`, uses a model with one CSV per
+  recordset. Not used here.
+- **No DataCite call.** The dates and version come from the `dataset_release`.
+- **`@id` is the dataset DOI.** `release_doi` is unused and hidden for now.
+- **Stored on `dataset_release.croissant_file_id`** (new column, dated
+  migration). The JSON is a Posda file like the retriever manifests, so
+  `ensure_wp_media` dedups the upload.
+- **Go-live requires it.** Publish refuses unless `croissant_manifest` holds
+  this release's current file.
 
-The guide assumes **WordPress** generates and hosts the documents. Posda's role
-is open (see *Where Posda fits*).
+## Plan
 
-- **One Croissant document per public Collection / Analysis Result.**
-- **The target model is external CSV recordsets.** Each WordPress download
-  becomes one Croissant `RecordSet`, backed by one CSV `FileObject` in
-  `distribution`. Every `Field` names its source CSV and column. The CSV is a
-  `FileObject` (one file), not a `FileSet`: a `FileSet` would describe the
-  payload files themselves.
-- An earlier, simpler format, **download summaries**, describes the WordPress
-  download rows and links to existing files and manifests. It is acceptable for
-  an early rollout. The two formats are not interchangeable.
-- **The CSV merges the manifest with the metadata.** Patient ID, study and
-  series descriptions, modality, sizes, and license all become columns. TCIA
-  wants to retire the separate WordPress "metadata" attachment once this CSV
-  becomes the authoritative inventory.
-- **Each CSV has exactly one TDR route column:**
+Disseminate order:
+1. Update download pages (existing: attaches each retriever manifest).
+2. **Generate Croissant**: enabled once every download page is current (the
+   `page_current` check go-live uses). Separate from go-live, so the file can be
+   checked before anything is public.
+3. Go live: new gate on the Croissant file.
 
-  | Route column | Used for | Posda destination |
-  |---|---|---|
-  | `SeriesInstanceUID` | public DICOM series | `idc`, `nbia` (TDR resolves through the IDC index and falls back to NBIA) |
-  | `imageUrl` | direct public files (e.g. PathDB) | possibly `wp` media? |
-  | `drs_uri` | controlled objects | `gc`, `ctdc` |
+Backend (oneposda):
+- `util/croissant.py`: the ported builder, pure functions, tests in `tests/`.
+- `POST /datasets/releases/{id}/croissant` in `distribution.py`: read the
+  dataset page and download pages from WordPress, resolve each `download_file`
+  URL, build, store as a file, `ensure_wp_media`, PATCH `croissant_manifest`,
+  set `croissant_file_id`.
+- Disseminate status reports whether `croissant_manifest` is current.
 
-  Other recordsets, such as an Aspera inventory, keep their native key (for
-  example `asset_id`) and a `retrievalRoute` column. TDR does not download them.
-- **Constant columns added to every row:** `accessLevel` (`open` /
-  `controlled`) and `retrievalRoute`. Controlled rows also get
-  `authorizationAuthority` (e.g. `dbGaP phs002192`).
-- **Proposed URLs:** `/collection/<slug>/croissant.jsonld`, plus
-  `/collection/<slug>/recordsets/<wp-download-id>-<slug>.csv`. Recordset
-  identity uses WordPress record IDs, not slugs, so it survives renames.
-- **Regenerate whenever any input changes:** a download added, edited, deleted
-  or reassigned (a reassignment regenerates both parents), dataset metadata
-  changing (title, DOI, version, dates, visibility, access, license), or a
-  manifest or inventory changing. Publish the JSON-LD and its CSVs together as
-  one consistent version, with matching `sha256` and `contentSize`. If a
-  generation fails, keep the last valid version and mark it stale. A withdrawal
-  must explicitly remove the documents.
-- **The page links to the document** in two places:
-  - a `subjectOf` `CreativeWork` on the page's Schema.org `Dataset`;
-  - `<link rel="alternate" type='application/ld+json; profile="http://mlcommons.org/croissant/1.1"'>`
-    in the page `<head>`.
+Frontend: a Croissant row on Disseminate: Generate, link, current/stale badge.
 
-  Later, DataCite would also link it through `HasMetadata`.
-- **Button:** "Download all with TCIA Data Retriever". If TDR can't retrieve
-  every recordset (for example the Aspera ones), the label must say so.
-- **ODRL / DUO** policy metadata is optional later work. Policy terms must
-  **never** be inferred from disease labels or dbGaP accessions, and a manifest
-  never grants access.
-- **Never publish** credentials, tokens or signed URLs. A DRS URI is fine: it
-  identifies an object without granting access.
+### Progress
 
-### Top-level shape (CMB-AML example)
+- [x] Migration `20261123_dataset_release_croissant_file.sql` (not applied).
+- [x] Builder `papi/util/croissant.py` + `tests/test_croissant.py` (8 pass).
+  Differences from the script:
+  - **Access level** comes from WordPress `download_access` (`Limited` →
+    controlled), with the license text only separating open from
+    noncommercial. The script guessed it all from text.
+  - **License URL** comes from the license name (the script's CC mapping), so
+    no Licenses lookup.
+  - **Dropped:** DataCite, the data-citation and related-publication lists
+    (WordPress `citations` are post IDs), the provenance block (it guessed the
+    document's URL), and parsing source collections out of the summary text.
+    `citeAs` is "title. The Cancer Imaging Archive. year. DOI URL", with the
+    year of release 1.
+  - **Analysis results:** `isBasedOn` lists the page's `collections` by name
+    plus the source download pages the caller passes.
+- [x] Endpoint `POST /datasets/releases/{id}/croissant` (written, not run).
+  - Refuses unless the release is `released` and every download page is
+    current (`wp_page_states`, the go-live check).
+  - Reads every download listed on the WordPress page (`collection_downloads` /
+    `result_downloads`), not just Posda's recordsets: the file describes the
+    public page. An analysis result's `collection_downloads` become
+    `isBasedOn`.
+  - Stores the JSON through `store_manifest` (filename
+    `<dataset>-croissant.jsonld`, no version), sets `croissant_file_id`, uploads
+    with `ensure_wp_media`, and PATCHes `croissant_manifest` only when it
+    differs.
+  - **Tested 2026-11-23 on page 55832 (production WP, draft page).** Generation
+    works: 2 retriever-manifest rows, 2 direct CSV rows. `croissant_manifest`
+    exists and reads `false` while empty. **The upload is blocked:** WordPress
+    rejects both `.jsonld` (`application/ld+json`) and `.json`
+    (`application/json`) with `rest_upload_sideload_error` "not allowed to
+    upload this file type". Nothing was written. WordPress needs to allow the
+    type (an `upload_mimes` filter adding `jsonld` → `application/ld+json`)
+    before the PATCH and read-back can be tested.
+- [ ] Disseminate status + go-live gate.
+- [ ] Frontend row.
 
-```text
-@type sc:Dataset, @id = DOI URL, conformsTo http://mlcommons.org/croissant/1.1
-name, alternateName (short title), description, url (landing page),
-identifier + citeAs (DOI), license [per-recordset licenses], version,
-datePublished, dateModified, isLiveDataset, conditionsOfAccess, usageInfo,
-prov:wasGeneratedBy, additionalProperty,
-distribution[]  cr:FileObject  {contentUrl, encodingFormat text/csv,
-                                contentSize "N B", sha256, license}
-recordSet[]     cr:RecordSet   {@id .../recordsets/<id>/records, name,
-                                description, key -> route field,
-                                conditionsOfAccess, usageInfo, field[]}
-field[]         cr:Field       {name, dataType sc:Text|sc:URL|…, description,
-                                source {fileObject @id, extract {column}}}
-```
+### What WordPress returns *(checked 2026-11-23, collection 55832, download 55836)*
 
-`@context` declares `sc`, `cr`, `rai`, `dct`, `prov`, `odrl` and `duo`.
+- `collection_downloads`: list of download post IDs.
+- `download_requirements`, `data_license`: **names** (e.g. "Requires TCIA Data
+  Retriever", "CC BY 4.0"), so the role logic's text match works as is. A
+  license URL needs a lookup in the Licenses endpoint by name.
+- `download_file`: a media ID as a string. The URL needs a Media lookup
+  (`source_url`). `download_url` is empty when a file is attached, so the payload
+  link is the media URL, falling back to `download_url`.
+- `croissant_manifest`: not visible through the Manager API (`format_collection`
+  doesn't pass it through); check the raw REST field when wiring the PATCH.
 
-## What TDR actually does (`core/app/croissant.go`, `main`)
+## What the file contains
 
-- **It accepts `.json` and `.jsonld` input.** A document qualifies if it has a
-  `recordSet`, a `distribution`, or `isBasedOn` DataDownloads.
-- **External-CSV RecordSets are supported on `main` now.** A RecordSet with no
-  inline `data` has its field-source `FileObject`s treated as nested TDR
-  manifests, and the CSV is parsed like any spreadsheet manifest. The guide
-  says the TDR build it inspected *didn't* do this, so check which **released**
-  version does before relying on it.
-- **Roles:** `data file` (downloaded directly), `manifest` (expanded, but only
-  when its access mechanism contains "Data Retriever"), and `transfer package`
-  (skipped with a warning). A row counts as a transfer package if its mechanism
-  says Aspera or its URL contains `faspex`. Nested manifests can be `.tcia`,
-  `.s5cmd`, `.csv`, `.tsv` or `.xlsx`.
-- **Download-summary rows** carry `additionalProperty` names TDR reads:
-  `tciaDownloadId`, `tciaDownloadArtifactRole`, `tciaAccessMechanism`,
-  `tciaAccessLevel`, `tciaSearchAccessUrl`, `tciaSearchSystem`,
-  `tciaDownstreamAccessSystem`, `tciaDownloadRequirements`. Matching ignores
-  case and punctuation.
-- **Selection:** each component's ID is its RecordSet `@id`, or failing that
-  the FileObject ID or download ID. The CLI flags `--croissant-list`,
-  `--croissant-include ID`, `--croissant-exclude ID` and
-  `--croissant-include-group isBasedOn` select by that ID. **RecordSet `@id`s
-  must therefore be stable across regenerations.**
-- **`isBasedOn` DataDownloads are opt-in.** They are listed but not selected by
-  default. This fits an **analysis result**, whose source collection's images
-  appear as optional `isBasedOn` downloads. In Posda that relationship would
-  come from `dataset_relation_type`.
-- TDR writes `metadata/metadata.csv` under the output directory and
-  de-duplicates rows that point at the same URL.
-- Controlled downloads use the user's own Gen3/CRDC key (`--auth`). Nothing of
-  ours goes in the document.
+| Croissant | Source |
+|---|---|
+| `@id`, `identifier`, `sameAs` | dataset DOI (WordPress `collection_doi` / `result_doi`) |
+| `name`, `alternateName`, `description`, `url`, `keywords` | the collection / analysis result page |
+| `version` | `dataset_release.release_number` |
+| `datePublished` | `release_date` of the dataset's **release 1** |
+| `dateModified` | this release's `release_date` |
+| `license`, `conditionsOfAccess` | combined from the download pages |
+| `distribution[]` (`cr:FileObject`) | one per download page that has a URL |
+| `recordSet[]` (`cr:RecordSet`, one inline `data` row) | one per download page: title, types, license, access level, counts, metadata URL, requirements |
+| `isBasedOn` | analysis results only: the source collection's downloads |
 
-## Where Posda fits (thinking, not decided)
+How the script decides what TDR does with each download:
 
-- **Posda has the authoritative inventory.** The guide notes that "WordPress
-  download metadata alone does not supply all payload inventory rows." Posda
-  knows every series and file in each `recordset_release`, its DICOM metadata,
-  and, after Transfer, the destination identifiers: the IDC/NBIA series UIDs
-  and the CRDC DRS IDs (`drs://nci-crdc.datacommons.io/` + the Data Hub
-  `fileID`). Posda could at least produce the **recordset CSVs**, even if
-  WordPress assembles the JSON-LD.
-- **Natural mapping:**
-  - `dataset_release` → one Croissant document (`version` = release number,
-    `identifier` = DOI);
-  - each member `recordset_release` / download page → one `RecordSet` + CSV;
-  - the destination flagged for the page → the route column.
-- **It is the retriever manifest, enriched.** CYCLE_WIZARD.md step 7 already
-  builds a per-`(transfer, recordset_release)` retriever manifest at
-  Disseminate (`transfer_recordset.retriever_manifest_file_id`). The Croissant
-  CSV is that manifest plus metadata columns plus `accessLevel` /
-  `retrievalRoute`, and the Croissant document sits one level up, per dataset
-  release.
-- **Why Disseminate, not earlier:** DRS URIs exist only after the CRDC
-  transfer, and an IDC UID list only resolves once IDC publishes a data release
-  containing those series. Disseminate's gate (every transfer `success`) is the
-  first point where every route value is real. Bundle could still build a
-  **preview** for checking.
-- **Regenerating outside the cycle.** TCIA's triggers include edits that
-  happen outside a release cycle, such as a title or license change or a
-  download reassignment. If Posda only generates at Disseminate, those edits
-  need WordPress-side regeneration or a manual "regenerate Croissant" action.
+| Download page says | Role | TDR |
+|---|---|---|
+| requirements mention "Data Retriever" | `manifest` | expands the linked manifest (`.tcia`, `.csv`, `.tsv`, `.xlsx`, `.s5cmd`) |
+| requirements mention Aspera / Faspex | `transfer package` | skips it with a warning |
+| anything else with a URL | `data file` | downloads it directly |
 
-## Open questions
-
-1. **Who generates and hosts it: WordPress or Posda?** If Posda generates, the
-   files go to WordPress as media, the same way retriever manifests do today.
-   Bring this to Justin and Jeff.
-2. **Storage in Posda.** Is it a file on the `dataset_release` (a new
-   `croissant_file_id`?) and per-recordset CSVs on `transfer_recordset`? Either
-   is a **schema change**, so it needs a dated migration.
-3. **Mixed-destination recordsets.** One CSV can hold only one route column. A
-   recordset split across destinations, such as DICOM to IDC and pathology to
-   Aspera, becomes two RecordSets. Does a WordPress download map 1:1 to a
-   recordset release, or not always?
-4. **Which columns belong in the stable TCIA profile?** TCIA itself lists this
-   as a review question. Wait for TCIA's answer before choosing columns.
-5. **Checksums.** Croissant uses `sha256`, while Posda's file digests are MD5.
-   That's fine for the CSV FileObjects, since we compute them at generation
-   time. Payload files aren't modeled as FileSets yet.
-6. **Faspex links.** TCIA's own CMB-AML example puts the Faspex public-link
-   `context` (which includes the passcode) in `transferHandoffUrl`. Public
-   package links are public by design (ASPERA_TRANSFER.md), but this sits
-   uneasily with "no tokens". Confirm it with TCIA.
-7. **Version DOIs.** Justin wants a DOI per dataset version (WP_UPDATES.md). If
-   each version gets one, is each Croissant document keyed to the version DOI,
-   and does the stable `/croissant.jsonld` always describe the latest version?
-8. **Validation.** The guide uses `mlcroissant` (Python). Adding it to oneposda
-   would be a **new dependency, so ask first**. An alternative is to validate
-   only on the TCIA side.
-9. **Which TDR release** first supports external-CSV recordsets, and does it
-   pass RecordSet selection from a WordPress button?
+`isBasedOn` downloads are opt-in in TDR. It lists them, but leaves them
+unselected by default.
