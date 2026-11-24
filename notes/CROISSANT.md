@@ -82,9 +82,12 @@ Frontend: a Croissant row on Disseminate: Generate, link, current/stale badge.
     exists and reads `false` while empty. **The upload is blocked:** WordPress
     rejects both `.jsonld` (`application/ld+json`) and `.json`
     (`application/json`) with `rest_upload_sideload_error` "not allowed to
-    upload this file type". Nothing was written. WordPress needs to allow the
-    type (an `upload_mimes` filter adding `jsonld` → `application/ld+json`)
-    before the PATCH and read-back can be tested.
+    upload this file type".
+  - **Retested 2026-11-24 after WordPress allowed `.jsonld`: works.** Uploaded
+    as media 56602 (`…/uploads/pseudo-clone-test-croissant.jsonld`, which
+    WordPress records as `application/json`). The PATCH set 55832's
+    `croissant_manifest`, and it reads back as the attachment post with
+    `"ID": "56602"` as a string, which is the shape the endpoint compares.
 - [ ] Disseminate status + go-live gate.
 - [ ] Frontend row.
 
