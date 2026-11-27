@@ -32,3 +32,6 @@ yarn-error.log*
 *.tsbuildinfo
 work/
 .claude/
+
+# python
+__pycache__/
