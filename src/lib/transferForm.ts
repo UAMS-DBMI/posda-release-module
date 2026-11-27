@@ -286,6 +286,8 @@ export function useSyncTransferRecordsets(
 export function useQueueTransfer(
   releaseId: number | undefined,
   datasetId: string | undefined,
+  /** Required by the API when the release is live. */
+  correctionNote: string | null = null,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -294,7 +296,10 @@ export function useQueueTransfer(
         `${BASE}/transfers/${transferId}`,
         {
           method: "PUT",
-          body: JSON.stringify({ transfer_status: "queued" }),
+          body: JSON.stringify({
+            transfer_status: "queued",
+            ...(correctionNote ? { correction_note: correctionNote } : {}),
+          }),
         },
       );
       return json.data;

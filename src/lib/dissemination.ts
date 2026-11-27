@@ -139,13 +139,20 @@ export type AttachManifestResult = {
  * whose series list didn't change. Callers should say so rather than reporting
  * nothing happened.
  */
+/** A page change on a live release is a correction, and the API wants its note. */
+type CorrectableTarget = ManifestTarget & { correctionNote?: string | null };
+
+function correctionBody(note: string | null | undefined): { body?: string } {
+  return note ? { body: JSON.stringify({ correction_note: note }) } : {};
+}
+
 export function useAttachRetrieverManifest() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ transferId, recordsetReleaseId }: ManifestTarget) => {
+    mutationFn: async ({ transferId, recordsetReleaseId, correctionNote }: CorrectableTarget) => {
       const json = await apiFetch<ItemEnvelope<AttachManifestResult>>(
         `${BASE}/transfers/${transferId}/recordsets/${recordsetReleaseId}/manifest/attach`,
-        { method: "POST" },
+        { method: "POST", ...correctionBody(correctionNote) },
       );
       return json.data;
     },
@@ -183,10 +190,10 @@ export function wpPagesKey(releaseId: number | undefined) {
 }
 
 /** Read live from WordPress, one read per page. */
-export function useWpPageStates(releaseId: number | undefined) {
+export function useWpPageStates(releaseId: number | undefined, enabled = true) {
   return useQuery({
     queryKey: wpPagesKey(releaseId),
-    enabled: releaseId != null,
+    enabled: enabled && releaseId != null,
     queryFn: () =>
       apiFetch<ListEnvelope<WpPageState>>(
         `${BASE}/datasets/releases/${releaseId}/wp/pages`,
@@ -209,10 +216,10 @@ export type UpdateWpPageResult = {
 export function useUpdateWpPage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ transferId, recordsetReleaseId }: ManifestTarget) => {
+    mutationFn: async ({ transferId, recordsetReleaseId, correctionNote }: CorrectableTarget) => {
       const json = await apiFetch<ItemEnvelope<UpdateWpPageResult>>(
         `${BASE}/transfers/${transferId}/recordsets/${recordsetReleaseId}/wp/update-page`,
-        { method: "POST" },
+        { method: "POST", ...correctionBody(correctionNote) },
       );
       return json.data;
     },

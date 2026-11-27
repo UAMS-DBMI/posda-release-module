@@ -32,7 +32,7 @@ import {
   type CycleTransfer,
   type DatasetCycle,
 } from "@/lib/useCycle";
-import { useCycleContext } from "./CycleLayout";
+import { isLocked, useCycleContext } from "./CycleLayout";
 
 /** The transfer a recordset's public download points at: the one for its
  *  `default_display` destination. Null when no destination is flagged, or when
@@ -128,8 +128,11 @@ function DestinationCell({ recordset }: { recordset: CycleRecordset }) {
  *  differences live in the modal. Its own component so each row can hold its
  *  modal state -- a hook cannot be called inside a `.map()`. */
 function DownloadPageCell({ recordset }: { recordset: CycleRecordset }) {
-  const { cycle } = useCycleContext();
-  const pages = useWpPageStates(cycle.dataset_release?.dataset_release_id);
+  const { cycle, correction } = useCycleContext();
+  const locked = isLocked(cycle, correction);
+  // A live release's pages went live with it, so there's nothing to check or
+  // change until a correction is started.
+  const pages = useWpPageStates(cycle.dataset_release?.dataset_release_id, !locked);
   const [managing, setManaging] = useState(false);
 
   const { transfer, destinationAbbr } = publicTransfer(
@@ -144,6 +147,7 @@ function DownloadPageCell({ recordset }: { recordset: CycleRecordset }) {
   );
 
   if (!destinationAbbr) return note("—");
+  if (locked) return note("Live");
   if (!transfer) {
     return (
       <div className={cell}>
@@ -175,6 +179,7 @@ function DownloadPageCell({ recordset }: { recordset: CycleRecordset }) {
           recordset={recordset}
           transfer={transfer}
           state={state}
+          correctionNote={correction}
           onClose={() => setManaging(false)}
         />
       )}
@@ -189,11 +194,14 @@ function DownloadPageModal({
   recordset,
   transfer,
   state,
+  correctionNote,
   onClose,
 }: {
   recordset: CycleRecordset;
   transfer: CycleTransfer;
   state: WpPageState;
+  /** Set when changing a live release's page, as a correction. */
+  correctionNote: string | null;
   onClose: () => void;
 }) {
   const { addToast } = useToast();
@@ -251,10 +259,11 @@ function DownloadPageModal({
       );
       onClose();
     };
+    const corrected = { ...target, correctionNote };
     if (isDirect) {
-      update.mutate(target, { onSuccess: (r) => onDone(r.attached), onError });
+      update.mutate(corrected, { onSuccess: (r) => onDone(r.attached), onError });
     } else {
-      attach.mutate(target, { onSuccess: (r) => onDone(r.attached), onError });
+      attach.mutate(corrected, { onSuccess: (r) => onDone(r.attached), onError });
     }
   }
 
@@ -365,11 +374,15 @@ function DownloadPageModal({
  *  its own destination's transfer to have landed. Only the go-live button waits
  *  for the whole release. */
 export default function DisseminateStage() {
-  const { cycle, datasetId } = useCycleContext();
+  const { cycle, datasetId, correction } = useCycleContext();
   const { addToast } = useToast();
   const release = cycle.dataset_release;
   const publish = usePublishRelease(datasetId, release?.dataset_release_id);
-  const wpPages = useWpPageStates(release?.dataset_release_id);
+  // Only the go-live check reads these here, and a live release has gone live.
+  const wpPages = useWpPageStates(
+    release?.dataset_release_id,
+    !isLocked(cycle, correction),
+  );
   const idcTransfer = release
     ? shippingTransfers(release).find((t) => t.destination_abbr === "idc")
     : undefined;
