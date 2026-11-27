@@ -15,10 +15,13 @@ import { useToast } from "@/components/Toast";
 import { toastError, toastSuccess, toastWarning } from "@/components/toastHelpers";
 import {
   useAttachRetrieverManifest,
+  useCroissantState,
+  useGenerateCroissant,
   useGenerateRetrieverManifest,
   usePublishRelease,
   useUpdateWpPage,
   useWpPageStates,
+  type CroissantState,
   type WpPageState,
 } from "@/lib/dissemination";
 import { useIdcBucketStatus, type IdcBucketStatus } from "@/lib/idcBucket";
@@ -59,6 +62,7 @@ function publishBlockedReason(
   cycle: DatasetCycle,
   wpPages: WpPageState[],
   idc: IdcBucketStatus | undefined,
+  croissant: CroissantState | undefined,
 ): string | null {
   const release = cycle.dataset_release;
   if (!release) return "No release to publish.";
@@ -97,7 +101,101 @@ function publishBlockedReason(
     return `${unlinked.map((r) => r.recordset_name).join(", ")} not linked to WordPress.`;
   }
   if (!cycle.dataset_wp_linked) return "The dataset has no WordPress page linked.";
+  // Built from the download pages above, so it comes after them.
+  if (!croissant?.page_current) return "Generate the Croissant file.";
   return null;
+}
+
+/** The dataset row's Croissant cell: is this release's file on the dataset
+ *  page, and Generate to build it from the WordPress pages. Generate waits for
+ *  every download page, since the file describes them. */
+function CroissantCell() {
+  const { cycle, correction } = useCycleContext();
+  const { addToast } = useToast();
+  const release = cycle.dataset_release;
+  const releaseId = release?.dataset_release_id;
+  const locked = isLocked(cycle, correction);
+  const finalized = release != null && release.release_status !== "draft";
+  const croissant = useCroissantState(releaseId, finalized && !locked);
+  const pages = useWpPageStates(releaseId, finalized && !locked);
+  const generate = useGenerateCroissant(releaseId);
+
+  const cell = "flex min-h-8 items-center gap-2";
+  const note = (text: string) => (
+    <div className={`${cell} px-2 text-xs`} style={{ color: "var(--muted)" }}>
+      {text}
+    </div>
+  );
+
+  if (!finalized) return note("—");
+  if (locked) return note("Live");
+  if (croissant.isLoading || pages.isLoading) return note("Loading…");
+
+  // A page whose transfer hasn't delivered has nothing to update yet, so say
+  // what it's actually waiting on.
+  const transfers = release?.transfers ?? [];
+  const delivered = (p: WpPageState) =>
+    transfers.find((t) => t.dataset_release_transfer_id === p.transfer_id)
+      ?.transfer_status === "success";
+  const stale = (pages.data ?? []).filter((p) => !p.page_current);
+  const waiting = stale.filter((p) => !delivered(p));
+  const toUpdate = stale.filter(delivered);
+  const names = (ps: WpPageState[]) => ps.map((p) => p.recordset_name).join(", ");
+  const blocked = waiting.length > 0
+    ? `Waiting on the ${[...new Set(waiting.map((p) => p.destination_abbr))].join(", ")} transfer for ${names(waiting)}.`
+    : toUpdate.length > 0
+      ? `Update the download for ${names(toUpdate)} first.`
+      : null;
+  const state = croissant.data;
+
+  function handleGenerate() {
+    generate.mutate(undefined, {
+      onSuccess: (r) =>
+        toastSuccess(
+          addToast,
+          r.attached
+            ? `Put the Croissant file on the dataset page (${r.download_count} downloads).`
+            : "The dataset page already has this Croissant file.",
+        ),
+      onError: (e) =>
+        toastError(
+          addToast,
+          e instanceof Error ? e.message : "Could not generate the Croissant file.",
+        ),
+    });
+  }
+
+  return (
+    <div className={cell}>
+      {state?.page_current ? (
+        <StatusBadge status="success" label="On page" variant="success" />
+      ) : (
+        <StatusBadge status="none" label="Not on page" variant="warning" />
+      )}
+      <Button
+        size="sm"
+        variant="ghost"
+        loading={generate.isPending}
+        disabled={blocked !== null}
+        title={blocked ?? "Build the file from the WordPress pages and put it on the dataset page"}
+        onClick={handleGenerate}
+      >
+        {state?.media_id != null ? "Regenerate" : "Generate"}
+      </Button>
+      {state?.media_url && (
+        <ExternalLinkButton
+          size="sm"
+          variant="ghost"
+          className="px-2"
+          aria-label="View the Croissant file"
+          title="View the Croissant file"
+          href={state.media_url}
+        >
+          <ExternalLinkIcon />
+        </ExternalLinkButton>
+      )}
+    </div>
+  );
 }
 
 /** The one destination that matters on this stage: the `default_display` one,
@@ -387,6 +485,10 @@ export default function DisseminateStage() {
     ? shippingTransfers(release).find((t) => t.destination_abbr === "idc")
     : undefined;
   const idc = useIdcBucketStatus(idcTransfer?.dataset_release_transfer_id);
+  const croissant = useCroissantState(
+    release?.dataset_release_id,
+    release != null && release.release_status !== "draft" && !isLocked(cycle, correction),
+  );
 
   if (!release) {
     return (
@@ -397,7 +499,12 @@ export default function DisseminateStage() {
   }
 
   const members = disseminationRecordsets(cycle);
-  const blockedReason = publishBlockedReason(cycle, wpPages.data ?? [], idc.data);
+  const blockedReason = publishBlockedReason(
+    cycle,
+    wpPages.data ?? [],
+    idc.data,
+    croissant.data,
+  );
   const transfers = shippingTransfers(release);
   const delivered = transfers.filter(
     (t) => t.transfer_status === "success",
@@ -468,6 +575,7 @@ export default function DisseminateStage() {
             version: `v${release.release_number}`,
             wp_linked: cycle.dataset_wp_linked,
             wp_status: cycle.dataset_wp_linked,
+            croissant: cycle.dataset_id,
           },
         ]}
         getRowKey={(row) => row.dataset_id}
@@ -535,6 +643,11 @@ export default function DisseminateStage() {
                 linked={cycle.dataset_wp_linked}
               />
             ),
+          },
+          {
+            key: "croissant",
+            label: "Croissant",
+            render: () => <CroissantCell />,
           },
         ]}
       />

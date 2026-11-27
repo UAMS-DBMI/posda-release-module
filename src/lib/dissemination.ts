@@ -202,6 +202,67 @@ export function useWpPageStates(releaseId: number | undefined, enabled = true) {
   });
 }
 
+/** Whether the dataset page's `croissant_manifest` holds this release's
+ *  generated Croissant file. "Current" means the page has this file, not that
+ *  the file still matches WordPress -- regenerate after any page change. */
+export type CroissantState = {
+  release_id: number;
+  file_id: number | null;
+  /** Null until the file has been generated and uploaded. */
+  media_id: number | null;
+  media_url: string;
+  current_media_id: number | null;
+  page_current: boolean;
+};
+
+export function croissantKey(releaseId: number | undefined) {
+  return ["croissant", releaseId ?? null] as const;
+}
+
+/** Read live from WordPress, like the page states. */
+export function useCroissantState(releaseId: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: croissantKey(releaseId),
+    enabled: enabled && releaseId != null,
+    queryFn: () =>
+      apiFetch<ItemEnvelope<CroissantState>>(
+        `${BASE}/datasets/releases/${releaseId}/croissant`,
+      ),
+    select: (env) => env.data,
+  });
+}
+
+export type GenerateCroissantResult = {
+  release_id: number;
+  file_id: number;
+  wp_media_id: number;
+  download_count: number;
+  source_download_count: number;
+  /** False when those exact bytes were already in the media library. */
+  uploaded: boolean;
+  /** False when the page already pointed at that file. */
+  attached: boolean;
+};
+
+/** Builds the release's Croissant file from its WordPress pages and puts it on
+ *  the dataset page. The server refuses until every download page is current.
+ *  No correction note on a live release: the file only describes the pages. */
+export function useGenerateCroissant(releaseId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const json = await apiFetch<ItemEnvelope<GenerateCroissantResult>>(
+        `${BASE}/datasets/releases/${releaseId}/croissant`,
+        { method: "POST" },
+      );
+      return json.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: croissantKey(releaseId) });
+    },
+  });
+}
+
 export type UpdateWpPageResult = {
   recordset_id: number;
   recordset_name: string;
