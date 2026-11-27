@@ -41,13 +41,16 @@ export function IdcBucketPill({ transferId }: { transferId: number }) {
 export function IdcTransferActions({
   transferId,
   onQueue,
+  correctionNote = null,
 }: {
   transferId: number;
   onQueue: () => void;
+  /** Set when acting on a live release, as a correction. */
+  correctionNote?: string | null;
 }) {
   const { addToast } = useToast();
   const { data } = useIdcBucketStatus(transferId);
-  const setReady = useSetIdcReady(transferId);
+  const setReady = useSetIdcReady(transferId, correctionNote);
   const [confirming, setConfirming] = useState(false);
 
   function handleSetReady() {

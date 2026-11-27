@@ -17,15 +17,18 @@ export default function QueueTransferModal({
   transfer,
   releaseId,
   datasetId,
+  correctionNote = null,
 }: {
   open: boolean;
   onClose: () => void;
   transfer: ReleaseTransfer | null;
   releaseId: number | undefined;
   datasetId: string | undefined;
+  /** Set when queueing on a live release, as a correction. */
+  correctionNote?: string | null;
 }) {
   const { addToast } = useToast();
-  const queue = useQueueTransfer(releaseId, datasetId);
+  const queue = useQueueTransfer(releaseId, datasetId, correctionNote);
 
   // IDC reads a submission from its manifests, so it cannot be queued until they
   // exist. `missing_manifests` comes from the API, which derives what this

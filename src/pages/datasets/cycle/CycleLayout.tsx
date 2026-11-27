@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Link,
   Navigate,
@@ -31,7 +32,16 @@ import {
 export type CycleContext = {
   cycle: DatasetCycle;
   datasetId: string | undefined;
+  /** What's being corrected on a live release, from the banner's Make a
+   *  Correction; null otherwise. A live release is read-only without one. */
+  correction: string | null;
 };
+
+/** A live release is finished: its Transfer and Disseminate actions stay
+ *  hidden until a correction is started from the banner. */
+export function isLocked(cycle: DatasetCycle, correction: string | null): boolean {
+  return cycle.dataset_release?.release_status === "live" && correction === null;
+}
 
 export function useCycleContext(): CycleContext {
   return useOutletContext<CycleContext>();
@@ -71,6 +81,18 @@ export default function CycleLayout() {
 
   const data = cycle.data;
   const activeStage = stageFromPath(pathname);
+
+  // Held per release, so moving to another release (or another dataset) ends
+  // the correction. Not persisted: leaving the page ends it too.
+  const [correctionFor, setCorrectionFor] = useState<{
+    releaseId: number;
+    note: string;
+  } | null>(null);
+  const shownReleaseId = data?.dataset_release?.dataset_release_id;
+  const correction =
+    correctionFor && correctionFor.releaseId === shownReleaseId
+      ? correctionFor.note
+      : null;
 
   // The release this view is pinned to. Unpinned, every redirect below lands on
   // the latest -- which is what the bare `/cycle` entry point is for.
@@ -204,6 +226,14 @@ export default function CycleLayout() {
             idc={idc.data}
             datasetId={datasetId}
             onGoToStage={(stage) => navigate(stagePath(datasetId, pinnedId, stage))}
+            correction={correction}
+            onCorrectionChange={(note) =>
+              setCorrectionFor(
+                note !== null && shownReleaseId != null
+                  ? { releaseId: shownReleaseId, note }
+                  : null,
+              )
+            }
           />
 
           <SectionCard className="mt-4">
@@ -223,7 +253,9 @@ export default function CycleLayout() {
               </p>
             )}
 
-            <Outlet context={{ cycle: data, datasetId } satisfies CycleContext} />
+            <Outlet
+              context={{ cycle: data, datasetId, correction } satisfies CycleContext}
+            />
           </SectionCard>
         </>
       )}

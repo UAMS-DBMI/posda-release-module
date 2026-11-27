@@ -19,7 +19,7 @@ import {
   type ReleaseTransfer,
   type TransferRecordset,
 } from "@/lib/transferForm";
-import { useCycleContext } from "./CycleLayout";
+import { isLocked, useCycleContext } from "./CycleLayout";
 
 /** One destination the release ships to. Rows are destinations rather than
  *  transfers so a configured destination with nothing created yet is still
@@ -194,10 +194,27 @@ function TransferContents({
   );
 }
 
+/** An IDC transfer recorded as done rather than delivered from Posda (the
+ *  release ETL records pre-Release-Module releases this way). IDC already has
+ *  the data and Posda has nothing in the bucket for the version, so it has no
+ *  bucket status to show and nothing to push or set to Ready. Per-file rows are
+ *  only made when a transfer is queued, so it has none. The API refuses those
+ *  actions too. */
+function idcRecordedOnly(row: DestinationRow): boolean {
+  const t = row.transfer;
+  return (
+    row.destination_abbr === "idc" &&
+    t?.transfer_status === "success" &&
+    t.file_count === 0
+  );
+}
+
 export default function TransferStage() {
-  const { cycle, datasetId } = useCycleContext();
+  const { cycle, datasetId, correction } = useCycleContext();
   const { addToast } = useToast();
   const release = cycle.dataset_release;
+  // A live release is read-only until a correction is started in the banner.
+  const locked = isLocked(cycle, correction);
   const releaseId = release?.dataset_release_id;
 
   const destinations = useReleaseDestinations(releaseId);
@@ -382,7 +399,12 @@ export default function TransferStage() {
               <td className="px-2 py-1">
                 {t ? (
                   <div>
-                    {r.destination_abbr === "idc" && t.transfer_status === "success" ? (
+                    {/* A live release is past IDC's Processed (go-live waits for
+                        it), so the plain status says enough while it's locked. */}
+                    {r.destination_abbr === "idc" &&
+                    t.transfer_status === "success" &&
+                    !locked &&
+                    !idcRecordedOnly(r) ? (
                       <IdcBucketPill transferId={t.dataset_release_transfer_id} />
                     ) : (
                       <StatusBadge status={t.transfer_status} />
@@ -412,12 +434,12 @@ export default function TransferStage() {
               </td>
               <td className="px-2 py-1">
                 <div className="flex items-center justify-end gap-2">
-                  {!t && r.configured && (
+                  {!t && r.configured && !locked && (
                     <Button size="sm" disabled={busy} onClick={() => createFor(r)}>
                       Create
                     </Button>
                   )}
-                  {t?.membership_drifted && (
+                  {t?.membership_drifted && !locked && (
                     <Button size="sm" disabled={busy} onClick={() => syncFor(r)}>
                       Sync
                     </Button>
@@ -438,12 +460,13 @@ export default function TransferStage() {
                       skipped by the daemon's MD5 check. The rest queue once --
                       they have no daemon yet. A finished IDC transfer also
                       depends on what IDC has done with the version. */}
-                  {r.configured &&
+                  {locked || idcRecordedOnly(r) ? null : r.configured &&
                   r.destination_abbr === "idc" &&
                   t?.transfer_status === "success" ? (
                     <IdcTransferActions
                       transferId={t.dataset_release_transfer_id}
                       onQueue={() => setQueueRow(r)}
+                      correctionNote={correction}
                     />
                   ) : (
                     r.configured &&
@@ -484,6 +507,7 @@ export default function TransferStage() {
         transfer={queueRow?.transfer ?? null}
         releaseId={releaseId}
         datasetId={datasetId}
+        correctionNote={correction}
       />
     </div>
   );

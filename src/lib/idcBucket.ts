@@ -30,13 +30,18 @@ export function useIdcBucketStatus(transferId: number | undefined) {
 }
 
 /** The curator's hand-off: IDC may pick the version up from here on. */
-export function useSetIdcReady(transferId: number) {
+export function useSetIdcReady(transferId: number, correctionNote: string | null = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () =>
       apiFetch<ItemEnvelope<{ status: string }>>(
         `${BASE}/transfers/${transferId}/idc/set-ready`,
-        { method: "POST" },
+        {
+          method: "POST",
+          ...(correctionNote
+            ? { body: JSON.stringify({ correction_note: correctionNote }) }
+            : {}),
+        },
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({
