@@ -21,7 +21,7 @@
             "name": "Prod: Debug full stack",
             "type": "node-terminal",
             "request": "launch",
-            "command": "npm run build && npm run preview",
+            "command": "npm run preview:build",
             "sourceMapPathOverrides": {
                 "/@fs/*": "${workspaceFolder}/*"
             },
@@ -46,6 +46,34 @@
             "request": "launch",
             "command": "python scripts/sync_bookstack.py --apply",
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Release ETL: prod (dry run)",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "python scripts/etl/release_etl.py --input \"${input:etlInput}\" --env prod --dataset ${input:etlDataset}",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Release ETL: prod (apply)",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "python scripts/etl/release_etl.py --input \"${input:etlInput}\" --env prod --dataset ${input:etlDataset} --apply --confirm-prod",
+            "cwd": "${workspaceFolder}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "etlInput",
+            "type": "promptString",
+            "description": "Release ETL input CSV",
+            "default": ""
+        },
+        {
+            "id": "etlDataset",
+            "type": "promptString",
+            "description": "WordPress page id of the dataset",
+            "default": "44417"
         }
     ]
 }
